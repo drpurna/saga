@@ -1,4 +1,224 @@
-/* Channel thumbnail with logo or emoji */
+/* ===== SPLASH SCREEN ===== */
+.splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #0a0a0a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    transition: opacity 0.5s ease-out;
+}
+
+.splash-screen.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.splash-content {
+    text-align: center;
+}
+
+.splash-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 64px;
+    font-weight: 600;
+    color: #ff4d4d;
+    margin-bottom: 20px;
+    /* YouTube Sans style */
+    font-family: 'Trade Gothic', 'GT America', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+/* YouTube‑style play button */
+.youtube-icon {
+    width: 80px;
+    height: 56px;
+    background: #ff0000;
+    border-radius: 14px;
+    position: relative;
+    box-shadow: 0 4px 10px rgba(255,0,0,0.3);
+}
+
+.youtube-icon::after {
+    content: "";
+    display: block;
+    width: 0;
+    height: 0;
+    border-top: 14px solid transparent;
+    border-bottom: 14px solid transparent;
+    border-left: 24px solid white;
+    position: absolute;
+    top: 50%;
+    left: 55%;
+    transform: translate(-50%, -50%);
+}
+
+.splash-tagline {
+    font-size: 24px;
+    color: #aaa;
+    letter-spacing: 1px;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: 400;
+}
+
+/* ===== APP BASE ===== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+    background: #0c0c0c;
+    color: #eee;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* ===== TOP BAR ===== */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 30px;
+    background: #1a1a1a;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+    z-index: 100;
+}
+
+.logo {
+    font-size: 22px;
+    font-weight: 600;
+    color: #ff4d4d;
+    font-family: 'Trade Gothic', 'GT America', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.top-actions {
+    display: flex;
+    gap: 20px;
+}
+
+.search-icon, .profile-icon {
+    font-size: 24px;
+    cursor: pointer;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: 500;
+}
+
+.search-icon.tv-focused,
+.profile-icon.tv-focused {
+    background: #333;
+}
+
+/* ===== MAIN CONTENT ===== */
+.content {
+    flex: 1;
+    padding: 20px 30px;
+    overflow-y: auto;
+    background: #0c0c0c;
+    scrollbar-width: none;
+}
+
+.content::-webkit-scrollbar {
+    display: none;
+}
+
+/* ===== CATEGORY ROWS ===== */
+.category-row {
+    margin-bottom: 40px;
+}
+
+.row-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    position: sticky;
+    top: 0;
+    background: #0c0c0c;
+    z-index: 50;
+    padding: 10px 0;
+}
+
+.row-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #fff;
+    font-family: 'Trade Gothic', 'GT America', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.row-link {
+    color: #aaa;
+    font-size: 16px;
+    cursor: pointer;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: 400;
+}
+
+.row-link.tv-focused {
+    color: #ff4d4d;
+    text-decoration: underline;
+}
+
+/* ===== HORIZONTAL CHANNEL STRIP ===== */
+.channel-strip {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 8px;
+}
+
+.channel-strip::-webkit-scrollbar {
+    display: none;
+}
+
+/* ===== CHANNEL TILE ===== */
+.channel-item {
+    flex: 0 0 auto;
+    width: 280px;
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s, border-color 0.2s;
+    border: 3px solid transparent;
+    will-change: transform, box-shadow, border-color;
+    position: relative;
+}
+
+.channel-item.tv-focused {
+    transform: scale(1.05);
+    border-color: #ff0000;
+    box-shadow: 0 20px 30px -8px rgba(255, 0, 0, 0.4);
+    z-index: 10;
+}
+
+/* Thumbnail area */
 .channel-thumb {
     aspect-ratio: 16 / 9;
     background: #2a2a2a;
@@ -6,17 +226,19 @@
     align-items: center;
     justify-content: center;
     position: relative;
-    overflow: hidden; /* for image fit */
+    overflow: hidden;
 }
 
+/* Logo image */
 .channel-logo {
     width: 100%;
     height: 100%;
-    object-fit: contain; /* keeps logo within bounds */
+    object-fit: contain;
     background: #1a1a1a;
     padding: 8px;
 }
 
+/* Fallback emoji */
 .channel-emoji {
     font-size: 48px;
 }
@@ -34,14 +256,10 @@
     border-radius: 4px;
     border-left: 3px solid #ff4d4d;
     z-index: 5;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
-/* Focus effect adjustments for images */
-.channel-item.tv-focused .channel-logo {
-    filter: brightness(1.1);
-}
-
-/* Keep existing gradient and play icon styles */
+/* Gradient overlay on focus */
 .channel-item.tv-focused .channel-thumb::before {
     content: "";
     position: absolute;
@@ -54,6 +272,7 @@
     z-index: 2;
 }
 
+/* Play icon overlay */
 .channel-thumb::after {
     content: "▶";
     position: absolute;
@@ -80,4 +299,89 @@
 .channel-item.tv-focused .channel-thumb::after {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* Channel info */
+.channel-info {
+    padding: 14px;
+    transition: background 0.2s;
+}
+
+.channel-item.tv-focused .channel-info {
+    background: #2a2a2a;
+}
+
+.channel-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.2s;
+    font-family: 'Trade Gothic', 'GT America', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.channel-item.tv-focused .channel-name {
+    color: #ff0000;
+    font-weight: 700;
+}
+
+.channel-program {
+    font-size: 14px;
+    color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: 400;
+}
+
+/* ===== PLAYER OVERLAY ===== */
+.player-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: black;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.player-container.hidden {
+    display: none;
+}
+
+.video-player {
+    width: 100%;
+    height: 100%;
+    max-height: 90vh;
+}
+
+.close-player {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    border: 2px solid white;
+    font-size: 20px;
+    padding: 10px 20px;
+    border-radius: 40px;
+    cursor: pointer;
+    z-index: 2100;
+    transition: background 0.2s;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: 400;
+}
+
+.close-player.tv-focused {
+    background: #ff4d4d;
+    border-color: #ff4d4d;
+    transform: scale(1.05);
 }
