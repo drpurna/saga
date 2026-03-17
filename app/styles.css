@@ -56,35 +56,16 @@ body {
     height: 100%;
 }
 
-/* Top bar */
+/* Top bar – simplified */
 .top-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 24px;
+    padding: 12px 30px;
     background: #1a1a1a;
     border-bottom: 1px solid #333;
     flex-shrink: 0;
     z-index: 100;
-}
-
-.menu-btn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 28px;
-    cursor: pointer;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.2s;
-}
-
-.menu-btn.tv-focused {
-    background: #333;
 }
 
 .logo {
@@ -95,7 +76,7 @@ body {
 
 .top-actions {
     display: flex;
-    gap: 16px;
+    gap: 20px;
 }
 
 .search-icon, .profile-icon {
@@ -115,91 +96,7 @@ body {
     background: #333;
 }
 
-/* Main layout */
-.main-layout {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-}
-
-/* Side panel (YouTube TV style drawer) */
-.side-panel {
-    width: 300px;
-    background: #0f0f0f;
-    display: flex;
-    flex-direction: column;
-    border-right: 1px solid #2a2a2a;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: 200;
-    overflow-y: auto;
-}
-
-.side-panel.open {
-    transform: translateX(0);
-}
-
-.panel-header {
-    padding: 24px 16px 16px 24px;
-}
-
-.panel-logo {
-    font-size: 22px;
-    font-weight: 600;
-    color: #ff4d4d;
-}
-
-.panel-menu {
-    flex: 1;
-    list-style: none;
-    padding: 8px 0;
-}
-
-.panel-footer {
-    padding: 16px 0;
-    border-top: 1px solid #2a2a2a;
-}
-
-.panel-item {
-    display: flex;
-    align-items: center;
-    padding: 12px 24px;
-    margin: 4px 8px;
-    border-radius: 10px;
-    cursor: pointer;
-    transition: background 0.2s;
-    border-left: 4px solid transparent;
-}
-
-.panel-item .icon {
-    font-size: 24px;
-    width: 32px;
-    text-align: center;
-    margin-right: 16px;
-}
-
-.panel-item .label {
-    font-size: 18px;
-    font-weight: 500;
-}
-
-.panel-item.active {
-    background: #1a1a1a;
-    border-left-color: #ff4d4d;
-}
-
-.panel-item.tv-focused {
-    background: #2a2a2a;
-    border-left-color: #ff4d4d;
-    outline: none;
-}
-
-/* Main content area with rows */
+/* Main content with rows */
 .content {
     flex: 1;
     padding: 20px 30px;
@@ -259,10 +156,10 @@ body {
     display: none;
 }
 
-/* Channel tile */
+/* Channel tile – YouTube TV style */
 .channel-item {
     flex: 0 0 auto;
-    width: 280px; /* fixed width for horizontal strip */
+    width: 280px; /* fixed width */
     background: #1e1e1e;
     border-radius: 12px;
     overflow: hidden;
@@ -280,6 +177,7 @@ body {
     z-index: 10;
 }
 
+/* Thumbnail area */
 .channel-thumb {
     aspect-ratio: 16 / 9;
     background: #2a2a2a;
@@ -333,6 +231,7 @@ body {
     transform: translate(-50%, -50%) scale(1.1);
 }
 
+/* Channel info */
 .channel-info {
     padding: 14px;
     transition: background 0.2s;
