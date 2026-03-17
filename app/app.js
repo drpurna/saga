@@ -126,7 +126,6 @@ class IPTVApp {
                     </div>
                     <div class="channel-strip" id="strip-${cat}">
                         ${channels.map(ch => {
-                            // Improved image fallback: image and hidden emoji, emoji shows on error
                             return `
                             <div class="channel-item" data-channel-id="${ch.id}" data-focusable="true">
                                 <div class="channel-thumb">
@@ -189,7 +188,6 @@ class IPTVApp {
 
     loadStream(url) {
         if (Hls.isSupported()) {
-            // Optimize HLS for low latency
             this.hls = new Hls({
                 maxBufferLength: 10,
                 maxMaxBufferLength: 20,
@@ -213,32 +211,29 @@ class IPTVApp {
         }
     }
 
-    // Search functionality
+    // Search overlay
     openSearch() {
         this.searchOverlay.classList.remove('hidden');
         this.searchInput.focus();
-        // Notify navigation module about new focusable elements
         if (window.navigationModule) window.navigationModule.rescan();
     }
 
     closeSearch() {
         this.searchOverlay.classList.add('hidden');
         this.searchInput.value = '';
-        // Optionally refocus on search button
         this.searchButton.focus();
         if (window.navigationModule) window.navigationModule.rescan();
     }
 
     performSearch(query) {
         if (!query.trim()) {
-            this.renderRows(); // reset
+            this.renderRows();
             return;
         }
         const filtered = this.channels.filter(ch => 
             ch.name.toLowerCase().includes(query.toLowerCase()) ||
             (ch.category && ch.category.toLowerCase().includes(query.toLowerCase()))
         );
-        // Render only search results as a single row
         this.content.innerHTML = `
             <div class="category-row">
                 <div class="row-header">
@@ -263,7 +258,6 @@ class IPTVApp {
                 </div>
             </div>
         `;
-        // Reattach listeners
         document.querySelectorAll('.channel-item').forEach(el => {
             el.addEventListener('click', () => this.playChannel(el.dataset.channelId));
             el.addEventListener('tv-enter', () => this.playChannel(el.dataset.channelId));
@@ -285,16 +279,28 @@ class IPTVApp {
         closeBtn.addEventListener('click', () => this.closeSearch());
         closeBtn.addEventListener('tv-enter', () => this.closeSearch());
 
-        // Search input – listen for Enter key to perform search
+        // Search input Enter key
         this.searchInput.addEventListener('keydown', (e) => {
-            if (e.keyCode === 13) { // Enter
+            if (e.keyCode === 13) {
                 e.preventDefault();
                 this.performSearch(this.searchInput.value);
-                this.closeSearch(); // optional: close after search
+                this.closeSearch();
             }
         });
 
-        // Global back button handler
+        // Remote color key: red (403) opens search
+        document.addEventListener('keydown', (e) => {
+            if (e.keyCode === 403) { // Red key on Tizen remote
+                e.preventDefault();
+                if (this.searchOverlay.classList.contains('hidden')) {
+                    this.openSearch();
+                } else {
+                    this.closeSearch();
+                }
+            }
+        });
+
+        // Global back button
         window.addEventListener('tv-back', () => {
             if (!this.playerContainer.classList.contains('hidden')) {
                 this.hidePlayer();
@@ -303,7 +309,7 @@ class IPTVApp {
             }
         });
 
-        // Passive scroll for performance
+        // Passive scroll
         document.addEventListener('scroll', () => {}, { passive: true });
     }
 }
