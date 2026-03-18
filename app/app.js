@@ -75,12 +75,15 @@ function renderRows() {
       card.className = "card";
       card.dataset.r = r;
       card.dataset.c = c;
+      card.dataset.name = ch.name;
 
-      const img = document.createElement("img");
-      img.src = ch.logo || "";
-      img.onerror = () => img.remove();
+      if (ch.logo) {
+        const img = document.createElement("img");
+        img.src = ch.logo;
+        img.onerror = () => img.remove();
+        card.appendChild(img);
+      }
 
-      card.appendChild(img);
       items.appendChild(card);
     });
 
@@ -99,9 +102,6 @@ function updateFocus() {
     if (el) {
       el.classList.add("active");
       el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-
-      const ch = rows[rowKeys[focus.row]][focus.col];
-      preview(ch);
     }
   }
 
@@ -110,27 +110,10 @@ function updateFocus() {
   }
 }
 
-function preview(ch) {
-  if (!ch) return;
-
-  video.muted = true;
-
-  if (window.Hls && ch.url.includes(".m3u8")) {
-    const hls = new Hls();
-    hls.loadSource(ch.url);
-    hls.attachMedia(video);
-  } else {
-    video.src = ch.url;
-  }
-
-  video.play().catch(() => {});
-}
-
 function play() {
   const ch = rows[rowKeys[focus.row]][focus.col];
   if (!ch) return;
 
-  video.muted = false;
   nowPlayingEl.textContent = ch.name;
   statusTextEl.textContent = "Playing";
 
@@ -145,7 +128,7 @@ function play() {
   }
 }
 
-/* 🔍 SEARCH */
+/* 🔍 Search */
 searchIcon.onclick = () => {
   focusArea = "overlay";
   searchOverlay.classList.remove("hidden");
@@ -158,12 +141,12 @@ searchInput.oninput = () => {
 
   searchResults.innerHTML = results.map(c => `
     <div class="card">
-      <img src="${c.logo || ''}">
+      ${c.logo ? `<img src="${c.logo}">` : ""}
     </div>
   `).join('');
 };
 
-/* 🎮 REMOTE */
+/* 🎮 Remote */
 window.addEventListener("keydown", e => {
 
   if (focusArea === "overlay") {
