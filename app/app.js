@@ -1,29 +1,20 @@
-// ========== DOM Elements ==========
-const browseView = document.getElementById('browseView');
-const playerView = document.getElementById('playerView');
-const categoryTabs = document.getElementById('categoryTabs');
-const rowsContainer = document.getElementById('rowsContainer');
-const backButton = document.getElementById('backButton');
+const searchInput = document.getElementById('searchInput');
+const channelListEl = document.getElementById('channelList');
+const nowPlayingEl = document.getElementById('nowPlaying');
+const statusTextEl = document.getElementById('statusText');
 const video = document.getElementById('video');
-const nowPlayingTitle = document.getElementById('nowPlayingTitle');
-const playerStatus = document.getElementById('playerStatus');
+const categoryBar = document.getElementById('categoryBar');
 
 let channels = [];
-let groupedChannels = {}; // { category: [channels] }
-let categories = [];
-let currentCategory = 'All';
-let rows = []; // references to row elements
-let tiles = []; // flat array of tile elements for focus management
-let focusedRowIndex = 0;
-let focusedTileIndex = 0; // index within current row
+let filtered = [];
+let selectedIndex = 0;
+let focusArea = 'list'; // list | player
 let hls = null;
-let currentChannel = null;
 
 const PLAYLIST_URL = 'https://iptv-org.github.io/iptv/languages/tel.m3u';
 
-// ========== Utility Functions ==========
-function setPlayerStatus(text) {
-  playerStatus.textContent = text;
+function setStatus(text) {
+  statusTextEl.textContent = text;
 }
 
 function parseM3U(text) {
@@ -61,200 +52,182 @@ function parseM3U(text) {
   return out;
 }
 
-// ========== Build UI ==========
-function buildUI() {
-  // Group channels by category
-  groupedChannels = {};
-  channels.forEach(ch => {
-    const cat = ch.group;
-    if (!groupedChannels[cat]) groupedChannels[cat] = [];
-    groupedChannels[cat].push(ch);
+function updateCategoryBar(allChannels) {
+  const groups = [...new Set(allChannels.map(ch => ch.group))].sort();
+  categoryBar.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.textContent = 'All';
+  allBtn.classList.add('category-btn', 'active');
+  allBtn.dataset.group = '';
+  allBtn.addEventListener('click', () => {
+    filterByGroup('');
+    highlightCategory(allBtn);
   });
-  categories = Object.keys(groupedChannels).sort();
+  categoryBar.appendChild(allBtn);
 
-  // Build category tabs
-  categoryTabs.innerHTML = '';
-  const allTab = document.createElement('button');
-  allTab.classList.add('category-tab', 'active');
-  allTab.textContent = 'All';
-  allTab.dataset.category = 'All';
-  allTab.addEventListener('click', () => filterByCategory('All'));
-  categoryTabs.appendChild(allTab);
-
-  categories.forEach(cat => {
-    const tab = document.createElement('button');
-    tab.classList.add('category-tab');
-    tab.textContent = cat;
-    tab.dataset.category = cat;
-    tab.addEventListener('click', () => filterByCategory(cat));
-    categoryTabs.appendChild(tab);
+  groups.forEach(group => {
+    const btn = document.createElement('button');
+    btn.textContent = group;
+    btn.classList.add('category-btn');
+    btn.dataset.group = group;
+    btn.addEventListener('click', () => {
+      filterByGroup(group);
+      highlightCategory(btn);
+    });
+    categoryBar.appendChild(btn);
   });
-
-  // Build rows for all categories initially
-  renderRows('All');
 }
 
-function renderRows(category) {
-  rowsContainer.innerHTML = '';
-  rows = [];
-  tiles = [];
+function filterByGroup(group) {
+  filtered = group ? channels.filter(ch => ch.group === group) : [...channels];
+  selectedIndex = 0;
+  renderList();
+}
 
-  let categoriesToRender = category === 'All' ? categories : [category];
+function highlightCategory(activeBtn) {
+  document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
+  activeBtn.classList.add('active');
+}
 
-  categoriesToRender.forEach(cat => {
-    const channelList = groupedChannels[cat];
-    if (!channelList || channelList.length === 0) return;
+function renderList() {
+  channelListEl.innerHTML = '';
+  if (!filtered.length) {
+    const li = document.createElement('li');
+    li.textContent = 'No channels';
+    channelListEl.appendChild(li);
+    return;
+  }
 
-    const row = document.createElement('div');
-    row.className = 'row';
-    row.dataset.category = cat;
+  filtered.forEach((ch, idx) => {
+    const li = document.createElement('li');
+    if (idx === selectedIndex) li.classList.add('active');
 
-    const title = document.createElement('h2');
-    title.className = 'row-title';
-    title.textContent = cat;
-    row.appendChild(title);
+    // Set tooltip for channel name (useful for remote users)
+    li.title = ch.name;
 
-    const tileContainer = document.createElement('div');
-    tileContainer.className = 'tile-container';
+    const icon = document.createElement('img');
+    icon.className = 'channel-icon';
+    icon.src = ch.logo || ''; // empty src will show broken image, but we'll handle with CSS maybe
+    icon.alt = ch.name;
+    icon.loading = 'lazy';
+    // If no logo, we could show a placeholder, but let's keep it simple: a blank gray box
+    icon.onerror = () => { icon.src = ''; }; // hide broken icon
 
-    channelList.forEach((ch, idx) => {
-      const tile = document.createElement('div');
-      tile.className = 'tile';
-      tile.dataset.category = cat;
-      tile.dataset.index = idx;
-      tile.dataset.channel = JSON.stringify(ch); // store channel data
+    li.appendChild(icon);
 
-      const icon = document.createElement('img');
-      icon.className = 'tile-icon';
-      icon.src = ch.logo || '';
-      icon.alt = ch.name;
-      icon.loading = 'lazy';
-
-      const name = document.createElement('div');
-      name.className = 'tile-name';
-      name.textContent = ch.name;
-
-      const group = document.createElement('div');
-      group.className = 'tile-group';
-      group.textContent = ch.group;
-
-      tile.appendChild(icon);
-      tile.appendChild(name);
-      tile.appendChild(group);
-
-      tile.addEventListener('click', () => {
-        // On click, play this channel
-        playChannel(ch);
-      });
-      tile.addEventListener('dblclick', () => {
-        // Double-click toggles fullscreen (but we're going to player view anyway)
-        // Actually in player view we handle fullscreen. Here we just play.
-        playChannel(ch);
-      });
-
-      tileContainer.appendChild(tile);
-      tiles.push(tile); // flat list for focus management
+    li.addEventListener('click', () => {
+      selectedIndex = idx;
+      renderList();
+      playSelected();
     });
 
-    row.appendChild(tileContainer);
-    rowsContainer.appendChild(row);
-    rows.push(row);
+    li.addEventListener('dblclick', () => {
+      toggleFullscreen();
+    });
+
+    channelListEl.appendChild(li);
   });
 
-  // Set initial focus
-  if (tiles.length > 0) {
-    setFocus(0, 0);
+  const active = channelListEl.querySelector('li.active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    video.requestFullscreen().catch(err => console.warn('Fullscreen failed:', err));
+  } else {
+    document.exitFullscreen();
   }
 }
 
-function filterByCategory(category) {
-  currentCategory = category;
-  // Update active tab
-  document.querySelectorAll('.category-tab').forEach(tab => {
-    tab.classList.remove('active');
-    if (tab.dataset.category === category) tab.classList.add('active');
-  });
-  renderRows(category);
+function applySearch() {
+  const q = searchInput.value.trim().toLowerCase();
+  filtered = !q
+    ? [...channels]
+    : channels.filter(c => c.name.toLowerCase().includes(q) || c.group.toLowerCase().includes(q));
+  if (selectedIndex >= filtered.length) selectedIndex = Math.max(0, filtered.length - 1);
+  renderList();
 }
 
-// ========== Focus Management ==========
-function setFocus(rowIdx, tileIdx) {
-  // Remove focus from all tiles
-  tiles.forEach(t => t.classList.remove('focused'));
-
-  // Find the actual tile element based on row and tile index
-  // We need to map rowIdx to the actual row in the current rendered rows
-  if (rows.length === 0) return;
-
-  // Ensure indices are within bounds
-  if (rowIdx < 0) rowIdx = 0;
-  if (rowIdx >= rows.length) rowIdx = rows.length - 1;
-
-  const row = rows[rowIdx];
-  const tileContainer = row.querySelector('.tile-container');
-  const tilesInRow = Array.from(tileContainer.children);
-  if (tilesInRow.length === 0) return;
-
-  if (tileIdx < 0) tileIdx = 0;
-  if (tileIdx >= tilesInRow.length) tileIdx = tilesInRow.length - 1;
-
-  const targetTile = tilesInRow[tileIdx];
-  targetTile.classList.add('focused');
-  targetTile.scrollIntoView({ block: 'nearest', inline: 'center' });
-
-  focusedRowIndex = rowIdx;
-  focusedTileIndex = tileIdx;
-}
-
-function moveFocus(dx, dy) {
-  if (rows.length === 0) return;
-
-  let newRowIdx = focusedRowIndex + dy;
-  let newTileIdx = focusedTileIndex + dx;
-
-  // Clamp row index
-  if (newRowIdx < 0) newRowIdx = 0;
-  if (newRowIdx >= rows.length) newRowIdx = rows.length - 1;
-
-  // Get tile count in new row
-  const newRow = rows[newRowIdx];
-  const tileContainer = newRow.querySelector('.tile-container');
-  const tilesInNewRow = Array.from(tileContainer.children);
-  if (tilesInNewRow.length === 0) return;
-
-  // Clamp tile index
-  if (newTileIdx < 0) newTileIdx = 0;
-  if (newTileIdx >= tilesInNewRow.length) newTileIdx = tilesInNewRow.length - 1;
-
-  setFocus(newRowIdx, newTileIdx);
-}
-
-// ========== Playback ==========
-function playChannel(channel) {
-  currentChannel = channel;
-  nowPlayingTitle.textContent = channel.name;
-  setPlayerStatus('Buffering...');
-
-  // Hide browse, show player
-  browseView.classList.add('hidden');
-  playerView.classList.remove('hidden');
-
-  // Focus back button for remote (optional)
-  backButton.focus();
-
-  // Stop any existing playback
-  if (hls) {
-    hls.destroy();
-    hls = null;
+function githubRawToJsdelivr(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== 'raw.githubusercontent.com') return null;
+    const parts = u.pathname.split('/').filter(Boolean);
+    if (parts.length < 4) return null;
+    const owner = parts[0];
+    const repo = parts[1];
+    const branch = parts[2];
+    const filePath = parts.slice(3).join('/');
+    return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${filePath}`;
+  } catch (_) {
+    return null;
   }
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
+}
 
-  const url = channel.url;
-  const isHls = /\.m3u8($|\?)/i.test(url) || url.toLowerCase().includes('m3u8');
+async function fetchTextWithTimeout(url, timeoutMs = 15000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadPlaylist() {
+  setStatus('Loading playlist...');
+  try {
+    let text;
+    let usedUrl = PLAYLIST_URL;
+
+    try {
+      text = await fetchTextWithTimeout(PLAYLIST_URL, 15000);
+    } catch (primaryErr) {
+      const mirrorUrl = githubRawToJsdelivr(PLAYLIST_URL);
+      if (!mirrorUrl) throw primaryErr;
+      setStatus('Primary URL failed, trying mirror...');
+      text = await fetchTextWithTimeout(mirrorUrl, 15000);
+      usedUrl = mirrorUrl;
+    }
+
+    channels = parseM3U(text);
+    filtered = [...channels];
+    selectedIndex = 0;
+    renderList();
+    updateCategoryBar(channels);
+
+    setStatus(`Loaded ${channels.length} channels`);
+  } catch (err) {
+    console.error(err);
+    if (err?.name === 'AbortError') {
+      setStatus('Load failed: timeout (network/TLS blocked?)');
+      return;
+    }
+    setStatus(`Load failed: ${err.message || 'unknown error'}`);
+  }
+}
+
+function playSelected() {
+  if (!filtered.length) return;
+  const ch = filtered[selectedIndex];
+  if (!ch) return;
+
+  nowPlayingEl.textContent = ch.name;
+  setStatus('Buffering...');
 
   try {
+    if (hls) {
+      hls.destroy();
+      hls = null;
+    }
+
+    const url = ch.url;
+    const isHls = /\.m3u8($|\?)/i.test(url) || url.toLowerCase().includes('m3u8');
+
     if (isHls) {
       if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = url;
@@ -270,148 +243,117 @@ function playChannel(channel) {
         });
         hls.on(window.Hls.Events.ERROR, (_, data) => {
           if (data?.fatal) {
-            setPlayerStatus(`HLS fatal: ${data.type || 'unknown'}`);
+            setStatus(`HLS fatal: ${data.type || 'unknown'}`);
           }
         });
         return;
       }
-      setPlayerStatus('HLS not supported');
+      setStatus('HLS not supported on this runtime');
       return;
     }
 
     video.src = url;
     video.play().catch(() => {});
   } catch (err) {
-    setPlayerStatus(`Play error: ${err.message}`);
+    setStatus(`Play error: ${err.message}`);
   }
 }
 
-function exitPlayer() {
-  // Stop playback
-  if (hls) {
-    hls.destroy();
-    hls = null;
-  }
-  video.pause();
-  video.removeAttribute('src');
-  video.load();
-
-  // Show browse, hide player
-  playerView.classList.add('hidden');
-  browseView.classList.remove('hidden');
-
-  // Restore focus to the tile that was playing
-  if (tiles.length > 0) {
-    // We need to find the tile corresponding to currentChannel
-    // For simplicity, we'll focus the first tile. But we could search.
-    setFocus(focusedRowIndex, focusedTileIndex);
-  }
+function moveSelection(delta) {
+  if (!filtered.length) return;
+  selectedIndex += delta;
+  if (selectedIndex < 0) selectedIndex = 0;
+  if (selectedIndex >= filtered.length) selectedIndex = filtered.length - 1;
+  renderList();
 }
 
-// ========== Playlist Loading ==========
-async function loadPlaylist() {
-  setPlayerStatus('Loading playlist...');
+video.addEventListener('playing', () => setStatus('Playing'));
+video.addEventListener('pause', () => setStatus('Paused'));
+video.addEventListener('waiting', () => setStatus('Buffering...'));
+video.addEventListener('error', () => setStatus('Playback error'));
+
+searchInput.addEventListener('input', applySearch);
+
+// Tizen key registration
+(function registerKeys() {
   try {
-    let text;
-    let usedUrl = PLAYLIST_URL;
+    if (window.tizen && tizen.tvinputdevice) {
+      [
+        'MediaPlay',
+        'MediaPause',
+        'MediaPlayPause',
+        'MediaStop',
+        'MediaFastForward',
+        'MediaRewind',
+        'ColorF1Green',
+        'ColorF2Yellow',
+        'ColorF3Blue',
+      ].forEach(k => {
+        try { tizen.tvinputdevice.registerKey(k); } catch (_) {}
+      });
+    }
+  } catch (_) {}
+})();
 
-    // Simple fetch without mirror for brevity (you can add mirror logic)
-    const res = await fetch(PLAYLIST_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    text = await res.text();
-
-    channels = parseM3U(text);
-    buildUI();
-    setPlayerStatus(`Loaded ${channels.length} channels`);
-  } catch (err) {
-    console.error(err);
-    setPlayerStatus(`Load failed: ${err.message}`);
-  }
-}
-
-// ========== Event Listeners ==========
-backButton.addEventListener('click', exitPlayer);
-
-video.addEventListener('playing', () => setPlayerStatus('Playing'));
-video.addEventListener('pause', () => setPlayerStatus('Paused'));
-video.addEventListener('waiting', () => setPlayerStatus('Buffering...'));
-video.addEventListener('error', () => setPlayerStatus('Playback error'));
-
-// Remote / keyboard navigation
 window.addEventListener('keydown', (e) => {
   const key = e.key;
   const code = e.keyCode;
 
-  // If player is visible, handle back and media keys
-  if (!playerView.classList.contains('hidden')) {
-    if (key === 'Escape' || key === 'Back' || key === 'MediaStop' || code === 413) {
-      exitPlayer();
-      e.preventDefault();
-      return;
-    }
-    // Media keys control video
-    if (key === 'MediaPlayPause' || code === 10252) {
-      if (video.paused) video.play().catch(() => {});
-      else video.pause();
-      e.preventDefault();
-      return;
-    }
-    if (key === 'MediaPlay' || code === 415) {
-      video.play().catch(() => {});
-      e.preventDefault();
-      return;
-    }
-    if (key === 'MediaPause' || code === 19) {
-      video.pause();
-      e.preventDefault();
-      return;
-    }
-    if (key === 'MediaStop' || code === 413) {
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-      setPlayerStatus('Stopped');
-      e.preventDefault();
-      return;
-    }
-    return; // ignore other keys in player
-  }
-
-  // Browse view navigation
   if (key === 'ArrowUp') {
-    moveFocus(0, -1);
+    if (focusArea === 'list') moveSelection(-1);
     e.preventDefault();
     return;
   }
   if (key === 'ArrowDown') {
-    moveFocus(0, 1);
+    if (focusArea === 'list') moveSelection(1);
     e.preventDefault();
     return;
   }
   if (key === 'ArrowLeft') {
-    moveFocus(-1, 0);
+    focusArea = 'list';
     e.preventDefault();
     return;
   }
   if (key === 'ArrowRight') {
-    moveFocus(1, 0);
+    focusArea = 'player';
     e.preventDefault();
     return;
   }
   if (key === 'Enter') {
-    // Play the focused tile
-    const focusedTile = document.querySelector('.tile.focused');
-    if (focusedTile) {
-      const channelData = focusedTile.dataset.channel;
-      if (channelData) {
-        playChannel(JSON.parse(channelData));
-      }
+    if (focusArea === 'list') {
+      playSelected();
+    } else if (focusArea === 'player') {
+      toggleFullscreen();
     }
     e.preventDefault();
     return;
   }
 
-  // Green key reloads playlist
+  if (key === 'MediaPlayPause' || code === 10252) {
+    if (video.paused) video.play().catch(() => {});
+    else video.pause();
+    e.preventDefault();
+    return;
+  }
+  if (key === 'MediaPlay' || code === 415) {
+    video.play().catch(() => {});
+    e.preventDefault();
+    return;
+  }
+  if (key === 'MediaPause' || code === 19) {
+    video.pause();
+    e.preventDefault();
+    return;
+  }
+  if (key === 'MediaStop' || code === 413) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    setStatus('Stopped');
+    e.preventDefault();
+    return;
+  }
+
   if (key === 'ColorF1Green' || code === 404) {
     loadPlaylist();
     e.preventDefault();
@@ -419,5 +361,4 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Initial load
 loadPlaylist();
