@@ -2,28 +2,66 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Tizen TV Ultimate</title>
+<title>Tizen TV</title>
 <meta name="viewport" content="width=1920, height=1080">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.5/shaka-player.compiled.js"></script>
+
 <style>
-body { margin:0; background:#141414; color:white; font-family:sans-serif; overflow:hidden;}
-.hero { height:320px; position:relative; }
-.hero video { width:100%; height:100%; object-fit:cover; }
-.overlay { position:absolute; bottom:20px; left:30px; font-size:32px; }
+body {
+  margin:0;
+  background:#141414;
+  color:white;
+  font-family:sans-serif;
+  overflow:hidden;
+}
 
-.row { margin:20px 30px; }
-.row h2 { margin-bottom:10px; }
+/* Splash */
+#splash {
+  position:fixed;
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background:black;
+  font-size:48px;
+  transition:opacity .5s;
+}
 
-.row-scroll { display:flex; gap:18px; overflow:hidden; }
+/* Layout */
+.row { margin:20px; }
+.row-scroll { display:flex; gap:15px; overflow:hidden; }
 
-.tile { min-width:220px; transition:0.25s; }
-.tile img, .tile video { width:100%; border-radius:12px; }
-.tile.active { transform:scale(1.25); z-index:10; }
+/* Tiles */
+.tile {
+  min-width:220px;
+  transition:transform .15s ease;
+  will-change: transform;
+  transform: translateZ(0);
+}
+.tile img { width:100%; border-radius:10px; }
 
-.player { position:fixed; top:0; left:0; width:100%; height:100%; background:black; }
+.tile.active {
+  transform:scale(1.2);
+  outline:3px solid #e50914;
+}
+
+/* Player */
+.player {
+  position:fixed;
+  width:100%;
+  height:100%;
+  background:black;
+}
 </style>
 </head>
+
 <body>
+
+<div id="splash">📺 Tizen TV</div>
 <div id="app"></div>
+
 <script src="app.js"></script>
 </body>
 </html>
