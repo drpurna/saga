@@ -1,0 +1,20 @@
+{
+  "name": "tizen-tv",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "^18",
+    "react-dom": "^18",
+    "zustand": "^4",
+    "shaka-player": "^4"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vite": "^5",
+    "@vitejs/plugin-react": "^4"
+  }
+}
