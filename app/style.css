@@ -1,9 +1,12 @@
 :root {
   --bg: #101418;
   --panel: #182028;
-  --accent: #4fc3f7;
+  --accent: #6c757d;        /* neutral gray instead of blue */
   --text: #f3f6fa;
   --muted: #a7b1bc;
+  --border: #2a3642;
+  --button-bg: #1e2d3a;
+  --button-hover: #2a3a48;
 }
 
 * { box-sizing: border-box; }
@@ -31,42 +34,88 @@ input, button {
   width: 100%;
   height: 42px;
   border-radius: 8px;
-  border: 1px solid #314252;
-  background: #0f151b;
+  border: 1px solid var(--border);
+  background: var(--button-bg);
   color: var(--text);
   padding: 0 12px;
   font-size: 16px;
 }
 button {
   cursor: pointer;
-  background: #1e2d3a;
+  background: var(--button-bg);
 }
-button:focus, input:focus {
-  outline: 2px solid var(--accent);
+button:hover,
+button:focus {
+  background: var(--button-hover);
+  border-color: #aaa;
+  outline: none;
+}
+button.active {
+  background: #3a4a58;
+  border-color: #aaa;
+}
+
+/* Category bar */
+.category-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+.category-btn {
+  flex: 1 0 auto;
+  padding: 8px 12px;
+  font-size: 14px;
+  background: var(--button-bg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  color: var(--text);
+  transition: all 0.2s;
+}
+.category-btn.active {
+  background: #3a4a58;
+  border-color: #aaa;
 }
 
 #channelList {
   list-style: none;
   margin: 10px 0 0;
   padding: 0;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 260px); /* adjusted to leave space for category bar */
   overflow: auto;
 }
 #channelList li {
-  padding: 12px;
+  padding: 8px 12px;
   border-radius: 8px;
   margin-bottom: 8px;
   background: #0f151b;
-  border: 1px solid #23303d;
+  border: 1px solid var(--border);
   cursor: pointer;
 }
 #channelList li.active {
-  border-color: var(--accent);
-  background: #162635;
+  border-color: #aaa;
+  background: #2a3a48;
 }
-#channelList li .meta {
+.channel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.channel-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #000;
+  filter: grayscale(100%); /* optional monochrome icons */
+}
+.channel-info {
+  flex: 1;
+}
+.meta {
+  font-size: 12px;
   color: var(--muted);
-  font-size: 13px;
 }
 
 .player-area {
