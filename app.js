@@ -4,39 +4,67 @@ let focusEl = null;
 let current = { row: 0, col: 0 };
 let player, video;
 
-/* ---------- LOAD + CACHE ---------- */
+/* ---------- ERROR DEBUG ---------- */
+window.onerror = function(msg, url, line) {
+  document.body.innerHTML = `
+    <div style="color:red;padding:20px">
+      ERROR: ${msg}<br>Line: ${line}
+    </div>
+  `;
+};
+
+/* ---------- LOAD CHANNELS (SAFE) ---------- */
 async function loadChannels() {
   const cached = localStorage.getItem("channels");
 
-  if (cached) {
-    return JSON.parse(cached);
+  if (cached) return JSON.parse(cached);
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(
+      "https://iptv-org.github.io/iptv/languages/telugu.m3u",
+      { signal: controller.signal }
+    );
+
+    clearTimeout(timeout);
+
+    const text = await res.text();
+
+    const parsed = text.split("#EXTINF").slice(1).map(e => ({
+      name: e.match(/,(.*)/)?.[1],
+      logo: e.match(/tvg-logo="(.*?)"/)?.[1],
+      url: e.split("\n")[1],
+      group: e.match(/group-title="(.*?)"/)?.[1] || "Other"
+    }));
+
+    localStorage.setItem("channels", JSON.stringify(parsed));
+
+    return parsed;
+
+  } catch (err) {
+    console.log("Using fallback channels");
+
+    return [
+      {
+        name: "Test Stream",
+        logo: "https://via.placeholder.com/300x200",
+        url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+        group: "Demo"
+      }
+    ];
   }
-
-  const res = await fetch("https://iptv-org.github.io/iptv/languages/telugu.m3u");
-  const text = await res.text();
-
-  const parsed = text.split("#EXTINF").slice(1).map(e => ({
-    name: e.match(/,(.*)/)?.[1],
-    logo: e.match(/tvg-logo="(.*?)"/)?.[1],
-    url: e.split("\n")[1],
-    group: e.match(/group-title="(.*?)"/)?.[1] || "Other"
-  }));
-
-  localStorage.setItem("channels", JSON.stringify(parsed));
-  return parsed;
 }
 
 /* ---------- GROUP ---------- */
 function groupChannels(list) {
   return {
-    News: list.filter(c => c.group.includes("News")),
-    Movies: list.filter(c => c.group.includes("Movies")),
-    Entertainment: list.filter(c => c.group.includes("Entertainment")),
-    All: list
+    Live: list
   };
 }
 
-/* ---------- BUILD UI (ONCE) ---------- */
+/* ---------- BUILD UI ONCE ---------- */
 function buildUI() {
   const app = document.getElementById("app");
 
@@ -133,7 +161,7 @@ async function play(url) {
 
 /* ---------- PRELOAD ---------- */
 function preload(channels) {
-  channels.slice(0, 3).forEach(c => {
+  channels.slice(0, 2).forEach(c => {
     const v = document.createElement("video");
     v.src = c.url;
     v.preload = "auto";
@@ -153,16 +181,23 @@ window.addEventListener("keydown", (e) => {
 
 /* ---------- INIT ---------- */
 (async function init() {
-  channels = await loadChannels();
-  grouped = groupChannels(channels);
+  try {
+    channels = await loadChannels();
+    grouped = groupChannels(channels);
 
-  preload(channels);
-  buildUI();
+    buildUI();
+    preload(channels);
 
-  // splash fade
+  } catch (e) {
+    console.log("Init error", e);
+  }
+
+  // NEVER BLOCK SPLASH
   setTimeout(() => {
     const splash = document.getElementById("splash");
-    splash.style.opacity = "0";
-    setTimeout(() => splash.remove(), 500);
+    if (splash) {
+      splash.style.opacity = "0";
+      setTimeout(() => splash.remove(), 500);
+    }
   }, 1500);
 })();
