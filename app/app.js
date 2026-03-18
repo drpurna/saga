@@ -1,10 +1,13 @@
 /* =========================
-   CORE STATE
+   IPTV ENGINE v3 FINAL
 ========================= */
-const STATE = {
+
+const App = (() => {
+
+const S = {
   channels: [],
+  rows: [],
   groups: [],
-  rows: {},
   flat: [],
 
   focusRow: 0,
@@ -12,99 +15,107 @@ const STATE = {
   currentIndex: 0,
 
   player: null,
-  playing: false
+
+  visibleStart: 0,
+  VISIBLE_ROWS: 6,
+
+  dom: {
+    rows: document.getElementById("rows"),
+    overlay: document.getElementById("overlay")
+  }
 };
 
-const PLAYLIST = "https://iptv-org.github.io/iptv/languages/tel.m3u";
+const CONFIG = {
+  PLAYLIST: "https://iptv-org.github.io/iptv/languages/tel.m3u",
+  CACHE_KEY: "iptv_cache_v1",
+  BUFFER: "300"
+};
 
-const rowsEl = document.getElementById("rows");
-const overlay = document.getElementById("overlay");
-
-/* =========================
-   INIT
-========================= */
-init();
-
+/* INIT */
 async function init() {
-  try {
-    STATE.player = webapis.avplay;
-  } catch (e) {
-    console.log("AVPlay unavailable");
+
+  try { S.player = webapis.avplay; } catch(e){}
+
+  let text = localStorage.getItem(CONFIG.CACHE_KEY);
+
+  if (!text) {
+    text = await fetch(CONFIG.PLAYLIST).then(r=>r.text());
+    localStorage.setItem(CONFIG.CACHE_KEY, text);
   }
 
-  const text = await fetch(PLAYLIST).then(r => r.text());
-  STATE.channels = parseM3U(text);
+  S.channels = parse(text);
   build();
 
-  render();
-  focus();
+  renderWindow();
+  setFocus();
 }
 
-/* =========================
-   PARSER
-========================= */
-function parseM3U(text) {
+/* PARSE */
+function parse(text) {
   const lines = text.split("\n");
-  let result = [];
-  let meta = {};
+  let res = [], meta = {};
 
-  for (let line of lines) {
-    line = line.trim();
+  for (let l of lines) {
+    l = l.trim();
 
-    if (line.startsWith("#EXTINF")) {
-      meta.name = line.split(",").pop();
+    if (l.startsWith("#EXTINF")) {
+      meta.name = l.split(",").pop();
 
-      const g = line.match(/group-title="([^"]+)"/);
-      const l = line.match(/tvg-logo="([^"]+)"/);
+      const g = l.match(/group-title="([^"]+)"/);
+      const logo = l.match(/tvg-logo="([^"]+)"/);
 
       meta.group = g ? g[1] : "Other";
-      meta.logo = l ? l[1] : "";
-    }
-    else if (line && !line.startsWith("#")) {
-      result.push({ ...meta, url: line });
+      meta.logo = logo ? logo[1] : "";
+
+    } else if (l && !l.startsWith("#")) {
+      res.push({...meta, url:l});
     }
   }
-  return result;
+  return res;
 }
 
-/* =========================
-   DATA BUILD
-========================= */
+/* BUILD */
 function build() {
-  STATE.rows = {};
+  const map = {};
 
-  STATE.channels.forEach(ch => {
-    if (!STATE.rows[ch.group]) STATE.rows[ch.group] = [];
-    STATE.rows[ch.group].push(ch);
+  S.channels.forEach(ch => {
+    if (!map[ch.group]) map[ch.group] = [];
+    map[ch.group].push(ch);
   });
 
-  STATE.groups = Object.keys(STATE.rows);
-  STATE.flat = STATE.channels;
+  S.groups = Object.keys(map);
+
+  S.rows = S.groups.map(g => ({
+    title: g,
+    items: map[g]
+  }));
+
+  S.flat = S.channels;
 }
 
-/* =========================
-   UI RENDER
-========================= */
-function render() {
-  rowsEl.innerHTML = "";
+/* VIRTUAL RENDER */
+function renderWindow() {
 
-  STATE.groups.forEach((g, r) => {
+  const start = S.visibleStart;
+  const end = Math.min(start + S.VISIBLE_ROWS, S.rows.length);
 
-    const row = document.createElement("div");
-    row.className = "row";
+  const frag = document.createDocumentFragment();
 
-    const title = document.createElement("div");
-    title.className = "row-title";
-    title.textContent = g;
+  for (let r = start; r < end; r++) {
 
-    const items = document.createElement("div");
-    items.className = "row-items";
+    const row = S.rows[r];
 
-    STATE.rows[g].forEach((ch, c) => {
-      const card = document.createElement("div");
-      card.className = "card";
-      card.dataset.r = r;
-      card.dataset.c = c;
+    const rowEl = div("row");
+
+    const title = div("row-title", row.title);
+
+    const items = div("row-items");
+
+    row.items.forEach((ch, c) => {
+
+      const card = div("card");
+      card._r = r;
+      card._c = c;
 
       if (ch.logo) {
         const img = new Image();
@@ -118,119 +129,117 @@ function render() {
       items.appendChild(card);
     });
 
-    row.appendChild(title);
-    row.appendChild(items);
-    rowsEl.appendChild(row);
-  });
+    rowEl.appendChild(title);
+    rowEl.appendChild(items);
+    frag.appendChild(rowEl);
+  }
+
+  S.dom.rows.innerHTML = "";
+  S.dom.rows.appendChild(frag);
 }
 
-/* =========================
-   FOCUS ENGINE
-========================= */
-function focus() {
-  document.querySelectorAll(".card").forEach(el => el.classList.remove("active"));
+/* FOCUS */
+function setFocus() {
 
-  const el = document.querySelector(
-    `[data-r="${STATE.focusRow}"][data-c="${STATE.focusCol}"]`
-  );
+  document.querySelectorAll(".card.active")
+    .forEach(e=>e.classList.remove("active"));
+
+  const vr = S.focusRow - S.visibleStart;
+
+  const rowEl = S.dom.rows.children[vr];
+  if (!rowEl) return;
+
+  const items = rowEl.children[1];
+  const el = items.children[S.focusCol];
 
   if (el) {
     el.classList.add("active");
-    el.scrollIntoView({ block: "center", inline: "center" });
+    el.scrollIntoView({block:"center", inline:"center"});
   }
 }
 
-/* =========================
-   PLAYER ENGINE (AVPLAY)
-========================= */
+/* PLAYER */
 function play(index) {
-  const ch = STATE.flat[index];
-  if (!ch || !STATE.player) return;
 
-  STATE.currentIndex = index;
+  const ch = S.flat[index];
+  if (!ch || !S.player) return;
 
+  S.currentIndex = index;
   showOverlay(ch.name);
 
   try {
-    STATE.player.stop();
-    STATE.player.close();
-  } catch (e) {}
+    S.player.stop();
+    S.player.close();
+  } catch(e){}
 
   try {
-    STATE.player.open(ch.url);
+    S.player.open(ch.url);
 
-    STATE.player.setDisplayRect(0, 0, 1920, 1080);
-    STATE.player.setStreamingProperty("BUFFERING_TIME", "500");
+    S.player.setDisplayRect(0,0,1920,1080);
+    S.player.setStreamingProperty("BUFFERING_TIME", CONFIG.BUFFER);
 
-    STATE.player.prepareAsync(
-      () => {
-        STATE.player.play();
-        STATE.playing = true;
-      },
-      e => console.log("AVPlay error", e)
+    S.player.prepareAsync(
+      ()=> S.player.play(),
+      e=>console.log("AVPlay error", e)
     );
 
-  } catch (e) {
-    console.log("play error", e);
-  }
+  } catch(e){}
 }
 
-/* =========================
-   ZAPPING ENGINE
-========================= */
+/* ZAP */
 function zap(dir) {
-  let i = STATE.currentIndex + dir;
+  let i = S.currentIndex + dir;
 
-  if (i < 0) i = STATE.flat.length - 1;
-  if (i >= STATE.flat.length) i = 0;
+  if (i < 0) i = S.flat.length - 1;
+  if (i >= S.flat.length) i = 0;
 
   play(i);
 }
 
-/* =========================
-   OVERLAY
-========================= */
-let overlayTimer = null;
+/* OVERLAY */
+let t;
+function showOverlay(txt) {
+  const o = S.dom.overlay;
+  o.textContent = txt;
+  o.style.opacity = 1;
 
-function showOverlay(name) {
-  overlay.textContent = name;
-  overlay.style.opacity = 1;
-
-  clearTimeout(overlayTimer);
-  overlayTimer = setTimeout(() => {
-    overlay.style.opacity = 0;
-  }, 3000);
+  clearTimeout(t);
+  t = setTimeout(()=>o.style.opacity=0,2000);
 }
 
-/* =========================
-   INPUT ENGINE
-========================= */
-window.addEventListener("keydown", e => {
+/* INPUT */
+let last = 0;
 
-  switch (e.key) {
+function onKey(e) {
 
-    case "ArrowRight":
-      STATE.focusCol++;
-      break;
+  const now = Date.now();
+  if (now - last < 70) return;
+  last = now;
 
-    case "ArrowLeft":
-      STATE.focusCol--;
-      break;
+  switch(e.key) {
 
     case "ArrowDown":
-      STATE.focusRow++;
-      STATE.focusCol = 0;
+      S.focusRow++;
+      S.focusCol = 0;
       break;
 
     case "ArrowUp":
-      STATE.focusRow--;
-      STATE.focusCol = 0;
+      S.focusRow--;
+      S.focusCol = 0;
+      break;
+
+    case "ArrowRight":
+      S.focusCol++;
+      break;
+
+    case "ArrowLeft":
+      S.focusCol--;
       break;
 
     case "Enter":
-      const ch = STATE.rows[STATE.groups[STATE.focusRow]][STATE.focusCol];
-      const idx = STATE.flat.findIndex(c => c.url === ch.url);
-      play(idx);
+      const row = S.rows[S.focusRow];
+      const ch = row.items[S.focusCol];
+      play(S.flat.indexOf(ch));
       return;
 
     case "ChannelUp":
@@ -242,10 +251,45 @@ window.addEventListener("keydown", e => {
       return;
   }
 
-  /* bounds */
-  STATE.focusRow = Math.max(0, Math.min(STATE.focusRow, STATE.groups.length - 1));
-  const maxCol = STATE.rows[STATE.groups[STATE.focusRow]].length - 1;
-  STATE.focusCol = Math.max(0, Math.min(STATE.focusCol, maxCol));
+  clamp();
+  adjustWindow();
+  setFocus();
+}
 
-  focus();
-});
+/* WINDOW SHIFT */
+function adjustWindow() {
+
+  if (S.focusRow < S.visibleStart) {
+    S.visibleStart = S.focusRow;
+    renderWindow();
+  }
+
+  if (S.focusRow >= S.visibleStart + S.VISIBLE_ROWS) {
+    S.visibleStart = S.focusRow - S.VISIBLE_ROWS + 1;
+    renderWindow();
+  }
+}
+
+/* HELPERS */
+function clamp() {
+  S.focusRow = Math.max(0, Math.min(S.focusRow, S.rows.length - 1));
+
+  const maxCol = S.rows[S.focusRow].items.length - 1;
+  S.focusCol = Math.max(0, Math.min(S.focusCol, maxCol));
+}
+
+function div(cls, txt) {
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  if (txt) d.textContent = txt;
+  return d;
+}
+
+/* START */
+window.addEventListener("keydown", onKey);
+
+return { init };
+
+})();
+
+App.init();
