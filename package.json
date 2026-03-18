@@ -1,6 +1,6 @@
 {
   "name": "Tizen TV",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Smart IPTV player module for Samsung Tizen TVs via TizenBrew",
   "license": "MIT",
 
@@ -22,7 +22,7 @@
 
   "packageType": "app",
 
-  "appName": "Smart IPTV",
+  "appName": "Tizen TV",
 
   "appPath": "app/index.html",
 
