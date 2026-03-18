@@ -1,4 +1,3 @@
-// No playlistUrlEl or loadBtn
 const searchInput = document.getElementById('searchInput');
 const channelListEl = document.getElementById('channelList');
 const nowPlayingEl = document.getElementById('nowPlaying');
@@ -12,7 +11,6 @@ let selectedIndex = 0;
 let focusArea = 'list'; // list | player
 let hls = null;
 
-// Fixed playlist URL
 const PLAYLIST_URL = 'https://iptv-org.github.io/iptv/languages/tel.m3u';
 
 function setStatus(text) {
@@ -285,7 +283,7 @@ searchInput.addEventListener('input', applySearch);
         'MediaStop',
         'MediaFastForward',
         'MediaRewind',
-        'ColorF1Green',   // Keep Green for reload
+        'ColorF1Green',
         'ColorF2Yellow',
         'ColorF3Blue',
       ].forEach(k => {
@@ -354,7 +352,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Green key reloads the playlist
   if (key === 'ColorF1Green' || code === 404) {
     loadPlaylist();
     e.preventDefault();
@@ -362,5 +359,4 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Initial load
 loadPlaylist();
