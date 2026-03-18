@@ -1,18 +1,41 @@
 {
-  "name": "smartiptv-pro",
-  "version": "3.1.0",
-  "description": "Professional IPTV player for Samsung Tizen TVs via TizenBrew",
-  "license": "MIT",
-  "packageType": "app",
-  "appName": "Smart IPTV Pro",
-  "appPath": "app/index.html",
-  "serviceFile": "service.js",
-  "evaluateScriptOnDocumentStart": false,
+  "name": "@drpurna/tizentv",
+  "appName": "Smart TV",
+  "version": "2.0.0",
+  "description": "YouTube TV style IPTV player for Tizen (Smart TV)",
+  "packageType": "mods",
+  "main": "mods/index.js",
+  "serviceFile": "service/index.js",
+  "author": "drpurna",
   "keys": [
-    "MediaPlay","MediaPause","MediaPlayPause","MediaStop",
-    "MediaFastForward","MediaRewind",
-    "ChannelUp","ChannelDown",
-    "VolumeUp","VolumeDown","VolumeMute",
-    "0","1","2","3","4","5","6","7","8","9"
-  ]
+    "MediaPlayPause",
+    "MediaPlay",
+    "MediaPause",
+    "MediaStop",
+    "MediaFastForward",
+    "MediaRewind",
+    "MediaTrackNext",
+    "MediaTrackPrevious"
+  ],
+  "repository": {
+    "url": "https://github.com/drpurna/tizentv"
+  },
+  "license": "MIT",
+  "tizenbrew": {
+    "moduleType": "mods",
+    "appName": "Smart TV",
+    "packageName": "com.drpurna.tizentv",
+    "version": "2.0.0",
+    "tizenVersion": "4.0",
+    "requiredPermissions": [
+      "http://tizen.org/privilege/internet",
+      "http://tizen.org/privilege/application.launch"
+    ],
+    "icon": "app/icon.png",
+    "screenshots": [],
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/drpurna/tizentv"
+    }
+  }
 }
