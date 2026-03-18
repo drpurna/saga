@@ -5,22 +5,91 @@ body {
   overflow: hidden;
 }
 
-/* video layer */
+/* HEADER */
+#header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 60px;
+  z-index: 5;
+}
+
+.logo {
+  color: #fff;
+  font-size: 26px;
+  font-weight: bold;
+}
+
+.actions {
+  display: flex;
+  gap: 20px;
+}
+
+.icon {
+  color: #fff;
+  font-size: 24px;
+}
+
+/* PLAYER */
 #player {
   position: fixed;
   inset: 0;
   background: black;
-  z-index: 0;
 }
 
 /* UI */
 #ui {
   position: relative;
   z-index: 2;
-  padding: 70px;
+  padding: 120px 70px 70px;
 }
 
-/* overlay */
+/* ROW */
+.row {
+  margin-bottom: 50px;
+}
+
+.row-title {
+  color: #aaa;
+  font-size: 22px;
+  margin-bottom: 15px;
+}
+
+/* HORIZONTAL SCROLL FIX */
+.row-items {
+  display: flex;
+  gap: 20px;
+  overflow: hidden;
+  will-change: transform;
+}
+
+/* FIXED TILE SIZE */
+.card {
+  flex: 0 0 260px;
+  height: 150px;
+  background: #111;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card img {
+  max-width: 75%;
+  max-height: 75%;
+}
+
+/* FOCUS */
+.card.active {
+  transform: scale(1.2);
+  box-shadow: 0 0 30px rgba(255,255,255,0.3);
+}
+
+/* OVERLAY */
 #overlay {
   position: fixed;
   bottom: 60px;
@@ -29,44 +98,4 @@ body {
   font-size: 24px;
   opacity: 0;
   transition: opacity 0.3s;
-}
-
-/* rows */
-.row {
-  margin-bottom: 40px;
-}
-
-.row-title {
-  color: #aaa;
-  font-size: 22px;
-  margin-bottom: 10px;
-}
-
-/* horizontal */
-.row-items {
-  display: flex;
-  gap: 20px;
-}
-
-/* tiles */
-.card {
-  width: 260px;
-  height: 150px;
-  background: #111;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s;
-}
-
-.card img {
-  max-width: 75%;
-  max-height: 75%;
-}
-
-/* focus */
-.card.active {
-  transform: scale(1.18);
-  box-shadow: 0 0 30px rgba(255,255,255,0.25);
 }
