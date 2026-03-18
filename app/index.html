@@ -7,32 +7,34 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <!-- Browse View -->
-  <div id="browseView" class="browse-view">
-    <div class="top-bar">
-      <h1 class="logo">Live TV</h1>
-      <div class="category-tabs" id="categoryTabs">
-        <!-- Filled by JS -->
+  <div class="app">
+    <!-- Top row: categories only (single row) -->
+    <div class="top-row">
+      <div class="category-bar" id="categoryBar"></div>
+    </div>
+
+    <!-- Left sidebar: channel icons only -->
+    <aside class="channel-sidebar" id="channelSidebar">
+      <h1>Live TV</h1>
+      <div class="search-row">
+        <input id="searchInput" type="text" placeholder="Search channel..." />
       </div>
-    </div>
+      <ul id="channelList" class="icon-list"></ul>
+    </aside>
 
-    <div class="rows-container" id="rowsContainer">
-      <!-- Rows filled by JS -->
-    </div>
+    <!-- Main area: video player (right side) -->
+    <main class="player-area" id="playerArea">
+      <video id="video" controls autoplay></video>
+      <div class="player-header">
+        <h2 id="nowPlaying">No channel selected</h2>
+        <span id="statusText">Idle</span>
+      </div>
+    </main>
 
-    <div class="footer-help">
-      <p>▲▼ move between rows, ◀▶ move in row, Enter play, Green reload</p>
+    <!-- Footer help -->
+    <div class="footer help">
+      <p>Remote: ↑↓ select channel, ←→ focus, Enter play, double‑click icon / Enter (video focused) toggles fullscreen, Green key reloads playlist.</p>
     </div>
-  </div>
-
-  <!-- Player View (hidden initially) -->
-  <div id="playerView" class="player-view hidden">
-    <div class="player-header">
-      <button id="backButton" class="back-btn">← Back</button>
-      <h2 id="nowPlayingTitle">Now Playing</h2>
-    </div>
-    <video id="video" controls autoplay></video>
-    <div class="player-footer" id="playerStatus">Idle</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
