@@ -1,8 +1,7 @@
 // service/index.js – Launches your web app from GitHub Pages
 module.exports = {
   name: "Smart TV",
-  async start(ctx) {
-    // Load from GitHub Pages with cache busting
+  async start(ctx){
     const url = "https://drpurna.github.io/tizentv/app/index.html?v=" + Date.now();
     ctx.openApp({
       url: url,
