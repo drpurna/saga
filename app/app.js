@@ -1,87 +1,118 @@
-const video = document.getElementById('video');
-const rowsContainer = document.getElementById('rowsContainer');
-const nowPlayingEl = document.getElementById('nowPlaying');
-const statusTextEl = document.getElementById('statusText');
+/* =========================
+   CORE STATE
+========================= */
+const STATE = {
+  channels: [],
+  groups: [],
+  rows: {},
+  flat: [],
 
-const searchIcon = document.getElementById('searchIcon');
-const searchOverlay = document.getElementById('searchOverlay');
-const searchInput = document.getElementById('searchInput');
-const searchResults = document.getElementById('searchResults');
+  focusRow: 0,
+  focusCol: 0,
+  currentIndex: 0,
 
-let channels = [];
-let rows = {};
-let rowKeys = [];
-
-let focus = { row: 0, col: 0 };
-let focusArea = "rows";
+  player: null,
+  playing: false
+};
 
 const PLAYLIST = "https://iptv-org.github.io/iptv/languages/tel.m3u";
 
+const rowsEl = document.getElementById("rows");
+const overlay = document.getElementById("overlay");
+
+/* =========================
+   INIT
+========================= */
+init();
+
 async function init() {
+  try {
+    STATE.player = webapis.avplay;
+  } catch (e) {
+    console.log("AVPlay unavailable");
+  }
+
   const text = await fetch(PLAYLIST).then(r => r.text());
-  channels = parseM3U(text);
-  buildRows();
-  renderRows();
-  updateFocus();
+  STATE.channels = parseM3U(text);
+  build();
+
+  render();
+  focus();
 }
 
+/* =========================
+   PARSER
+========================= */
 function parseM3U(text) {
-  const lines = text.split(/\n/);
-  const out = [];
+  const lines = text.split("\n");
+  let result = [];
   let meta = {};
 
   for (let line of lines) {
     line = line.trim();
-    if (!line) continue;
 
     if (line.startsWith("#EXTINF")) {
       meta.name = line.split(",").pop();
+
       const g = line.match(/group-title="([^"]+)"/);
       const l = line.match(/tvg-logo="([^"]+)"/);
+
       meta.group = g ? g[1] : "Other";
-      meta.logo = l ? l[1] : null;
-    } else if (!line.startsWith("#")) {
-      out.push({ ...meta, url: line });
+      meta.logo = l ? l[1] : "";
+    }
+    else if (line && !line.startsWith("#")) {
+      result.push({ ...meta, url: line });
     }
   }
-  return out;
+  return result;
 }
 
-function buildRows() {
-  rows = {};
-  channels.forEach(ch => {
-    if (!rows[ch.group]) rows[ch.group] = [];
-    rows[ch.group].push(ch);
+/* =========================
+   DATA BUILD
+========================= */
+function build() {
+  STATE.rows = {};
+
+  STATE.channels.forEach(ch => {
+    if (!STATE.rows[ch.group]) STATE.rows[ch.group] = [];
+    STATE.rows[ch.group].push(ch);
   });
-  rowKeys = Object.keys(rows);
+
+  STATE.groups = Object.keys(STATE.rows);
+  STATE.flat = STATE.channels;
 }
 
-function renderRows() {
-  rowsContainer.innerHTML = "";
+/* =========================
+   UI RENDER
+========================= */
+function render() {
+  rowsEl.innerHTML = "";
 
-  rowKeys.forEach((key, r) => {
+  STATE.groups.forEach((g, r) => {
+
     const row = document.createElement("div");
     row.className = "row";
 
     const title = document.createElement("div");
     title.className = "row-title";
-    title.textContent = key;
+    title.textContent = g;
 
     const items = document.createElement("div");
     items.className = "row-items";
 
-    rows[key].forEach((ch, c) => {
+    STATE.rows[g].forEach((ch, c) => {
       const card = document.createElement("div");
       card.className = "card";
       card.dataset.r = r;
       card.dataset.c = c;
-      card.dataset.name = ch.name;
 
       if (ch.logo) {
-        const img = document.createElement("img");
+        const img = new Image();
         img.src = ch.logo;
-        img.onerror = () => img.remove();
+        img.loading = "lazy";
         card.appendChild(img);
+      } else {
+        card.textContent = ch.name;
       }
 
       items.appendChild(card);
@@ -89,107 +120,132 @@ function renderRows() {
 
     row.appendChild(title);
     row.appendChild(items);
-    rowsContainer.appendChild(row);
+    rowsEl.appendChild(row);
   });
 }
 
-function updateFocus() {
+/* =========================
+   FOCUS ENGINE
+========================= */
+function focus() {
   document.querySelectorAll(".card").forEach(el => el.classList.remove("active"));
-  searchIcon.classList.remove("active");
 
-  if (focusArea === "rows") {
-    const el = document.querySelector(`[data-r="${focus.row}"][data-c="${focus.col}"]`);
-    if (el) {
-      el.classList.add("active");
-      el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-    }
-  }
+  const el = document.querySelector(
+    `[data-r="${STATE.focusRow}"][data-c="${STATE.focusCol}"]`
+  );
 
-  if (focusArea === "search") {
-    searchIcon.classList.add("active");
+  if (el) {
+    el.classList.add("active");
+    el.scrollIntoView({ block: "center", inline: "center" });
   }
 }
 
-function play() {
-  const ch = rows[rowKeys[focus.row]][focus.col];
-  if (!ch) return;
+/* =========================
+   PLAYER ENGINE (AVPLAY)
+========================= */
+function play(index) {
+  const ch = STATE.flat[index];
+  if (!ch || !STATE.player) return;
 
-  nowPlayingEl.textContent = ch.name;
-  statusTextEl.textContent = "Playing";
+  STATE.currentIndex = index;
 
-  if (window.Hls && ch.url.includes(".m3u8")) {
-    const hls = new Hls();
-    hls.loadSource(ch.url);
-    hls.attachMedia(video);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-  } else {
-    video.src = ch.url;
-    video.play();
+  showOverlay(ch.name);
+
+  try {
+    STATE.player.stop();
+    STATE.player.close();
+  } catch (e) {}
+
+  try {
+    STATE.player.open(ch.url);
+
+    STATE.player.setDisplayRect(0, 0, 1920, 1080);
+    STATE.player.setStreamingProperty("BUFFERING_TIME", "500");
+
+    STATE.player.prepareAsync(
+      () => {
+        STATE.player.play();
+        STATE.playing = true;
+      },
+      e => console.log("AVPlay error", e)
+    );
+
+  } catch (e) {
+    console.log("play error", e);
   }
 }
 
-/* 🔍 Search */
-searchIcon.onclick = () => {
-  focusArea = "overlay";
-  searchOverlay.classList.remove("hidden");
-  searchInput.focus();
-};
+/* =========================
+   ZAPPING ENGINE
+========================= */
+function zap(dir) {
+  let i = STATE.currentIndex + dir;
 
-searchInput.oninput = () => {
-  const q = searchInput.value.toLowerCase();
-  const results = channels.filter(c => c.name.toLowerCase().includes(q));
+  if (i < 0) i = STATE.flat.length - 1;
+  if (i >= STATE.flat.length) i = 0;
 
-  searchResults.innerHTML = results.map(c => `
-    <div class="card">
-      ${c.logo ? `<img src="${c.logo}">` : ""}
-    </div>
-  `).join('');
-};
+  play(i);
+}
 
-/* 🎮 Remote */
+/* =========================
+   OVERLAY
+========================= */
+let overlayTimer = null;
+
+function showOverlay(name) {
+  overlay.textContent = name;
+  overlay.style.opacity = 1;
+
+  clearTimeout(overlayTimer);
+  overlayTimer = setTimeout(() => {
+    overlay.style.opacity = 0;
+  }, 3000);
+}
+
+/* =========================
+   INPUT ENGINE
+========================= */
 window.addEventListener("keydown", e => {
 
-  if (focusArea === "overlay") {
-    if (e.key === "Backspace" || e.key === "Escape") {
-      searchOverlay.classList.add("hidden");
-      focusArea = "rows";
-      updateFocus();
-    }
-    return;
-  }
-
-  if (e.key === "ArrowUp" && focus.row === 0) {
-    focusArea = "search";
-    updateFocus();
-    return;
-  }
-
-  if (focusArea === "search") {
-    if (e.key === "Enter") {
-      searchOverlay.classList.remove("hidden");
-      focusArea = "overlay";
-      searchInput.focus();
-    }
-    if (e.key === "ArrowDown") {
-      focusArea = "rows";
-      updateFocus();
-    }
-    return;
-  }
-
   switch (e.key) {
-    case "ArrowRight": focus.col++; break;
-    case "ArrowLeft": focus.col--; break;
-    case "ArrowDown": focus.row++; focus.col = 0; break;
-    case "ArrowUp": focus.row--; focus.col = 0; break;
-    case "Enter": play(); break;
+
+    case "ArrowRight":
+      STATE.focusCol++;
+      break;
+
+    case "ArrowLeft":
+      STATE.focusCol--;
+      break;
+
+    case "ArrowDown":
+      STATE.focusRow++;
+      STATE.focusCol = 0;
+      break;
+
+    case "ArrowUp":
+      STATE.focusRow--;
+      STATE.focusCol = 0;
+      break;
+
+    case "Enter":
+      const ch = STATE.rows[STATE.groups[STATE.focusRow]][STATE.focusCol];
+      const idx = STATE.flat.findIndex(c => c.url === ch.url);
+      play(idx);
+      return;
+
+    case "ChannelUp":
+      zap(1);
+      return;
+
+    case "ChannelDown":
+      zap(-1);
+      return;
   }
 
-  focus.row = Math.max(0, Math.min(focus.row, rowKeys.length - 1));
-  const maxCol = rows[rowKeys[focus.row]].length - 1;
-  focus.col = Math.max(0, Math.min(focus.col, maxCol));
+  /* bounds */
+  STATE.focusRow = Math.max(0, Math.min(STATE.focusRow, STATE.groups.length - 1));
+  const maxCol = STATE.rows[STATE.groups[STATE.focusRow]].length - 1;
+  STATE.focusCol = Math.max(0, Math.min(STATE.focusCol, maxCol));
 
-  updateFocus();
+  focus();
 });
-
-init();
