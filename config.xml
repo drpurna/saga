@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" 
+        xmlns:tizen="http://tizen.org/ns/widgets" 
+        id="TizenTV" 
+        version="1.0.0" 
+        viewmodes="fullscreen">
+    <name>Tizen TV</name>
+    <content src="app/index.html"/>
+    <!-- Replace the numbers with any 10-digit number (e.g., 1234567890) -->
+    <tizen:application id="1234567890.TizenTV" package="1234567890" required_version="2.3"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.avplay"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:service id="1234567890.TizenTVService" name="TizenTVService">
+        <tizen:content src="service.js"/>
+    </tizen:service>
+</widget>
