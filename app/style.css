@@ -1,5 +1,5 @@
 /* =========================
-   IPTV TV – STYLE v6 (UPGRADED)
+   IPTV TV – STYLE v6 FINAL
 ========================= */
 
 :root {
@@ -10,7 +10,8 @@
   --border: #333333;
   --tile-bg: #111111;
   --tile-hover: #222222;
-  --overlay-bg: rgba(0,0,0,0.7); /* slightly darker for visibility */
+  --overlay-bg: rgba(0,0,0,0.6);
+  --splash-logo: #ffffff;
 }
 
 /* =========================
@@ -74,37 +75,34 @@ body {
 }
 
 /* =========================
-   SPLASH SCREEN – YouTube TV style
+   SPLASH SCREEN (JS HANDLED)
 ========================= */
 #splash {
   position: fixed;
   inset: 0;
-  background: var(--bg);
   display: flex;
-  align-items: center;
   justify-content: center;
-  z-index: 1000;
-}
-
-#splash .splash-inner {
-  display: flex;
   align-items: center;
-  gap: 20px;
+  flex-direction: column;
+  background: #000;
+  z-index: 1000;
+  opacity: 1;
+  transition: opacity 0.8s ease;
 }
 
-#splash .splash-logo {
-  width: 60px;
-  height: 60px;
-  background: #ff0000; /* YouTube red */
-  clip-path: polygon(25% 20%, 25% 80%, 75% 50%); /* triangle */
+.splash-logo {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--splash-logo);
+  margin-bottom: 20px;
 }
 
-#splash .splash-text {
-  color: #fff;
-  font-family: "Arial Black", Arial, sans-serif;
-  font-size: 64px;
+.splash-text {
+  color: var(--text);
+  font-size: 48px;
   font-weight: 900;
-  letter-spacing: -1px;
+  font-family: "Arial Black", Arial, sans-serif;
 }
 
 /* =========================
@@ -118,12 +116,13 @@ body {
 }
 
 /* =========================
-   UI OVERLAY
+   UI GRID
 ========================= */
 #ui {
   position: relative;
   z-index: 5;
   padding: 140px 60px 70px;
+  display: block; /* Hidden automatically by JS when fullscreen */
 }
 
 /* =========================
@@ -134,13 +133,12 @@ body {
 }
 
 .row-title {
-  font-weight: 900; /* Bold for category names */
+  font-weight: 900;
   font-size: 26px;
   color: var(--muted);
   margin-bottom: 20px;
 }
 
-/* Horizontal scroll wrapper */
 .row-items {
   display: flex;
   gap: 20px;
@@ -171,7 +169,7 @@ body {
 
 .card.active {
   transform: scale(1.2);
-  box-shadow: 0 0 35px rgba(255,255,255,0.5);
+  box-shadow: 0 0 35px rgba(255,255,255,0.4);
   background: var(--tile-hover);
 }
 
@@ -228,24 +226,11 @@ video, #player video {
 .card:focus {
   outline: none;
   transform: scale(1.2);
-  box-shadow: 0 0 40px rgba(255,255,255,0.5); /* slightly stronger glow */
+  box-shadow: 0 0 35px rgba(255,255,255,0.5);
 }
 
-/* =========================
-   ICON FOCUS
-========================= */
 .icon:focus {
   outline: none;
   transform: scale(1.25);
   background: var(--tile-hover);
 }
-
-/* =========================
-   SUGGESTIONS / UPGRADES ADDED
-=========================
-1. Splash screen fully coded (no external PNG)
-2. Overlay slightly darker for better visibility
-3. Card active glow stronger for remote navigation clarity
-4. Focus scaling smoothed for better UX
-5. Ready for responsive adjustments (future Samsung TVs)
-*/
