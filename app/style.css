@@ -1,83 +1,39 @@
 body {
   margin: 0;
-  background: #000;
-  color: #fff;
-  font-family: Arial, sans-serif;
-  overflow: hidden;
+  background: black;
+  color: white;
+  font-family: Arial;
 }
 
-#player {
+#video {
   position: fixed;
   inset: 0;
   background: black;
   z-index: 1;
 }
 
-#app {
+#grid {
   position: relative;
-  z-index: 5;
-  padding: 80px 60px;
-}
-
-#topbar {
-  font-size: 36px;
-  font-weight: bold;
-  margin-bottom: 40px;
-}
-
-.row {
-  margin-bottom: 40px;
-}
-
-.row-title {
-  font-size: 22px;
-  color: #aaa;
-  margin-bottom: 15px;
-}
-
-.row-items {
-  display: flex;
-  gap: 20px;
-  transition: transform 0.3s ease;
+  z-index: 2;
+  padding: 40px;
 }
 
 .card {
-  flex: 0 0 240px;
-  height: 140px;
-  background: #111;
-  border-radius: 10px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
+  display: inline-block;
+  width: 220px;
+  height: 120px;
+  margin: 10px;
+  background: #222;
+  border-radius: 8px;
   text-align: center;
+  line-height: 120px;
   cursor: pointer;
 }
 
-.card img {
-  max-width: 90%;
-  max-height: 90%;
-  object-fit: contain;
+.card:hover {
+  background: #444;
 }
 
-.card.active {
-  transform: scale(1.2);
-  box-shadow: 0 0 20px white;
-}
-
-#overlay {
-  position: fixed;
-  bottom: 50px;
-  left: 60px;
-  font-size: 24px;
-  background: rgba(0,0,0,0.7);
-  padding: 8px 12px;
-  border-radius: 6px;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.fullscreen #app {
+.fullscreen #grid {
   display: none;
 }
