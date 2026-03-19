@@ -1,3 +1,7 @@
+/* =========================
+   IPTV TV – STYLE v6 (Final)
+========================= */
+
 :root {
   --bg: #000000;
   --panel: #111111;
@@ -9,64 +13,211 @@
   --overlay-bg: rgba(0,0,0,0.6);
 }
 
-/* GLOBAL */
-* { box-sizing: border-box; }
+/* =========================
+   GLOBAL
+========================= */
+* {
+  box-sizing: border-box;
+}
+
 body {
-  margin:0;
+  margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: "Arial Black", Arial, sans-serif;
   overflow: hidden;
 }
 
-/* HEADER */
+/* =========================
+   HEADER – YouTube style
+========================= */
 #header {
   position: fixed;
-  top:0; left:0; right:0;
-  display:flex; justify-content:space-between; align-items:center;
-  padding:20px 60px;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 60px;
   background: var(--panel);
-  z-index:100;
-  border-bottom:1px solid var(--border);
+  z-index: 100;
+  border-bottom: 1px solid var(--border);
 }
-.logo { font-size:48px; font-weight:900; color:var(--text); }
-.actions { display:flex; gap:30px; }
-.icon { font-size:36px; background:var(--text); color:var(--bg);
-  padding:14px 18px; border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition: transform 0.2s, background 0.2s; }
-.icon:hover, .icon:focus { transform:scale(1.2); background:var(--tile-hover); outline:none; }
 
-/* SPLASH */
+.logo {
+  font-family: "Arial Black", Arial, sans-serif;
+  font-weight: 900;
+  font-size: 48px;
+  letter-spacing: -2px;
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  gap: 30px;
+}
+
+.icon {
+  font-size: 36px;
+  background: var(--text);
+  color: var(--bg);
+  padding: 14px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.icon:hover,
+.icon:focus {
+  transform: scale(1.25);
+  background: var(--tile-hover);
+  outline: none;
+}
+
+/* =========================
+   SPLASH SCREEN
+========================= */
 #splash {
-  position: fixed; inset:0; background:black; z-index:1000;
-  display:flex; justify-content:center; align-items:center;
-  color:white; font-size:120px; font-weight:900; letter-spacing:-2px;
+  position: fixed;
+  inset: 0;
+  background: black;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 120px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  z-index: 1000;
 }
 
-/* PLAYER */
-#player { position:fixed; inset:0; background:black; z-index:1; }
+/* =========================
+   PLAYER
+========================= */
+#player {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 1;
+}
 
-/* UI */
-#ui { position:relative; z-index:5; padding:140px 60px 70px; }
+/* =========================
+   UI OVERLAY
+========================= */
+#ui {
+  position: relative;
+  z-index: 5;
+  padding: 140px 60px 70px;
+}
 
-/* ROWS */
-.row { margin-bottom:50px; }
-.row-title { font-weight:900; font-size:26px; color:var(--muted); margin-bottom:20px; }
-.row-items { display:flex; gap:20px; overflow:hidden; will-change: transform; }
+/* =========================
+   ROWS
+========================= */
+.row {
+  margin-bottom: 50px;
+}
 
-/* CARD */
-.card { flex:0 0 260px; height:160px; background:var(--tile-bg); border-radius:16px; display:flex; align-items:center; justify-content:center; transition: transform 0.25s, box-shadow 0.25s, background 0.25s; cursor:pointer; }
-.card img { max-width:80%; max-height:80%; border-radius:6px; }
-.card.active, .card:focus { transform:scale(1.25); box-shadow:0 0 45px rgba(255,255,255,0.5); background: var(--tile-hover); outline:none; }
+.row-title {
+  font-weight: 900; /* Bold for category names */
+  font-size: 26px;
+  color: var(--muted);
+  margin-bottom: 20px;
+}
 
-/* OVERLAY */
-#overlay { position:fixed; bottom:60px; left:80px; color:var(--text); font-size:26px; background:var(--overlay-bg); padding:8px 12px; border-radius:8px; opacity:0; transition:opacity 0.3s; z-index:20; }
+/* Horizontal scroll wrapper */
+.row-items {
+  display: flex;
+  gap: 20px;
+  overflow: hidden;
+  will-change: transform;
+}
 
-/* SCROLLBAR HIDE */
-.row-items::-webkit-scrollbar { display:none; }
-.row-items { -ms-overflow-style:none; scrollbar-width:none; }
+/* =========================
+   TILE CARD
+========================= */
+.card {
+  flex: 0 0 260px;
+  height: 160px;
+  background: var(--tile-bg);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.25s, box-shadow 0.25s, background 0.25s;
+  cursor: pointer;
+}
 
-/* FOOTER */
-.footer { position:fixed; bottom:0; left:0; right:0; padding:8px 20px; background:var(--panel); border-top:1px solid var(--border); color:var(--muted); font-size:14px; z-index:5; }
+.card img {
+  max-width: 80%;
+  max-height: 80%;
+  border-radius: 6px;
+}
 
-/* VIDEO FULLSCREEN */
-video, #player video { width:100%; height:100%; background:black; object-fit:contain; }
+.card.active,
+.card:focus {
+  transform: scale(1.25);
+  box-shadow: 0 0 45px rgba(255, 255, 255, 0.5);
+  background: var(--tile-hover);
+  outline: none;
+}
+
+/* =========================
+   OVERLAY (CHANNEL NAME)
+========================= */
+#overlay {
+  position: fixed;
+  bottom: 60px;
+  left: 80px;
+  color: var(--text);
+  font-size: 26px;
+  background: var(--overlay-bg);
+  padding: 8px 12px;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 20;
+}
+
+/* =========================
+   SCROLLBAR HIDE
+========================= */
+.row-items::-webkit-scrollbar {
+  display: none;
+}
+
+.row-items {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* =========================
+   FOOTER HELP
+========================= */
+.footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 20px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 14px;
+  z-index: 5;
+}
+
+/* =========================
+   VIDEO FULLSCREEN
+========================= */
+video,
+#player video {
+  width: 100%;
+  height: 100%;
+  background: black;
+  object-fit: contain;
+}
