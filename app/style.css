@@ -97,13 +97,20 @@ body {
 }
 
 /* =========================
-   PLAYER
+   PLAYER – now contains the video element
 ========================= */
 #player {
   position: fixed;
   inset: 0;
   background: black;
   z-index: 1;
+}
+
+#av-player {
+  width: 100%;
+  height: 100%;
+  background: black;
+  object-fit: cover;  /* change to 'contain' if you prefer black bars */
 }
 
 /* =========================
@@ -123,7 +130,7 @@ body {
 }
 
 .row-title {
-  font-weight: 900; /* Bold for category names */
+  font-weight: 900;
   font-size: 26px;
   color: var(--muted);
   margin-bottom: 20px;
@@ -196,7 +203,7 @@ body {
 }
 
 /* =========================
-   FOOTER HELP
+   FOOTER HELP (if you use it)
 ========================= */
 .footer {
   position: fixed;
@@ -209,15 +216,4 @@ body {
   color: var(--muted);
   font-size: 14px;
   z-index: 5;
-}
-
-/* =========================
-   VIDEO FULLSCREEN
-========================= */
-video,
-#player video {
-  width: 100%;
-  height: 100%;
-  background: black;
-  object-fit: contain;
 }
