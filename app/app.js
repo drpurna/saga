@@ -1,4 +1,4 @@
-// 🔴 ERROR DISPLAY (NO WHITE SCREEN EVER AGAIN)
+// 🔴 ERROR HANDLER (no more silent crash)
 window.onerror = function(msg, url, line) {
   document.body.innerHTML =
     "<pre style='color:red'>" + msg + " at line " + line + "</pre>";
@@ -6,35 +6,60 @@ window.onerror = function(msg, url, line) {
 
 const PLAYLIST = "https://iptv-org.github.io/iptv/languages/tel.m3u";
 
+let video, player;
 let channels = [];
-let player = null;
-let video = null;
 
 // INIT
 window.onload = () => {
-  init();
+  setupUI();      // ✅ ALWAYS render UI first
+  loadChannels(); // then load data
 };
 
-async function init() {
+// CREATE VIDEO ELEMENT
+function setupUI() {
 
-  // AVPlay (if available)
+  const videoBox = document.getElementById("video");
+  const grid = document.getElementById("grid");
+
+  // Video
+  video = document.createElement("video");
+  video.style.width = "100%";
+  video.style.height = "100%";
+  video.autoplay = true;
+  videoBox.appendChild(video);
+
+  // Initial message
+  grid.innerHTML = "<h2>Loading channels...</h2>";
+
+  // AVPlay safe init
   try {
     if (window.webapis && webapis.avplay) {
       player = webapis.avplay;
     }
   } catch {}
+}
 
-  // HTML5 fallback video
-  video = document.createElement("video");
-  video.style.width = "100%";
-  video.style.height = "100%";
-  video.autoplay = true;
-  document.getElementById("video").appendChild(video);
+// LOAD PLAYLIST
+async function loadChannels() {
 
-  // Load playlist
-  let text = await fetch(PLAYLIST).then(r => r.text());
+  let text = "";
+
+  try {
+    const res = await fetch(PLAYLIST);
+    text = await res.text();
+  } catch (e) {
+    document.getElementById("grid").innerHTML =
+      "<h2>Failed to load playlist</h2>";
+    return;
+  }
 
   channels = parse(text);
+
+  if (!channels.length) {
+    document.getElementById("grid").innerHTML =
+      "<h2>No channels found</h2>";
+    return;
+  }
 
   render();
 }
@@ -55,21 +80,22 @@ function parse(txt) {
     }
   }
 
-  return res.slice(0, 40); // keep small for stability
+  return res.slice(0, 30); // keep small
 }
 
-// RENDER GRID
+// RENDER UI
 function render() {
+
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
 
-  channels.forEach(ch => {
+  channels.forEach((ch) => {
 
     const card = document.createElement("div");
     card.className = "card";
     card.textContent = ch.name;
 
-    // 🔥 CLICK WORKS GUARANTEED
+    // ✅ CLICK WORKS GUARANTEED
     card.onclick = () => {
       play(ch.url);
     };
@@ -85,7 +111,7 @@ function play(url) {
 
   document.body.classList.add("fullscreen");
 
-  // HLS → AVPlay first
+  // AVPlay for HLS
   if (url.includes(".m3u8") && player) {
 
     try {
@@ -104,7 +130,7 @@ function play(url) {
       return;
 
     } catch {
-      console.log("AVPlay failed → fallback");
+      console.log("AVPlay failed");
     }
   }
 
