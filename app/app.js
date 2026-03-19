@@ -1,23 +1,30 @@
 let channels = [];
 let categories = {};
-let currentFocus = 0;
+let currentFocus = null;
 
 const videoContainer = document.getElementById("video");
 const ui = document.getElementById("ui");
 
-// ===================== LOAD PLAYLIST =====================
+// ===================== LOAD =====================
 async function loadChannels() {
   ui.innerHTML = "Loading channels...";
+
+  let text = "";
 
   try {
     const res = await fetch(
       "https://corsproxy.io/?https://iptv-org.github.io/iptv/languages/tel.m3u"
     );
-    const text = await res.text();
-    channels = parseM3U(text);
+    text = await res.text();
   } catch (e) {
-    console.log("Fetch failed, using fallback");
+    console.log("Fetch failed, fallback used");
+  }
 
+  if (text) {
+    channels = parseM3U(text);
+  }
+
+  if (!channels.length) {
     channels = [
       {
         name: "Test Stream",
@@ -44,7 +51,8 @@ function parseM3U(text) {
 
       const g = line.match(/group-title="(.*?)"/);
       group = g ? g[1] : "Other";
-    } else if (line.startsWith("http")) {
+    } 
+    else if (line.startsWith("http")) {
       res.push({ name, group, url: line.trim() });
     }
   }
@@ -86,7 +94,10 @@ function render() {
       card.innerText = ch.name;
 
       card.onclick = () => play(ch);
-      card.onfocus = () => currentFocus = card;
+
+      card.onfocus = () => {
+        currentFocus = card;
+      };
 
       items.appendChild(card);
     });
@@ -95,6 +106,12 @@ function render() {
     row.appendChild(items);
     ui.appendChild(row);
   });
+
+  // Auto focus first card
+  setTimeout(() => {
+    const first = document.querySelector(".card");
+    if (first) first.focus();
+  }, 300);
 }
 
 // ===================== PLAY =====================
@@ -113,13 +130,19 @@ function play(ch) {
 // ===================== AVPLAY =====================
 function playAV(url) {
   try {
+    webapis.avplay.stop();
     webapis.avplay.close();
   } catch (e) {}
 
-  webapis.avplay.open(url);
-  webapis.avplay.prepareAsync(() => {
-    webapis.avplay.play();
-  });
+  try {
+    webapis.avplay.open(url);
+    webapis.avplay.prepareAsync(() => {
+      webapis.avplay.play();
+    });
+  } catch (e) {
+    console.log("AVPlay failed, fallback");
+    playHTML5(url);
+  }
 }
 
 // ===================== HTML5 =====================
@@ -135,7 +158,7 @@ function playHTML5(url) {
   video.style.height = "100%";
 
   video.onerror = () => {
-    alert("Stream not working");
+    alert("Stream not supported");
   };
 
   videoContainer.appendChild(video);
@@ -143,6 +166,7 @@ function playHTML5(url) {
 
 // ===================== REMOTE =====================
 document.addEventListener("keydown", e => {
+
   if (e.key === "Enter" && currentFocus) {
     currentFocus.click();
   }
@@ -151,6 +175,7 @@ document.addEventListener("keydown", e => {
     ui.style.display = "block";
     videoContainer.innerHTML = "";
   }
+
 });
 
 // ===================== INIT =====================
