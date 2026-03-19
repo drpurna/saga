@@ -1,86 +1,11 @@
-/* =========================
-   IPTV TV – FINAL STABLE UI
-========================= */
-
-:root {
-  --bg: #000;
-  --panel: #111;
-  --text: #fff;
-  --muted: #aaa;
-  --border: #333;
-  --tile-bg: #111;
-  --tile-hover: #222;
-  --overlay-bg: rgba(0,0,0,0.6);
-}
-
-/* GLOBAL */
-* { box-sizing: border-box; }
-
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  background: #000;
+  color: #fff;
   font-family: Arial, sans-serif;
   overflow: hidden;
 }
 
-/* =========================
-   SPLASH (FIXED)
-========================= */
-#splash {
-  position: fixed;
-  inset: 0;
-  background: black;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 100px;
-  font-weight: 900;
-  z-index: 9999;
-}
-
-/* =========================
-   HEADER
-========================= */
-#header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  padding: 20px 60px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  z-index: 100;
-}
-
-.logo {
-  font-size: 40px;
-  font-weight: 900;
-}
-
-.actions {
-  display: flex;
-  gap: 30px;
-}
-
-.icon {
-  font-size: 32px;
-  background: white;
-  color: black;
-  padding: 10px 14px;
-  border-radius: 10px;
-}
-
-.icon:focus {
-  transform: scale(1.2);
-  outline: none;
-}
-
-/* =========================
-   PLAYER
-========================= */
 #player {
   position: fixed;
   inset: 0;
@@ -88,98 +13,70 @@ body {
   z-index: 1;
 }
 
-/* =========================
-   UI
-========================= */
-#ui {
+#app {
   position: relative;
   z-index: 5;
-  padding: 140px 60px 80px;
+  padding: 80px 60px;
 }
 
-/* =========================
-   ROWS
-========================= */
+#topbar {
+  font-size: 36px;
+  font-weight: bold;
+  margin-bottom: 40px;
+}
+
 .row {
-  margin-bottom: 50px;
+  margin-bottom: 40px;
 }
 
 .row-title {
-  font-size: 24px;
-  color: var(--muted);
+  font-size: 22px;
+  color: #aaa;
   margin-bottom: 15px;
 }
 
-/* 🔥 FIXED SCROLL */
 .row-items {
   display: flex;
   gap: 20px;
   transition: transform 0.3s ease;
-  will-change: transform;
 }
 
-/* =========================
-   CARDS
-========================= */
 .card {
-  flex: 0 0 260px;
-  height: 150px;
-  background: var(--tile-bg);
-  border-radius: 14px;
+  flex: 0 0 240px;
+  height: 140px;
+  background: #111;
+  border-radius: 10px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
   text-align: center;
-  padding: 10px;
-
-  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-/* 🔥 FOCUS FIX */
-.card.active,
-.card:focus {
+.card img {
+  max-width: 90%;
+  max-height: 90%;
+  object-fit: contain;
+}
+
+.card.active {
   transform: scale(1.2);
-  box-shadow: 0 0 25px rgba(255,255,255,0.6);
-  outline: none;
+  box-shadow: 0 0 20px white;
 }
 
-/* =========================
-   OVERLAY
-========================= */
 #overlay {
   position: fixed;
-  bottom: 60px;
-  left: 80px;
-  background: var(--overlay-bg);
-  padding: 10px 15px;
-  border-radius: 8px;
+  bottom: 50px;
+  left: 60px;
   font-size: 24px;
+  background: rgba(0,0,0,0.7);
+  padding: 8px 12px;
+  border-radius: 6px;
   opacity: 0;
   transition: opacity 0.3s;
-  z-index: 20;
 }
 
-/* =========================
-   FOOTER
-========================= */
-.footer {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  padding: 10px;
-  background: var(--panel);
-  font-size: 14px;
-  color: var(--muted);
-  text-align: center;
-}
-
-/* =========================
-   FULLSCREEN FIX
-========================= */
-.fullscreen #ui,
-.fullscreen #header,
-.fullscreen .footer {
+.fullscreen #app {
   display: none;
 }
