@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <title>Tizen TV</title>
+<!-- ADDED: viewport meta for proper scaling -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<!-- Player – now contains a video element for AVPlay -->
+<!-- Player – ADDED video element for AVPlay to render on -->
 <div id="player">
     <video id="av-player" width="100%" height="100%"></video>
 </div>
 
-<!-- Header -->
+<!-- Header (unchanged) -->
 <div id="header">
   <div class="logo">Tizen TV</div>
   <div class="actions">
@@ -22,7 +23,7 @@
   </div>
 </div>
 
-<!-- UI -->
+<!-- UI (unchanged) -->
 <div id="ui">
   <div id="overlay"></div>
   <div id="rows"></div>
