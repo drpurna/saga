@@ -4,7 +4,7 @@ module.exports = {
 
   async start(ctx){
 
-    // ---------- SAFE STORAGE (SERVICE SIDE) ----------
+    // ---------- SAFE STORAGE ----------
     const storage = {
       get(key, fallback = null) {
         try {
@@ -25,33 +25,17 @@ module.exports = {
     const DEFAULT_PLAYLIST = "https://iptv-org.github.io/iptv/languages/tel.m3u";
 
     // Load saved data
-    const playlist = storage.get("playlist_url", DEFAULT_PLAYLIST);
+    const playlist = storage.get("custom_playlist", DEFAULT_PLAYLIST);
     const lastChannel = storage.get("last_channel", null);
     const lastPosition = storage.get("last_position", 0);
 
-    // ---------- CACHE BUSTING ----------
-    // Clear old cache folder to ensure fresh launch
-    try {
-      const fs = ctx.fs;
-      const CACHE_DIR = ctx.modulePath + "/app/cache";
-      await fs.rmdir(CACHE_DIR, { recursive: true });
-      console.log("Cache cleared on service launch");
-    } catch(e) {
-      // ignore if folder doesn't exist
-    }
-
-    // Force version-based cache invalidation
-    const APP_VERSION = "1.0.3"; // increment this on each update
-    const storedVersion = storage.get("app_version", null);
-    if (storedVersion !== APP_VERSION) {
-      localStorage.clear();
-      storage.set("app_version", APP_VERSION);
-      console.log("LocalStorage cleared for new version", APP_VERSION);
-    }
+    // ---------- FORCE LATEST CODE ON LAUNCH ----------
+    // Append timestamp to URL to bypass Tizen cache
+    const appUrl = ctx.modulePath + "/app/index.html" + "?v=" + Date.now();
 
     // ---------- APP LAUNCH ----------
     ctx.openApp({
-      url: ctx.modulePath + "/app/index.html",
+      url: appUrl,
       fullscreen: true,
       data: {
         playlist,
@@ -69,7 +53,6 @@ module.exports = {
     ctx.on?.("appError", (err) => {
       console.error("App error:", err);
     });
-
   }
 
-}
+};
