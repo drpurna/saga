@@ -1,10 +1,10 @@
-const video = document.getElementById("video");
 const grid = document.getElementById("grid");
 const loader = document.getElementById("loader");
 const player = document.getElementById("playerContainer");
 
 let channels = [];
 let categories = {};
+let flatChannels = [];
 
 const PLAYLISTS = [
   { name: "Telugu", url: "https://iptv-org.github.io/iptv/languages/tel.m3u" },
@@ -100,6 +100,7 @@ function parseM3U(data) {
 function buildCategories() {
 
   categories = {};
+  flatChannels = [];
 
   channels.forEach(ch => {
 
@@ -110,6 +111,8 @@ function buildCategories() {
 
     if (!categories[cat]) categories[cat] = [];
     categories[cat].push(ch);
+
+    flatChannels.push(ch);
   });
 }
 
@@ -130,7 +133,9 @@ function render() {
     const items = document.createElement("div");
     items.className = "row-items";
 
-    categories[cat].forEach(ch => {
+    categories[cat].forEach((ch, index) => {
+
+      const globalIndex = flatChannels.indexOf(ch);
 
       const card = document.createElement("div");
       card.className = "card";
@@ -142,7 +147,7 @@ function render() {
 
       card.appendChild(img);
 
-      card.onclick = () => play(ch.url);
+      card.onclick = () => play(ch.url, globalIndex);
 
       items.appendChild(card);
     });
@@ -160,10 +165,13 @@ function finish() {
   loader.style.display = "none";
 }
 
-/* PLAY */
-function play(url) {
+/* PLAY ENGINE WITH AUTO-SKIP */
+function play(url, index = 0) {
+
+  if (!url) return;
 
   player.style.display = "block";
+  loader.style.display = "block";
 
   try {
     webapis.avplay.stop();
@@ -172,15 +180,51 @@ function play(url) {
 
   try {
     webapis.avplay.open(url);
+
+    webapis.avplay.setListener({
+
+      onbufferingstart: () => loader.style.display = "block",
+      onbufferingcomplete: () => loader.style.display = "none",
+
+      onstreamcompleted: () => playNext(index),
+
+      onerror: () => playNext(index)
+
+    });
+
     webapis.avplay.prepareAsync(() => {
       webapis.avplay.play();
     });
+
+    // TIMEOUT FAIL SAFE
+    setTimeout(() => {
+      if (loader.style.display === "block") {
+        playNext(index);
+      }
+    }, 8000);
+
   } catch (e) {
-    alert("Cannot play");
+    playNext(index);
   }
 }
 
-/* REMOTE */
+/* AUTO SKIP */
+function playNext(currentIndex) {
+
+  for (let i = currentIndex + 1; i < flatChannels.length; i++) {
+
+    const next = flatChannels[i];
+
+    if (next && next.url) {
+      play(next.url, i);
+      return;
+    }
+  }
+
+  alert("No playable channels");
+}
+
+/* REMOTE EXIT */
 document.addEventListener("keydown", e => {
 
   if (e.key === "Return") {
