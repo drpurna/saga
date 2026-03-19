@@ -3,6 +3,7 @@ body {
   background: black;
   color: white;
   font-family: Arial;
+  overflow: hidden;
 }
 
 #video {
@@ -12,28 +13,41 @@ body {
   z-index: 1;
 }
 
-#grid {
+#ui {
   position: relative;
-  z-index: 2;
-  padding: 40px;
+  z-index: 5;
+  padding: 60px;
+}
+
+.row {
+  margin-bottom: 40px;
+}
+
+.row-title {
+  font-size: 24px;
+  margin-bottom: 15px;
+  color: #aaa;
+}
+
+.row-items {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
 }
 
 .card {
-  display: inline-block;
-  width: 220px;
-  height: 120px;
-  margin: 10px;
-  background: #222;
-  border-radius: 8px;
-  text-align: center;
-  line-height: 120px;
+  min-width: 220px;
+  height: 130px;
+  background: #111;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
-.card:hover {
-  background: #444;
-}
-
-.fullscreen #grid {
-  display: none;
+.card:focus {
+  outline: none;
+  transform: scale(1.2);
+  box-shadow: 0 0 20px white;
 }
