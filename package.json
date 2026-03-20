@@ -1,14 +1,16 @@
 {
-  "name": "Tizen TV",
-  "version": "1.0.5",
+  "name": "smartiptv",
+  "version": "1.0.0",
   "description": "Smart IPTV player module for Samsung Tizen TVs via TizenBrew",
   "license": "MIT",
+
   "files": [
     "app",
     "service.js",
     "README.md",
     "package.json"
   ],
+
   "keywords": [
     "tizen",
     "tizenbrew",
@@ -17,17 +19,29 @@
     "hls",
     "samsung-tv"
   ],
+
   "packageType": "app",
-  "appName": "Tizen TV",
+
+  "appName": "Smart IPTV",
+
   "appPath": "app/index.html",
+
   "keys": [
-    "MediaPlay","MediaPause","MediaPlayPause","MediaStop",
-    "MediaFastForward","MediaRewind",
-    "ChannelUp","ChannelDown",
-    "ColorF0Red","ColorF1Green","ColorF2Yellow","ColorF3Blue",
-    "Return","Escape",
-    "ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"
+    "MediaPlay",
+    "MediaPause",
+    "MediaPlayPause",
+    "MediaStop",
+    "MediaFastForward",
+    "MediaRewind",
+    "ChannelUp",
+    "ChannelDown",
+    "ColorF0Red",
+    "ColorF1Green",
+    "ColorF2Yellow",
+    "ColorF3Blue"
   ],
+
   "serviceFile": "service.js",
+
   "evaluateScriptOnDocumentStart": false
 }

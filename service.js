@@ -1,12 +1,14 @@
 module.exports = {
-  name: "Tizen TV",
+
+  name: "Smart IPTV",
 
   async start(ctx){
-    const appUrl = ctx.modulePath + "/app/index.html?v=" + Date.now();
 
     ctx.openApp({
-      url: appUrl,
+      url: ctx.modulePath + "/app/index.html",
       fullscreen: true
-    });
+    })
+
   }
-};
+
+}
