@@ -1,316 +1,267 @@
-/* =========================
-   Tizen IPTV v1 – FULL OPTIMIZED
-========================= */
+let channels = [];
+let categories = {};
+let currentFocus = null;
 
-const App = (() => {
-  const S = {
-    channels: [],
-    categories: [],
-    focusRow: 0,
-    focusCol: 0,
-    currentIndex: null,
-    dom: {
-      rows: document.getElementById("rows"),
-      overlay: document.getElementById("overlay"),
-      player: document.getElementById("player"),
-      header: document.getElementById("header"),
-      searchBtn: document.getElementById("searchBtn"),
-      addBtn: document.getElementById("addBtn"),
-      loader: null
-    },
-    isFullscreen: false
+const videoContainer = document.getElementById("video");
+const grid = document.getElementById("grid");
+const ui = document.getElementById("ui");
+const overlay = document.getElementById("overlay");
+const loader = document.getElementById("loader");
+
+// STORAGE
+function getPlaylists() {
+  return JSON.parse(localStorage.getItem("playlists") || "[]");
+}
+
+function savePlaylists(p) {
+  localStorage.setItem("playlists", JSON.stringify(p));
+}
+
+// LOAD CHANNELS
+async function loadChannels() {
+
+  try {
+    const res = await fetch("https://iptv-org.github.io/iptv/languages/tel.m3u");
+    const text = await res.text();
+    channels = parseM3U(text);
+  } catch {}
+
+  buildCategories();
+  render();
+}
+
+// PARSE
+function parseM3U(text) {
+  const lines = text.split("\n");
+  const result = [];
+
+  let name="", group="Other", logo="";
+
+  for (let line of lines) {
+
+    if (line.startsWith("#EXTINF")) {
+      name = line.split(",").pop();
+
+      const g = line.match(/group-title="(.*?)"/);
+      group = g ? g[1] : "Other";
+
+      const l = line.match(/tvg-logo="(.*?)"/);
+      logo = l ? l[1] : "";
+    }
+
+    else if (line.startsWith("http")) {
+      result.push({ name, group, logo, url: line.trim() });
+    }
+  }
+
+  return result.slice(0,200);
+}
+
+// CATEGORY
+function buildCategories() {
+
+  categories = {
+    Devotional: [],
+    News: [],
+    Movies: [],
+    Sports: [],
+    Entertainment: [],
+    "My Channels": [],
+    Others: []
   };
 
-  const CONFIG = {
-    PLAYLIST_URLS: {
-      Telugu: "https://iptv-org.github.io/iptv/languages/tel.m3u",
-      India: "https://iptv-org.github.io/iptv/streams/in.m3u"
-    },
-    BUFFER: "300",
-    VISIBLE_TILES: 5
-  };
+  channels.forEach(ch => {
 
-  /* =========================
-     INIT
-  ========================== */
-  async function init() {
-    S.dom.loader = createLoader();
-    S.dom.player.appendChild(S.dom.loader);
+    const n = ch.name.toLowerCase();
 
-    await loadPlaylist("Telugu"); // default
+    if (n.includes("bhakti") || n.includes("devotional")) categories.Devotional.push(ch);
+    else if (n.includes("news")) categories.News.push(ch);
+    else if (n.includes("movie")) categories.Movies.push(ch);
+    else if (n.includes("sport")) categories.Sports.push(ch);
+    else if (n.includes("tv")) categories.Entertainment.push(ch);
+    else categories.Others.push(ch);
+  });
 
-    buildRows();
-    renderRows();
-    setFocus();
-  }
+  let manual = [];
+  getPlaylists().forEach(p => manual = manual.concat(p.channels));
+  categories["My Channels"] = manual;
+}
 
-  /* =========================
-     CREATE LOADER SPINNER
-  ========================== */
-  function createLoader() {
-    const loader = document.createElement("div");
-    loader.className = "loader";
-    loader.style.display = "none";
-    loader.style.position = "absolute";
-    loader.style.top = "50%";
-    loader.style.left = "50%";
-    loader.style.transform = "translate(-50%, -50%)";
-    loader.style.border = "8px solid #f3f3f3";
-    loader.style.borderTop = "8px solid #ff0000";
-    loader.style.borderRadius = "50%";
-    loader.style.width = "60px";
-    loader.style.height = "60px";
-    loader.style.animation = "spin 1s linear infinite";
-    return loader;
-  }
+// RENDER
+function render() {
 
-  /* =========================
-     LOAD PLAYLIST
-  ========================== */
-  async function loadPlaylist(name) {
-    S.channels = [];
-    try {
-      const text = await fetch(CONFIG.PLAYLIST_URLS[name]).then(r => r.text());
-      S.channels = parseM3U(text);
-      S.categories = [...new Set(S.channels.map(c => c.group))];
-    } catch (e) {
-      console.error("Failed to load playlist", e);
-    }
-  }
+  grid.innerHTML = "";
 
-  /* =========================
-     PARSE M3U
-  ========================== */
-  function parseM3U(text) {
-    const lines = text.split("\n");
-    let meta = {};
-    const res = [];
+  Object.keys(categories).forEach(group => {
 
-    for (let l of lines) {
-      l = l.trim();
-      if (l.startsWith("#EXTINF")) {
-        meta.name = l.split(",").pop();
-        const g = l.match(/group-title="([^"]+)"/);
-        const logo = l.match(/tvg-logo="([^"]+)"/);
-        meta.group = g ? g[1] : "Other";
-        meta.logo = logo ? logo[1] : "";
-      } else if (l && !l.startsWith("#") && l.endsWith(".m3u8")) {
-        res.push({ ...meta, url: l });
+    if (!categories[group].length) return;
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const title = document.createElement("div");
+    title.className = "row-title";
+    title.innerText = group;
+
+    const items = document.createElement("div");
+    items.className = "row-items";
+
+    categories[group].forEach(ch => {
+
+      const card = document.createElement("div");
+      card.className = "card";
+      card.tabIndex = 0;
+
+      if (ch.logo) {
+        const img = document.createElement("img");
+        img.src = ch.logo;
+        img.onerror = () => card.innerText = ch.name;
+        card.appendChild(img);
+      } else {
+        card.innerText = ch.name;
       }
-    }
-    return res;
-  }
 
-  /* =========================
-     BUILD ROWS
-  ========================== */
-  function buildRows() {
-    S.rowsData = S.categories.map(cat => ({
-      title: cat,
-      items: S.channels.filter(c => c.group === cat)
-    }));
-  }
+      card.onclick = () => play(ch);
 
-  /* =========================
-     RENDER ROWS + CHANNELS
-  ========================== */
-  function renderRows() {
-    const frag = document.createDocumentFragment();
-    S.rowsData.forEach((row, rIdx) => {
-      const rowEl = div("row");
-      const title = div("row-title", row.title);
-      const items = div("row-items");
-
-      row.items.forEach((ch, cIdx) => {
-        const card = div("card");
-        card.tabIndex = 0;
-        card._r = rIdx;
-        card._c = cIdx;
-
-        if (ch.logo) {
-          const img = new Image();
-          img.src = ch.logo;
-          img.alt = ch.name;
-          card.appendChild(img);
-        } else {
-          card.textContent = ch.name;
-        }
-
-        card.addEventListener("click", () => playChannel(rIdx, cIdx));
-        items.appendChild(card);
+      card.addEventListener("focus", () => {
+        currentFocus = card;
+        card.scrollIntoView({ behavior:"smooth", inline:"center" });
       });
 
-      rowEl.appendChild(title);
-      rowEl.appendChild(items);
-      frag.appendChild(rowEl);
+      items.appendChild(card);
     });
 
-    S.dom.rows.innerHTML = "";
-    S.dom.rows.appendChild(frag);
-  }
+    row.appendChild(title);
+    row.appendChild(items);
+    grid.appendChild(row);
+  });
 
-  /* =========================
-     SET FOCUS
-  ========================== */
-  function setFocus() {
-    document.querySelectorAll(".card.active").forEach(e => e.classList.remove("active"));
-    const row = S.dom.rows.children[S.focusRow];
-    if (!row) return;
-    const items = row.children[1];
-    const el = items.children[S.focusCol];
-    if (el) el.classList.add("active");
-    scrollRow(items);
-    updateOverlay();
-  }
+  setTimeout(()=>document.querySelector(".card")?.focus(),200);
+}
 
-  function scrollRow(items) {
-    let scroll = S.focusCol - Math.floor(CONFIG.VISIBLE_TILES / 2);
-    if (scroll < 0) scroll = 0;
-    items.style.transform = `translateX(${-scroll * 280}px)`;
-  }
+// PLAY
+function play(ch) {
 
-  function updateOverlay() {
-    const ch = S.rowsData[S.focusRow].items[S.focusCol];
-    if (ch) {
-      S.dom.overlay.textContent = ch.name;
-      S.dom.overlay.style.opacity = 1;
-      setTimeout(() => (S.dom.overlay.style.opacity = 0), 1500);
+  overlay.innerText = ch.name;
+  overlay.style.opacity = 1;
+  setTimeout(()=>overlay.style.opacity=0,3000);
+
+  ui.style.display = "none";
+  loader.style.display = "block";
+
+  videoContainer.innerHTML = "";
+
+  const video = document.createElement("video");
+  video.src = ch.url;
+  video.autoplay = true;
+  video.controls = true;
+
+  video.style.width = "100%";
+  video.style.height = "100%";
+
+  video.onplaying = () => loader.style.display = "none";
+  video.onerror = () => loader.style.display = "none";
+
+  videoContainer.appendChild(video);
+}
+
+// ADD PLAYLIST
+document.getElementById("addPlaylistBtn").onclick = addPlaylist;
+
+function addPlaylist() {
+
+  const url = prompt("Enter M3U URL");
+  if (!url) return;
+
+  loader.style.display = "block";
+
+  fetch(url)
+    .then(r => r.text())
+    .then(text => {
+
+      const parsed = parseM3U(text);
+
+      let p = getPlaylists();
+      p.push({ name: url, url, channels: parsed });
+
+      savePlaylists(p);
+
+      loader.style.display = "none";
+
+      buildCategories();
+      render();
+    })
+    .catch(()=> loader.style.display="none");
+}
+
+// SETTINGS
+const settingsBtn = document.getElementById("settingsBtn");
+const settingsPanel = document.getElementById("settingsPanel");
+const playlistList = document.getElementById("playlistList");
+
+settingsBtn.onclick = openSettings;
+
+function openSettings() {
+
+  settingsPanel.classList.add("active");
+
+  const playlists = getPlaylists();
+  playlistList.innerHTML = "";
+
+  playlists.forEach((p,i)=>{
+
+    const item = document.createElement("div");
+    item.className = "settings-item";
+
+    item.innerHTML = `<span>${p.name}</span>
+      <button onclick="removePlaylist(${i})">Remove</button>`;
+
+    playlistList.appendChild(item);
+  });
+}
+
+function removePlaylist(i) {
+  let p = getPlaylists();
+  p.splice(i,1);
+  savePlaylists(p);
+  openSettings();
+  buildCategories();
+  render();
+}
+
+// REMOTE
+document.addEventListener("keydown", e => {
+
+  if (settingsPanel.classList.contains("active")) {
+    if (e.key==="Return"||e.key==="Escape") {
+      settingsPanel.classList.remove("active");
     }
+    return;
   }
 
-  /* =========================
-     PLAY CHANNEL
-  ========================== */
-  async function playChannel(rIdx, cIdx) {
-    const ch = S.rowsData[rIdx].items[cIdx];
-    if (!ch || !ch.url) return;
+  const f = document.activeElement;
 
-    S.currentIndex = { r: rIdx, c: cIdx };
-    S.isFullscreen = true;
-    S.dom.ui.style.display = "none";
-    S.dom.loader.style.display = "block";
+  if (e.key==="Enter" && currentFocus) currentFocus.click();
 
-    try {
-      webapis.avplay.stop();
-      webapis.avplay.close();
-    } catch (e) {}
-
-    try {
-      const res = await fetch(ch.url, { method: "HEAD" });
-      if (!res.ok) throw new Error("Channel not playable");
-    } catch (e) {
-      console.warn("Skipping dead channel", ch.name);
-      return;
-    }
-
-    try {
-      webapis.avplay.open(ch.url);
-      webapis.avplay.setDisplayRect(0, 0, 1920, 1080);
-      webapis.avplay.setListener({
-        onbufferingstart: () => (S.dom.loader.style.display = "block"),
-        onbufferingcomplete: () => (S.dom.loader.style.display = "none"),
-        onstreamcompleted: () => exitFullscreen(),
-        onerror: () => exitFullscreen()
-      });
-      webapis.avplay.prepareAsync(() => webapis.avplay.play());
-    } catch (e) {
-      console.error("AVPlay error", e);
-      exitFullscreen();
-    }
+  if (e.key==="Escape"||e.key==="Return") {
+    ui.style.display="block";
+    videoContainer.innerHTML="";
   }
 
-  function exitFullscreen() {
-    try {
-      webapis.avplay.stop();
-      webapis.avplay.close();
-    } catch (e) {}
-    S.isFullscreen = false;
-    S.dom.ui.style.display = "block";
-  }
+  if (e.key==="ColorF0Red") addPlaylist();
 
-  /* =========================
-     REMOTE CONTROL
-  ========================== */
-  function onKey(e) {
-    if (S.isFullscreen) {
-      switch (e.key) {
-        case "Return":
-        case "Escape":
-          exitFullscreen();
-          return;
-        case "ArrowUp":
-          playAdjacent(-1);
-          return;
-        case "ArrowDown":
-          playAdjacent(1);
-          return;
-      }
-      return;
-    }
+  if (!f.classList.contains("card")) return;
 
-    switch (e.key) {
-      case "ArrowUp":
-        S.focusRow--;
-        S.focusCol = 0;
-        break;
-      case "ArrowDown":
-        S.focusRow++;
-        S.focusCol = 0;
-        break;
-      case "ArrowLeft":
-        S.focusCol--;
-        break;
-      case "ArrowRight":
-        S.focusCol++;
-        break;
-      case "Enter":
-        playChannel(S.focusRow, S.focusCol);
-        return;
-      case "ColorF0Red":
-        addPlaylist();
-        return;
-    }
-    clampFocus();
-    setFocus();
-  }
+  if (e.key==="ArrowRight") f.nextElementSibling?.focus();
+  if (e.key==="ArrowLeft") f.previousElementSibling?.focus();
 
-  function playAdjacent(dir) {
-    let r = S.currentIndex.r + dir;
-    if (r < 0) r = S.rowsData.length - 1;
-    if (r >= S.rowsData.length) r = 0;
-    const c = Math.min(S.currentIndex.c, S.rowsData[r].items.length - 1);
-    playChannel(r, c);
-  }
+  if (e.key==="ArrowDown")
+    f.closest(".row")?.nextElementSibling?.querySelector(".card")?.focus();
 
-  function clampFocus() {
-    S.focusRow = Math.max(0, Math.min(S.focusRow, S.rowsData.length - 1));
-    const maxCol = S.rowsData[S.focusRow].items.length - 1;
-    S.focusCol = Math.max(0, Math.min(S.focusCol, maxCol));
-  }
+  if (e.key==="ArrowUp")
+    f.closest(".row")?.previousElementSibling?.querySelector(".card")?.focus();
 
-  /* =========================
-     ADD PLAYLIST BUTTON
-  ========================== */
-  function addPlaylist() {
-    const url = prompt("Enter M3U URL:");
-    if (!url) return;
-    CONFIG.PLAYLIST_URLS["Custom"] = url;
-    loadPlaylist("Custom").then(() => {
-      buildRows();
-      renderRows();
-      setFocus();
-    });
-  }
+});
 
-  function div(cls, txt) {
-    const d = document.createElement("div");
-    if (cls) d.className = cls;
-    if (txt) d.textContent = txt;
-    return d;
-  }
-
-  window.addEventListener("keydown", onKey);
-  return { init };
-})();
-
-App.init();
+// INIT
+loadChannels();

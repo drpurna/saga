@@ -2,104 +2,116 @@ body {
   margin: 0;
   background: black;
   color: white;
-  font-family: Arial Black;
+  font-family: Impact, Arial, sans-serif;
   overflow: hidden;
+}
+
+/* VIDEO */
+#video {
+  position: fixed;
+  inset: 0;
+  background: black;
+  z-index: 1;
+}
+
+/* UI */
+#ui {
+  position: relative;
+  z-index: 5;
+  padding: 0 60px;
 }
 
 /* HEADER */
 #header {
   position: fixed;
   top: 0;
-  width: 100%;
-  padding: 20px 60px;
-  display: flex;
-  justify-content: space-between;
-  background: #111;
+  left: 0;
+  right: 0;
+  padding: 30px 60px;
+  background: linear-gradient(to bottom, black, transparent);
   z-index: 10;
 }
 
 .logo {
-  font-size: 36px;
-  font-weight: bold;
+  font-size: 42px;
+  font-weight: 900;
 }
 
 .actions {
+  position: absolute;
+  right: 60px;
+  top: 30px;
   display: flex;
-  gap: 20px;
+  gap: 15px;
 }
 
-.icon {
-  font-size: 28px;
-  background: white;
-  color: black;
-  padding: 10px;
-  border-radius: 8px;
-}
-
-/* PLAYLIST BAR */
-#playlistBar {
-  display: flex;
-  gap: 20px;
-  padding: 100px 60px 20px;
-}
-
-.playlist-btn {
-  background: #222;
-  padding: 12px 20px;
-  border-radius: 8px;
-}
-
-.playlist-btn.active {
+.action-btn {
   background: red;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.settings {
+  background: #333;
 }
 
 /* GRID */
 #grid {
-  padding: 20px 60px;
+  margin-top: 120px;
 }
 
-/* ROW */
 .row {
-  margin-bottom: 40px;
+  margin-bottom: 50px;
 }
 
 .row-title {
   font-size: 24px;
-  margin-bottom: 10px;
+  color: #aaa;
+  margin-bottom: 15px;
 }
 
 .row-items {
   display: flex;
-  gap: 20px;
+  gap: 25px;
   overflow-x: auto;
+  scroll-behavior: smooth;
 }
 
 /* CARD */
 .card {
-  min-width: 260px;
-  height: 160px;
+  min-width: 320px;
+  height: 180px;
   background: #111;
+  border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
 .card img {
-  max-width: 90%;
+  max-width: 85%;
+  max-height: 85%;
 }
 
-/* PLAYER */
-#playerContainer {
+.card:focus {
+  outline: none;
+  transform: scale(1.25);
+  box-shadow: 0 0 25px rgba(255,255,255,0.6);
+}
+
+/* OVERLAY */
+#overlay {
   position: fixed;
-  inset: 0;
-  background: black;
-  display: none;
-  z-index: 100;
-}
-
-video {
-  width: 100%;
-  height: 100%;
+  bottom: 50px;
+  left: 60px;
+  font-size: 26px;
+  background: rgba(0,0,0,0.6);
+  padding: 10px 15px;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.3s;
 }
 
 /* LOADER */
@@ -107,5 +119,43 @@ video {
   position: fixed;
   top: 50%;
   left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.7);
+  padding: 15px 25px;
+  border-radius: 10px;
   display: none;
+}
+
+/* SETTINGS PANEL */
+#settingsPanel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#settingsPanel.active {
+  display: flex;
+}
+
+.settings-box {
+  width: 800px;
+  background: #111;
+  padding: 30px;
+  border-radius: 12px;
+}
+
+.settings-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid #333;
+}
+
+.settings-item button {
+  background: red;
+  border: none;
+  padding: 6px 12px;
 }

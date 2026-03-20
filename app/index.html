@@ -1,30 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>Tizen IPTV</title>
+  <meta name="viewport" content="width=1920, height=1080">
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-<div id="header">
-  <div class="logo">Channels</div>
+<div id="video"></div>
 
-  <div class="actions">
-    <div class="icon" tabindex="0">+</div>
-    <div class="icon" tabindex="0">⚙</div>
+<div id="ui">
+
+  <div id="header">
+    <div class="logo">CHANNELS</div>
+
+    <div class="actions">
+      <div class="action-btn" id="addPlaylistBtn">＋ Playlist</div>
+      <div class="action-btn settings" id="settingsBtn">⚙</div>
+    </div>
   </div>
+
+  <div id="grid"></div>
+
 </div>
 
-<div id="playlistBar"></div>
-
-<div id="grid"></div>
-
+<div id="overlay"></div>
 <div id="loader">Loading...</div>
 
-<div id="playerContainer">
-  <video id="video"></video>
+<!-- SETTINGS PANEL -->
+<div id="settingsPanel">
+  <div class="settings-box">
+    <div class="settings-title">Playlist Manager</div>
+    <div id="playlistList"></div>
+    <div class="settings-footer">Press RETURN to close</div>
+  </div>
 </div>
 
 <script src="app.js"></script>
