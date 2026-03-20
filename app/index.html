@@ -1,109 +1,123 @@
 <!doctype html>
+
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>IPTV</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css" />
 </head>
-<body>
+<body data-focus="list">
+
   <div class="app" id="app">
 
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <div class="brand-icon">▶</div>
-        <div class="brand-text">
-          <span class="brand-name">IPTV</span>
-          <span class="brand-version">v1.0.1</span>
-        </div>
-      </div>
+```
+<!-- ── Sidebar ── -->
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <div class="brand-icon">&#9654;</div>
+    <div class="brand-text">
+      <span class="brand-name">IPTV</span>
+      <span class="brand-version">v1.0.1</span>
+    </div>
+  </div>
 
-      <div class="url-section">
-        <label class="field-label">PLAYLIST URL</label>
-        <div class="input-row">
-          <input id="playlistUrl" type="text" placeholder="Paste M3U URL..." spellcheck="false" autocomplete="off"/>
-        </div>
-        <div class="btn-row">
-          <button id="loadBtn" class="btn-primary">
-            <span class="btn-icon">↻</span> Load Playlist
-          </button>
-          <button id="defaultBtn" class="btn-secondary">Default</button>
-        </div>
-      </div>
+  <div class="url-section">
+    <label class="field-label">PLAYLIST URL</label>
+    <div class="input-row">
+      <input id="playlistUrl" type="text" placeholder="Paste M3U URL&hellip;" spellcheck="false" autocomplete="off" autocorrect="off" />
+    </div>
+    <div class="btn-row">
+      <button id="loadBtn" class="btn-primary">
+        <span class="btn-icon">&#8635;</span> Load
+      </button>
+      <button id="defaultBtn" class="btn-secondary">Telugu</button>
+    </div>
+  </div>
 
-      <div class="search-section">
-        <label class="field-label">FILTER CHANNELS</label>
-        <div class="search-wrap">
-          <span class="search-icon">⌕</span>
-          <input id="searchInput" type="text" placeholder="Search..." spellcheck="false" autocomplete="off"/>
-        </div>
-      </div>
+  <div class="search-section">
+    <label class="field-label">FILTER CHANNELS</label>
+    <div class="search-wrap">
+      <span class="search-icon">&#9906;</span>
+      <input id="searchInput" type="text" placeholder="Search&hellip;" spellcheck="false" autocomplete="off" />
+    </div>
+  </div>
 
-      <div class="list-header">
-        <span class="field-label">CHANNELS</span>
-        <span id="countBadge" class="count-badge">0</span>
-      </div>
-      <ul id="channelList"></ul>
+  <div class="list-header">
+    <span class="field-label">CHANNELS</span>
+    <span id="countBadge" class="count-badge">0</span>
+  </div>
+  <ul id="channelList"></ul>
 
-      <div class="keys-hint">
-        <div class="hint-row"><span class="key">↑↓</span> Navigate</div>
-        <div class="hint-row"><span class="key">↵</span> Play</div>
-        <div class="hint-row"><span class="key">←→</span> Focus</div>
-        <div class="hint-row"><span class="key">⏹</span> Stop</div>
-        <div class="hint-row"><span class="key">🔴</span> URL</div>
-        <div class="hint-row"><span class="key">🟢</span> Reload</div>
-      </div>
-    </aside>
+  <div class="keys-hint">
+    <div class="hint-row"><span class="key">&#8593;&#8595;</span> Navigate</div>
+    <div class="hint-row"><span class="key">&#8629;</span> Play</div>
+    <div class="hint-row"><span class="key">Esc</span> Back to list</div>
+    <div class="hint-row"><span class="key">&#9664;&#9654;</span> Sidebar/Player</div>
+    <div class="hint-row"><span class="key">&#11036;&#11036;</span> Fullscreen</div>
+    <div class="hint-row"><span class="key red-key">&#9632;</span> URL</div>
+    <div class="hint-row"><span class="key grn-key">&#9632;</span> Reload</div>
+    <div class="hint-row"><span class="key yel-key">&#9632;</span> Search</div>
+    <div class="hint-row"><span class="key blu-key">&#9632;</span> Default playlist</div>
+  </div>
+</aside>
 
-    <!-- Player -->
-    <main class="player-area" id="playerArea">
-      <div class="player-top">
-        <div class="now-playing-info">
-          <div class="np-label">NOW PLAYING</div>
-          <div id="nowPlaying" class="np-title">No channel selected</div>
-          <div id="nowGroup" class="np-group">—</div>
-        </div>
-        <div class="status-pill" id="statusPill">
-          <span class="status-dot" id="statusDot"></span>
-          <span id="statusText">IDLE</span>
-        </div>
-      </div>
+<!-- ── Player ── -->
+<main class="player-area" id="playerArea">
 
-      <div class="video-wrap" id="videoWrap">
-        <div class="video-idle-screen" id="idleScreen">
-          <div class="idle-icon">▶</div>
-          <div class="idle-msg">Select a channel to start watching</div>
-        </div>
-        <video id="video" autoplay playsinline></video>
-        <div class="video-overlay" id="videoOverlay">
-          <div class="overlay-channel" id="overlayChannel"></div>
-          <div class="overlay-status" id="overlayStatus"></div>
-        </div>
-        <div class="buffering-spinner" id="bufferingSpinner">
-          <div class="spinner-ring"></div>
-        </div>
-      </div>
+  <div class="player-top">
+    <div class="now-playing-info">
+      <div class="np-label">NOW PLAYING</div>
+      <div id="nowPlaying" class="np-title">No channel selected</div>
+      <div id="nowGroup" class="np-group">&mdash;</div>
+    </div>
+    <div class="status-pill idle" id="statusPill">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">IDLE</span>
+    </div>
+  </div>
 
-      <div class="controls-bar">
-        <button class="ctrl-btn" id="prevBtn" title="Previous">⏮</button>
-        <button class="ctrl-btn" id="playPauseBtn" title="Play/Pause">⏸</button>
-        <button class="ctrl-btn" id="stopBtn" title="Stop">⏹</button>
-        <button class="ctrl-btn" id="nextBtn" title="Next">⏭</button>
-        <div class="vol-wrap">
-          <span class="vol-icon">🔊</span>
-          <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1" />
-        </div>
-        <div class="ctrl-spacer"></div>
-        <div class="quality-info" id="qualityInfo">HLS</div>
-      </div>
-    </main>
+  <div class="video-wrap" id="videoWrap">
+    <div class="video-idle-screen" id="idleScreen">
+      <div class="idle-icon">&#9654;</div>
+      <div class="idle-msg">Select a channel to start watching</div>
+    </div>
+    <video id="video" autoplay playsinline webkit-playsinline></video>
+    <div class="video-overlay" id="videoOverlay">
+      <div class="overlay-channel" id="overlayChannel"></div>
+      <div class="overlay-status"  id="overlayStatus"></div>
+    </div>
+    <div class="buffering-spinner" id="bufferingSpinner">
+      <div class="spinner-ring"></div>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <button class="ctrl-btn" id="prevBtn"       title="Previous">&#9198;</button>
+    <button class="ctrl-btn" id="playPauseBtn"  title="Play/Pause">&#9208;</button>
+    <button class="ctrl-btn" id="stopBtn"       title="Stop">&#9209;</button>
+    <button class="ctrl-btn" id="nextBtn"       title="Next">&#9197;</button>
+    <div class="vol-wrap">
+      <span class="vol-icon">&#128266;</span>
+      <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1" />
+    </div>
+    <div class="ctrl-spacer"></div>
+    <div class="quality-info" id="qualityInfo">&#8212;</div>
+  </div>
+
+</main>
+```
 
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <!-- hls.js pinned version — stable on older Tizen WebKit -->
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+
   <script src="./app.js"></script>
+
 </body>
 </html>
