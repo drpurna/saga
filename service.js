@@ -1,6 +1,6 @@
 module.exports = {
 
-  name: "Smart IPTV",
+  name: "tizentv",
 
   async start(ctx){
 
