@@ -17,9 +17,7 @@
     "m3u",
     "hls",
     "samsung",
-    "tv",
-    "adaptive-bitrate",
-    "streaming"
+    "tv"
   ],
   "packageType": "app",
   "appName": "IPTV",
