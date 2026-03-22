@@ -17,10 +17,7 @@ const videoWrap     = document.getElementById('videoWrap');
 // Default playlists
 const DEFAULT_PLAYLISTS = [
   { name: 'Telugu',  url: 'https://iptv-org.github.io/iptv/languages/tel.m3u' },
-  { name: 'Hindi',   url: 'https://iptv-org.github.io/iptv/languages/hin.m3u' },
-  { name: 'English', url: 'https://iptv-org.github.io/iptv/languages/eng.m3u' },
-  { name: 'Distro',  url: 'https://github.com/iptv-org/iptv/blob/master/streams/in_distro.m3u' },
-  { name: 'News',    url: 'https://iptv-org.github.io/iptv/categories/news.m3u' },
+  { name: 'India',   url: 'https://https://iptv-org.github.io/iptv/countries/in.m3u' },
   { name: 'Sports',  url: 'https://iptv-org.github.io/iptv/categories/sports.m3u' },
   { name: 'Movies',  url: 'https://iptv-org.github.io/iptv/categories/movies.m3u' },
 ];
