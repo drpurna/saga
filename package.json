@@ -1,29 +1,12 @@
 {
   "name": "iptv",
+  "appName": "IPTV",
   "version": "1.0.2",
   "description": "Premium IPTV player with HLS.js for TizenBrew — Samsung TV 2K/4K",
-  "license": "MIT",
-  "private": false,
-  "files": [
-    "app",
-    "service.js",
-    "README.md",
-    "package.json"
-  ],
-  "keywords": [
-    "tizen",
-    "tizenbrew",
-    "iptv",
-    "m3u",
-    "hls",
-    "samsung",
-    "tv"
-  ],
   "packageType": "app",
-  "appName": "IPTV",
   "appPath": "app/index.html",
   "serviceFile": "service.js",
-  "evaluateScriptOnDocumentStart": false,
+  "author": "drpurna",
   "keys": [
     "MediaPlay",
     "MediaPause",
@@ -39,8 +22,8 @@
     "ChannelDown",
     "Back"
   ],
-  "author": "drpurna",
   "repository": {
-    "type": "git",
     "url": "https://github.com/drpurna/tizen"
   },
+  "license": "MIT"
+}
