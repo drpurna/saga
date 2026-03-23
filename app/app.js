@@ -1,35 +1,19 @@
 // ================================================================
 // IPTV PRO — app.js v2.0
-// TizenBrew / Samsung TV
-// - enableWorker: false  (Tizen has no Web Worker support)
-// - XHR only            (Tizen fetch API unreliable)
-// - Back key registered + app exit
-// - Enter → play + auto fullscreen
-// - Back/← → exit fullscreen
-// - Channel logos from tvg-logo
-// - Tab playlists, no URL input
-// - Color buttons: Red=Reload, Green=Next playlist,
-//                  Yellow=Search, Blue=Fullscreen
+// TizenBrew / Samsung TV - with local HLS.js
 // ================================================================
 
-/* ── TizenBrew Initialization ─────────────────────────────────── */
-(function initTizenBrew() {
-  console.log('[IPTV] Initializing on TizenBrew');
-  
-  // Ensure app is visible
-  document.body.style.display = 'block';
-  document.body.style.visibility = 'visible';
-  
-  // Force a repaint for Samsung TV
-  setTimeout(() => {
-    window.dispatchEvent(new Event('resize'));
-  }, 100);
-  
-  // Show debug indicator (remove in production)
-  if (console.log('IPTV Pro started successfully'));
+/* ── Verify HLS.js loaded locally ─────────────────────────── */
+(function checkHLS() {
+  if (window.Hls) {
+    console.log('[IPTV Pro] HLS.js loaded successfully from local file');
+    console.log('[IPTV Pro] HLS.js version:', window.Hls.version);
+  } else {
+    console.error('[IPTV Pro] HLS.js failed to load from local file');
+  }
 })();
 
-/* ── DOM Elements ─────────────────────────────────────────────────── */
+/* ── DOM Elements ─────────────────────────────────────────── */
 const searchInput   = document.getElementById('searchInput');
 const tabBar        = document.getElementById('tabBar');
 const channelListEl = document.getElementById('channelList');
@@ -78,7 +62,7 @@ const HLS_CONFIG = {
 let channels      = [];
 let filtered      = [];
 let selectedIndex = 0;
-let focusArea     = 'list';  // list | search | player
+let focusArea     = 'list';
 let hls           = null;
 let plIdx         = 0;
 let isFullscreen  = false;
