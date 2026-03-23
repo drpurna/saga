@@ -1,11 +1,15 @@
 {
-  "name": "iptv",
+  "name": "tizenbrew-iptv-pro",
   "version": "2.0.0",
-  "description": "Premium IPTV player for TizenBrew — Samsung TV",
+  "description": "Premium IPTV player for TizenBrew - Samsung TV",
   "license": "MIT",
   "private": false,
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "pack:check": "npm pack --dry-run",
+    "publish:public": "npm publish --access public"
   },
   "files": [
     "app",
@@ -25,8 +29,6 @@
   "packageType": "app",
   "appName": "IPTV Pro",
   "appPath": "app/index.html",
-  "serviceFile": "service.js",
-  "evaluateScriptOnDocumentStart": true,
   "keys": [
     "MediaPlay",
     "MediaPause",
@@ -37,10 +39,8 @@
     "ColorF0Red",
     "ColorF1Green",
     "ColorF2Yellow",
-    "ColorF3Blue",
-    "ChannelUp",
-    "ChannelDown",
-    "Back"
+    "ColorF3Blue"
   ],
-  "main": "service.js"
+  "serviceFile": "service.js",
+  "evaluateScriptOnDocumentStart": false
 }
