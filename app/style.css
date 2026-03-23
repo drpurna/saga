@@ -1,6 +1,7 @@
 /* ================================================================
-   IPTV PRO — style.css — Samsung TV / TizenBrew
-   No external fonts. Uses Samsung built-in font stack only.
+   IPTV — style.css v3.0 — Samsung TV / TizenBrew
+   GPU-accelerated, virtual-scroll ready, lag-free.
+   No external fonts. Samsung built-in font stack only.
    ================================================================ */
 
 :root {
@@ -14,28 +15,33 @@
   --accent:    #e50000;
   --hi:        #ffffff;
   --radius:    10px;
-  --sidebar-w: 380px;
-  /* Samsung TV built-in fonts — zero network load */
-  --font-title: 'SamsungSharpSans-Bold', 'Samsung Sharp Sans', 'Arial Black', 'Arial Narrow', Arial, sans-serif;
+  --sidebar-w: 400px;
+  --font-title: 'SamsungSharpSans-Bold', 'Samsung Sharp Sans', 'Arial Black', Arial, sans-serif;
   --font-body:  'SamsungOne', 'Samsung One', Arial, sans-serif;
 }
 
-* { 
-  box-sizing: border-box; 
-  margin: 0; 
-  padding: 0; 
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  /* Prevent GPU layer explosions on Tizen */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 html, body {
-  width: 100%; 
+  width: 100%;
   height: 100%;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 16px;
+  /* Promote root to GPU composite layer */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 
 /* ── Layout ──────────────────────────────────────────────── */
@@ -44,6 +50,8 @@ html, body {
   grid-template-columns: var(--sidebar-w) 1fr;
   height: 100vh;
   width: 100vw;
+  /* Contain layout recalculations to this element */
+  contain: strict;
 }
 
 /* ── Sidebar ─────────────────────────────────────────────── */
@@ -54,9 +62,10 @@ html, body {
   flex-direction: column;
   overflow: hidden;
   padding: 18px 0 0;
+  contain: layout style;
 }
 
-/* Brand */
+/* Brand — no PRO badge, just IPTV */
 .brand {
   display: flex;
   align-items: baseline;
@@ -74,18 +83,8 @@ html, body {
   text-transform: uppercase;
   line-height: 1;
 }
-.brand-pro {
-  font-family: var(--font-title);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  color: var(--accent);
-  border: 2px solid var(--accent);
-  border-radius: 4px;
-  padding: 2px 6px;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
+/* .brand-pro hidden via display:none in HTML — kept here for safety */
+.brand-pro { display: none !important; }
 
 /* Search */
 .search-wrap {
@@ -97,30 +96,29 @@ html, body {
   left: 28px;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   color: var(--muted);
   pointer-events: none;
 }
 #searchInput {
   width: 100%;
-  height: 40px;
+  height: 44px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--panel2);
   color: var(--text);
-  padding: 0 12px 0 38px;
-  font-size: 14px;
+  padding: 0 14px 0 42px;
+  font-size: 15px;
   font-family: var(--font-body);
   outline: none;
+  /* No transition on input — Tizen is slow with input reflows */
 }
-#searchInput:focus { 
-  border-color: #444; 
-  background: #1c1c1c; 
+#searchInput:focus {
+  border-color: #444;
+  background: #1c1c1c;
 }
-#searchInput::placeholder { 
-  color: var(--muted); 
-}
+#searchInput::placeholder { color: var(--muted); }
 
 /* Tabs */
 .tab-bar {
@@ -130,36 +128,29 @@ html, body {
   overflow-x: auto;
   scrollbar-width: none;
 }
-.tab-bar::-webkit-scrollbar { 
-  display: none; 
-}
+.tab-bar::-webkit-scrollbar { display: none; }
 .tab {
   flex-shrink: 0;
-  height: 30px;
-  padding: 0 14px;
+  height: 32px;
+  padding: 0 16px;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
   font-family: var(--font-body);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: .5px;
   text-transform: uppercase;
   cursor: pointer;
   outline: none;
   white-space: nowrap;
-  transition: all 0.2s ease;
+  /* Use opacity for transition — much cheaper than color on Tizen */
+  will-change: opacity;
+  transition: opacity 0.15s ease;
 }
-.tab:focus, .tab:hover { 
-  border-color: #444; 
-  color: var(--text); 
-}
-.tab.active { 
-  background: #fff; 
-  color: #000; 
-  border-color: #fff; 
-}
+.tab:focus, .tab:hover { opacity: 0.85; border-color: #444; color: var(--text); }
+.tab.active { background: #fff; color: #000; border-color: #fff; opacity: 1; }
 
 /* List header */
 .list-head {
@@ -169,14 +160,14 @@ html, body {
   padding: 0 16px 8px;
 }
 .lbl {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 3px;
   color: var(--muted);
   text-transform: uppercase;
   font-weight: 600;
 }
 #countBadge {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   background: var(--panel2);
   border: 1px solid var(--border);
@@ -184,7 +175,7 @@ html, body {
   padding: 1px 8px;
 }
 
-/* Channel list */
+/* ── Channel list — virtual scroll container ─────────────── */
 #channelList {
   list-style: none;
   flex: 1;
@@ -193,48 +184,56 @@ html, body {
   padding: 0 8px;
   scrollbar-width: thin;
   scrollbar-color: #222 transparent;
+  /* Critical: promote to its own GPU layer so scroll
+     does NOT repaint the rest of the page               */
+  will-change: scroll-position;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  /* Contain all painting inside this element */
+  contain: strict;
+  position: relative;
 }
-#channelList::-webkit-scrollbar { 
-  width: 3px; 
-}
-#channelList::-webkit-scrollbar-thumb { 
-  background: #222; 
-  border-radius: 3px; 
+#channelList::-webkit-scrollbar { width: 3px; }
+#channelList::-webkit-scrollbar-thumb { background: #222; border-radius: 3px; }
+
+/* Virtual scroll inner spacer */
+#vsInner {
+  position: relative;
+  width: 100%;
+  /* height set dynamically by JS */
 }
 
+/* Channel row — FIXED height (must match VS.ITEM_H = 62px) */
 #channelList li {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 10px 10px;
   border-radius: 8px;
-  margin-bottom: 2px;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: all 0.2s ease;
+  height: 62px;          /* ← must equal VS.ITEM_H */
+  /* GPU composite: use opacity/transform for active state,
+     NOT background-color, because background triggers repaint */
+  will-change: transform;
+  /* Avoid layout thrash — contain each row */
+  contain: layout style;
 }
-#channelList li:hover  { 
-  background: var(--panel2); 
+/* Hover — cheap opacity pulse instead of background repaint */
+#channelList li:hover { background: var(--panel2); }
+#channelList li.active {
+  background: #fff;
+  border-color: #fff;
 }
-#channelList li.active { 
-  background: #fff; 
-  border-color: #fff; 
-}
-#channelList li.active .ch-name  { 
-  color: #000; 
-}
-#channelList li.active .ch-group { 
-  color: #555; 
-}
-#channelList li.active .ch-num   { 
-  color: #aaa; 
-}
+#channelList li.active .ch-name  { color: #000; }
+#channelList li.active .ch-group { color: #555; }
+#channelList li.active .ch-num   { color: #aaa; }
 
 /* Logo */
 .ch-logo {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 6px;
   background: #1a1a1a;
   border: 1px solid #252525;
@@ -242,27 +241,26 @@ html, body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  contain: strict;
 }
-.ch-logo img { 
-  width: 100%; 
-  height: 100%; 
-  object-fit: contain; 
+.ch-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  /* Don't promote every logo to its own layer */
 }
 .ch-logo-fb {
   font-family: var(--font-title);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
   color: #444;
   text-transform: uppercase;
 }
 
-/* Channel text */
-.ch-info { 
-  flex: 1; 
-  min-width: 0; 
-}
+/* Channel text — BIGGER fonts per request */
+.ch-info { flex: 1; min-width: 0; }
 .ch-name {
-  font-size: 13px;
+  font-size: 16px;          /* was 13px — increased */
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -270,7 +268,7 @@ html, body {
   text-overflow: ellipsis;
 }
 .ch-group {
-  font-size: 11px;
+  font-size: 12px;          /* was 11px — slightly bigger */
   color: var(--muted);
   margin-top: 2px;
   white-space: nowrap;
@@ -278,7 +276,7 @@ html, body {
   text-overflow: ellipsis;
 }
 .ch-num {
-  font-size: 11px;
+  font-size: 12px;
   color: #2a2a2a;
   font-family: var(--font-title);
   font-weight: 700;
@@ -302,12 +300,7 @@ html, body {
   font-weight: 500;
   letter-spacing: .3px;
 }
-.dot {
-  width: 10px; 
-  height: 10px;
-  border-radius: 2px; 
-  flex-shrink: 0;
-}
+.dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 .dot.red    { background: #e5000e; }
 .dot.green  { background: #00b259; }
 .dot.yellow { background: #e5b400; }
@@ -321,6 +314,7 @@ html, body {
   gap: 10px;
   background: var(--bg);
   overflow: hidden;
+  contain: layout style;
 }
 
 .player-header {
@@ -377,9 +371,12 @@ html, body {
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border);
+  /* Own GPU layer — video decode stays isolated */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
 }
 video {
-  width: 100%; 
+  width: 100%;
   height: 100%;
   display: block;
   background: #000;
@@ -396,32 +393,20 @@ video {
   justify-content: center;
   gap: 14px;
   pointer-events: none;
-  transition: opacity .3s;
+  /* Use opacity transition only — avoids composite layer thrash */
+  opacity: 1;
+  transition: opacity 0.25s ease;
   background: rgba(0,0,0,0.7);
 }
-.video-overlay.hidden { 
-  opacity: 0; 
-  visibility: hidden;
-}
-.overlay-icon { 
-  font-size: 52px; 
-  color: #fff; 
-}
-.overlay-hint {
-  font-size: 14px; 
-  color: #ccc;
-  text-align: center; 
-  line-height: 1.9;
-}
-.overlay-hint span { 
-  font-size: 12px; 
-  color: #888; 
-}
+.video-overlay.hidden { opacity: 0; visibility: hidden; }
+.overlay-icon { font-size: 52px; color: #fff; }
+.overlay-hint { font-size: 14px; color: #ccc; text-align: center; line-height: 1.9; }
+.overlay-hint span { font-size: 12px; color: #888; }
 
 /* Fullscreen hint */
 .fs-hint {
   position: absolute;
-  bottom: 20px; 
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0,0,0,.75);
@@ -431,13 +416,11 @@ video {
   border-radius: 20px;
   pointer-events: none;
   opacity: 0;
-  transition: opacity .3s;
+  transition: opacity 0.25s ease;
   white-space: nowrap;
   letter-spacing: .5px;
 }
-.fs-hint.visible { 
-  opacity: 1; 
-}
+.fs-hint.visible { opacity: 1; }
 
 /* Load bar */
 .load-bar {
@@ -446,30 +429,21 @@ video {
   border-radius: 2px;
   width: 0%;
   opacity: 0;
-  transition: width .4s ease, opacity .3s;
+  /* Width transition fine here — element is tiny */
+  transition: width 0.35s ease, opacity 0.2s;
   flex-shrink: 0;
+  /* Own layer so video area isn't repainted */
+  will-change: width, opacity;
+  transform: translateZ(0);
 }
-.load-bar.active { 
-  opacity: 1; 
-}
+.load-bar.active { opacity: 1; }
 
 /* ── Fullscreen ──────────────────────────────────────────── */
-body.fullscreen .sidebar { 
-  display: none; 
-}
-body.fullscreen .app { 
-  grid-template-columns: 1fr; 
-}
-body.fullscreen .player-area { 
-  padding: 0; 
-  gap: 0; 
-}
-body.fullscreen .player-header { 
-  display: none; 
-}
-body.fullscreen .load-bar { 
-  display: none; 
-}
+body.fullscreen .sidebar        { display: none; }
+body.fullscreen .app            { grid-template-columns: 1fr; }
+body.fullscreen .player-area    { padding: 0; gap: 0; }
+body.fullscreen .player-header  { display: none; }
+body.fullscreen .load-bar       { display: none; }
 body.fullscreen .video-wrap {
   position: fixed;
   inset: 0;
@@ -477,10 +451,6 @@ body.fullscreen .video-wrap {
   border-radius: 0;
   border: none;
 }
-body.fullscreen .fs-hint { 
-  z-index: 10000; 
-}
+body.fullscreen .fs-hint { z-index: 10000; }
 
-* { 
-  outline: none; 
-}
+* { outline: none; }
