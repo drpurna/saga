@@ -167,7 +167,7 @@ function initials(n){ return n.replace(/[^a-zA-Z0-9]/g,' ').trim().split(/\s+/).
    transitions on rows (eliminates jank)
    ================================================================ */
 const VS = {
-  ITEM_H:  80,   // ← MUST match CSS --item-h
+  ITEM_H:  88,   // ← MUST match CSS --item-h
   OVERSCAN: 6,
   c:null, inner:null, vh:0, st:0, total:0,
   rs:-1, re:-1, nodes:[], raf:null,
@@ -203,6 +203,16 @@ const VS = {
     if(top<st)         this.c.scrollTop=top;
     else if(bot>st+vh) this.c.scrollTop=bot-vh;
     this.st=this.c.scrollTop;
+    this._paint();
+  },
+
+  scrollToIndexCentered(idx){
+    // Force scroll to center the item in view — used by dialer so highlight is always visible
+    const center=idx*this.ITEM_H-(this.vh/2)+(this.ITEM_H/2);
+    this.c.scrollTop=Math.max(0,center);
+    this.st=this.c.scrollTop;
+    // Force repaint even if range didn't change
+    this.rs=-1; this.re=-1;
     this._paint();
   },
 
@@ -465,7 +475,7 @@ function switchTab(idx){
 }
 tabBar.querySelectorAll('.tab').forEach((b,i)=>b.addEventListener('click',()=>switchTab(i)));
 
-/* ── Number dial (highlight only, ENTER to play) ─────────── */
+/* ── Number dial (jump + play) ────────────────────────────── */
 function handleDigit(d){
   clearTimeout(dialTimer);
   dialBuffer+=d;
@@ -476,19 +486,16 @@ function handleDigit(d){
     const num=parseInt(dialBuffer,10);
     dialBuffer='';
     chDialer.classList.remove('visible');
-    if(!filtered.length) return;
-    // Just highlight the channel — user presses ENTER to play
+    if(!filtered.length||isNaN(num)) return;
+    // Clamp to valid range (1-based channel number → 0-based index)
     const idx=Math.max(0,Math.min(filtered.length-1,num-1));
     cancelPreview();
     selectedIndex=idx;
-    VS.scrollToIndex(idx);
-    VS.refresh();
-    // Show channel info but don't start stream yet
-    const ch=filtered[idx];
-    if(ch){
-      nowPlayingEl.textContent=ch.name;
-      npChNumEl.textContent='CH '+(idx+1);
-    }
+    // Force centered scroll + repaint so highlight is always visible
+    VS.scrollToIndexCentered(idx);
+    // Auto-play the selected channel immediately
+    playSelected();
+    showToast('CH '+(idx+1)+' — '+filtered[idx].name);
   },1500);
 }
 

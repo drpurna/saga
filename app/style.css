@@ -15,7 +15,7 @@
   --gold:      #f0c400;
   --radius:    10px;
   --sidebar-w: 440px;
-  --item-h:    80px;    /* MUST match VS.ITEM_H in app.js */
+  --item-h:    88px;    /* MUST match VS.ITEM_H in app.js */
   --font-brand: 'Bebas Neue','Arial Black',Arial,sans-serif;
   --font-title: 'SamsungSharpSans-Bold','Samsung Sharp Sans','Arial Black',Arial,sans-serif;
   --font-body:  'SamsungOne','Samsung One',Arial,sans-serif;
@@ -52,18 +52,26 @@ html,body {
 
 /* ── Brand ───────────────────────────────────────────────── */
 .brand {
-  display:flex; align-items:center; gap:12px;
+  display:flex; align-items:center; gap:14px;
   padding:0 22px 18px;
   border-bottom:1px solid var(--border);
   margin-bottom:16px;
 }
-.brand-play { font-size:20px; color:var(--accent); line-height:1; }
+.brand-icon {
+  width:48px; height:48px; border-radius:12px;
+  background:linear-gradient(135deg,#e50000 0%,#8b0000 100%);
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+  box-shadow:0 2px 12px rgba(229,0,0,0.5);
+}
+.brand-icon svg { width:28px; height:28px; }
 .brand-title {
   font-family:var(--font-brand);
-  font-size:52px; font-weight:400;
-  letter-spacing:8px; color:#fff;
+  font-size:58px; font-weight:900;
+  letter-spacing:6px; color:#fff;
   text-transform:uppercase; line-height:1;
-  -webkit-text-stroke:1.5px #fff;
+  -webkit-text-stroke:2px #fff;
+  text-shadow:0 0 30px rgba(229,0,0,0.6), 0 2px 8px rgba(0,0,0,0.8);
 }
 
 /* ── Search ──────────────────────────────────────────────── */
@@ -90,11 +98,11 @@ html,body {
 }
 .tab-bar::-webkit-scrollbar { display:none; }
 .tab {
-  flex:1; min-width:0; height:40px; padding:0 10px;
+  flex:1; min-width:0; height:48px; padding:0 10px;
   border-radius:10px; border:1.5px solid var(--border);
   background:transparent; color:var(--muted);
   font-family:var(--font-title);
-  font-size:14px; font-weight:700;
+  font-size:17px; font-weight:800;
   letter-spacing:.5px; text-transform:uppercase;
   cursor:pointer; outline:none; white-space:nowrap;
   display:flex; align-items:center; justify-content:center;
@@ -131,7 +139,7 @@ html,body {
 #channelList::-webkit-scrollbar { display:none; }
 #vsInner { position:relative; width:100%; }
 
-/* Channel row — height MUST equal VS.ITEM_H = 80px */
+/* Channel row — height MUST equal VS.ITEM_H = 88px */
 #channelList li {
   display:flex; align-items:center; gap:14px;
   padding:0 14px; border-radius:10px;
@@ -160,11 +168,11 @@ html,body {
 .ch-info { flex:1; min-width:0; }
 .ch-name {
   font-family:var(--font-title);
-  font-size:24px;   /* large, readable from couch */
-  font-weight:700;
+  font-size:30px;   /* increased from 24px — clearly visible at distance */
+  font-weight:800;
   color:var(--text);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  line-height:1; letter-spacing:0.2px;
+  line-height:1; letter-spacing:0.3px;
 }
 
 .ch-fav { font-size:16px; color:var(--gold); flex-shrink:0; margin-right:2px; }
@@ -314,6 +322,8 @@ body.fullscreen .player-header { display:none; }
 body.fullscreen .load-bar      { display:none; }
 body.fullscreen .video-wrap    { position:fixed; inset:0; z-index:9999; border-radius:0; border:none; }
 body.fullscreen .fs-hint       { z-index:10000; }
+/* In fullscreen, default to cover so channels fill the screen edge-to-edge */
+body.fullscreen video:not(.ar-fill):not(.ar-wide) { object-fit:cover; }
 
 /* ── Toast ───────────────────────────────────────────────── */
 #toast {
