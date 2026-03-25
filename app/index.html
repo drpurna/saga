@@ -11,11 +11,10 @@
 
   <!-- ── Sidebar ────────────────────────────────────────── -->
   <aside class="sidebar">
-
-    <!-- Brand -->
     <div class="brand">
       <div class="brand-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2"/>
           <path d="M8 21h8M12 17v4"/>
         </svg>
@@ -23,15 +22,15 @@
       <div class="brand-title">IPTV</div>
     </div>
 
-    <!-- Search -->
     <div class="search-wrap" id="searchWrap">
-      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input id="searchInput" type="text" placeholder="Search channels…" autocomplete="off" spellcheck="false"/>
+      <input id="searchInput" type="text" placeholder="Search channels&#8230;"
+             autocomplete="off" spellcheck="false"/>
     </div>
 
-    <!-- Tabs -->
     <div class="tab-bar" id="tabBar">
       <button class="tab active">Telugu</button>
       <button class="tab">India</button>
@@ -39,34 +38,27 @@
       <button class="tab">Jio TV</button>
     </div>
 
-    <!-- List header -->
     <div class="list-head">
       <span class="lbl">Channels</span>
       <span id="countBadge">0</span>
     </div>
 
-    <!-- Channel list (virtual scroll) -->
     <ul id="channelList"></ul>
 
-    <!-- Number dialer -->
     <div class="ch-dialer" id="chDialer">
       <div id="chDialerNum">0</div>
     </div>
 
-    <!-- Hint bar -->
     <div class="hint-bar">
       <div class="hint-item"><span class="dot red"></span>Switch Tab</div>
       <div class="hint-item"><span class="dot green"></span>Favourite</div>
       <div class="hint-item"><span class="dot yellow"></span>Search</div>
       <div class="hint-item"><span class="dot blue"></span>Fullscreen</div>
     </div>
-
   </aside>
 
   <!-- ── Player area ────────────────────────────────────── -->
   <main class="player-area">
-
-    <!-- Header: now-playing + controls -->
     <div class="player-header">
       <div class="np-info">
         <div class="np-ch-num" id="npChNum"></div>
@@ -78,43 +70,78 @@
       </div>
     </div>
 
-    <!-- Load bar -->
     <div class="load-bar" id="loadBar"></div>
 
-    <!-- Video -->
     <div class="video-wrap" id="videoWrap">
       <video id="video" playsinline></video>
       <div class="video-overlay" id="videoOverlay">
         <div class="overlay-icon">&#9654;</div>
         <div class="overlay-hint">
           Press <strong>Enter</strong> to play<br/>
-          <span>&#8592; &#8593; &#8594; &#8595; to navigate &nbsp;|&nbsp; &#8594; for aspect ratio</span>
+          <span>&#8592; &#8593; &#8594; &#8595; navigate &nbsp;|&nbsp; &#8594; aspect ratio</span>
         </div>
       </div>
       <div class="fs-hint" id="fsHint">Press BACK or &#8592; to exit fullscreen</div>
     </div>
-
   </main>
 </div>
 
-<!-- ── Jio TV Login Modal ─────────────────────────────────── -->
+<!-- ================================================================
+     Jio TV Login Modal
+================================================================ -->
 <div class="jio-modal" id="jioModal">
   <div class="jio-modal-content">
-    <h3>Jio TV Login</h3>
+
+    <h3>&#128246; Jio TV Login</h3>
+    <p style="font-size:13px;color:#777;margin-bottom:20px;line-height:1.6">
+      Login with your Jio mobile number.<br/>
+      An OTP will be sent to your registered number.
+    </p>
+
+    <!-- Step 1: Mobile number -->
     <div id="jioLoginStep1">
-      <input id="jioMobile" type="tel" maxlength="10" placeholder="Mobile number (10 digits)" inputmode="numeric"/>
-      <button id="jioRequestOtp">Send OTP</button>
+      <label style="font-size:12px;color:#666;letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:8px">
+        Mobile Number
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+        <span style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:0 12px;height:44px;display:flex;align-items:center;font-size:15px;color:#888;flex-shrink:0">+91</span>
+        <input id="jioMobile" type="tel" maxlength="10"
+               placeholder="10-digit number"
+               inputmode="numeric" pattern="[0-9]*"
+               style="flex:1"/>
+      </div>
+      <button id="jioRequestOtp" style="margin-top:10px">Send OTP</button>
     </div>
+
+    <!-- Step 2: OTP entry -->
     <div id="jioLoginStep2" style="display:none">
-      <input id="jioOtp" type="tel" maxlength="6" placeholder="Enter OTP" inputmode="numeric"/>
-      <button id="jioVerifyOtp">Verify &amp; Login</button>
+      <label style="font-size:12px;color:#666;letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:8px">
+        Enter OTP
+      </label>
+      <input id="jioOtp" type="tel" maxlength="6"
+             placeholder="6-digit OTP"
+             inputmode="numeric" pattern="[0-9]*"
+             style="letter-spacing:8px;font-size:22px;text-align:center"/>
+      <button id="jioVerifyOtp" style="margin-top:10px">Verify &amp; Login</button>
+      <button id="jioResendOtp"
+              style="background:transparent;color:#666;border:1px solid #2a2a2a;
+                     margin-top:8px;font-size:13px;letter-spacing:0">
+        &#8592; Change Number / Resend OTP
+      </button>
     </div>
-    <div id="jioStatus"></div>
-    <button id="jioCloseModal" style="background:#333;margin-top:8px">Cancel</button>
+
+    <!-- Status message -->
+    <div id="jioStatus" style="min-height:28px;margin:14px 0 6px;font-size:14px"></div>
+
+    <!-- Cancel -->
+    <button id="jioCloseModal"
+            style="background:#1a1a1a;color:#555;border:1px solid #2a2a2a;margin-top:2px;font-size:13px">
+      Cancel
+    </button>
+
   </div>
 </div>
 
-<!-- Shaka Player (local, no network needed) -->
 <script src="shaka.js"></script>
 <script src="app.js"></script>
 </body>
