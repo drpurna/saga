@@ -59,10 +59,10 @@ html,body {
 }
 .brand-icon {
   width:48px; height:48px; border-radius:12px;
-  background:linear-gradient(135deg,#e50000 0%,#8b0000 100%);
+  background:transparent;      /* removed red gradient */
   display:flex; align-items:center; justify-content:center;
   flex-shrink:0;
-  box-shadow:0 2px 12px rgba(229,0,0,0.5);
+  box-shadow:none;              /* removed red glow */
 }
 .brand-icon svg { width:28px; height:28px; }
 .brand-title {
@@ -109,7 +109,10 @@ html,body {
 }
 .tab:hover  { border-color:#333; color:var(--text); }
 .tab.active { background:#fff; color:#000; border-color:#fff; }
-.tab.fav-tab { border-color:#3a3000; color:#7a6400; }
+.tab.fav-tab {
+  border-color:#3a3000; color:#7a6400;
+  font-size:14px;                     /* reduced font size */
+}
 .tab.fav-tab:hover  { border-color:#665800; color:var(--gold); }
 .tab.fav-tab.active { background:var(--gold); color:#000; border-color:var(--gold); }
 
