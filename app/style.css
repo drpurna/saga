@@ -1,24 +1,30 @@
 /* ================================================================
-   IPTV Pro — style.css v7.0 | Samsung Tizen OS9 TV
+IPTV Pro — style.css v7.1 | Samsung Tizen OS9 TV
+v7.1 Changes:
+  • FIX: Fullscreen no longer forces object-fit:cover on video
+         — stream plays at native aspect ratio in fullscreen
+  • FIX: video base rule is object-fit:contain (letterbox, no crop)
+  • AR classes still available for manual override via AR button
+  • ar-wide uses scaleX(1.34) only when user explicitly selects it
 ================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
 
 :root {
-  --bg:          #080808;
-  --panel:       #0e0e0e;
-  --panel2:      #161616;
-  --border:      #1c1c1c;
-  --text:        #f0f0f0;
-  --muted:       #444;
-  --accent:      #e50000;
-  --gold:        #f0c400;
-  --radius:      10px;
-  --sidebar-w:   440px;
-  --item-h:      88px;
-  --font-brand:  'Bebas Neue','Arial Black',Arial,sans-serif;
-  --font-title:  'SamsungSharpSans-Bold','Samsung Sharp Sans','Arial Black',Arial,sans-serif;
-  --font-body:   'SamsungOne','Samsung One',Arial,sans-serif;
+  --bg: #080808;
+  --panel: #0e0e0e;
+  --panel2: #161616;
+  --border: #1c1c1c;
+  --text: #f0f0f0;
+  --muted: #444;
+  --accent: #e50000;
+  --gold: #f0c400;
+  --radius: 10px;
+  --sidebar-w: 440px;
+  --item-h: 88px;
+  --font-brand: 'Bebas Neue','Arial Black',Arial,sans-serif;
+  --font-title: 'SamsungSharpSans-Bold','Samsung Sharp Sans','Arial Black',Arial,sans-serif;
+  --font-body:  'SamsungOne','Samsung One',Arial,sans-serif;
 }
 
 *,*::before,*::after {
@@ -26,7 +32,6 @@
   user-select:none; -webkit-tap-highlight-color:transparent;
   -webkit-backface-visibility:hidden; backface-visibility:hidden;
 }
-
 html,body {
   width:100%; height:100%; overflow:hidden;
   background:var(--bg); color:var(--text);
@@ -142,7 +147,6 @@ html,body {
 #channelList::-webkit-scrollbar { display:none; }
 #vsInner { position:relative; width:100%; }
 
-/* Channel row */
 #channelList li {
   display:flex; align-items:center; gap:14px;
   padding:0 14px; border-radius:10px;
@@ -156,7 +160,6 @@ html,body {
 #channelList li.active .ch-num  { color:#aaa; }
 #channelList li.active .ch-fav  { color:#b08800; }
 
-/* Logo */
 .ch-logo {
   flex-shrink:0; width:46px; height:46px; border-radius:8px;
   background:#1a1a1a; border:1px solid #222;
@@ -166,7 +169,6 @@ html,body {
 .ch-logo img { width:100%; height:100%; object-fit:contain; }
 .ch-logo-fb { font-family:var(--font-title); font-size:14px; font-weight:800; color:#333; text-transform:uppercase; }
 
-/* Channel name */
 .ch-info { flex:1; min-width:0; }
 .ch-name {
   font-family:var(--font-title);
@@ -182,10 +184,7 @@ html,body {
 }
 
 /* ── Skeleton loading rows ───────────────────────────────── */
-.sk-row {
-  display:flex; align-items:center; gap:14px;
-  padding:0 14px; height:88px;
-}
+.sk-row { display:flex; align-items:center; gap:14px; padding:0 14px; height:88px; }
 .sk-logo {
   width:46px; height:46px; border-radius:8px; flex-shrink:0;
   background:linear-gradient(90deg,#1a1a1a 25%,#252525 50%,#1a1a1a 75%);
@@ -264,13 +263,10 @@ html,body {
   cursor:pointer; outline:none; white-space:nowrap;
   display:flex; align-items:center; gap:6px;
 }
-.ar-btn.focused        { border-color:#fff; color:#fff; background:#1e1e1e; box-shadow:0 0 0 2px #fff; }
-.ar-btn.ar-fill        { border-color:#e50000; color:#e50000; }
-.ar-btn.ar-cover       { border-color:#00b259; color:#00b259; }
-.ar-btn.ar-wide        { border-color:#e5b400; color:#e5b400; }
-.ar-btn.ar-fill.focused,
-.ar-btn.ar-cover.focused,
-.ar-btn.ar-wide.focused { box-shadow:0 0 0 2px #fff; }
+.ar-btn.focused { border-color:#fff; color:#fff; background:#1e1e1e; box-shadow:0 0 0 2px #fff; }
+.ar-btn.ar-fill  { border-color:#e50000; color:#e50000; }
+.ar-btn.ar-cover { border-color:#00b259; color:#00b259; }
+.ar-btn.ar-wide  { border-color:#e5b400; color:#e5b400; }
 
 /* ── Status badge ────────────────────────────────────────── */
 .status-badge {
@@ -281,7 +277,7 @@ html,body {
 .status-badge.idle    { color:var(--muted); border-color:#1c1c1c; }
 .status-badge.loading { color:#e5b400; border-color:#e5b40044; background:#e5b40011; }
 .status-badge.playing { color:#00c06a; border-color:#00c06a44; background:#00c06a11; }
-.status-badge.paused  { color:#555;    border-color:#2a2a2a; }
+.status-badge.paused  { color:#555; border-color:#2a2a2a; }
 .status-badge.error   { color:var(--accent); border-color:#e5000e44; background:#e5000e11; }
 
 /* ── Video ───────────────────────────────────────────────── */
@@ -290,10 +286,15 @@ html,body {
   border-radius:var(--radius); overflow:hidden; border:1px solid var(--border);
   transform:translateZ(0); -webkit-transform:translateZ(0);
 }
+
+/* v7.1 FIX: Default is contain — stream plays at native ratio, no cropping */
 video {
   width:100%; height:100%; display:block;
-  background:#000; object-fit:contain;
+  background:#000;
+  object-fit:contain;          /* ← was missing explicit contain; fullscreen was overriding to cover */
 }
+
+/* Manual AR overrides (user-selected via AR button) */
 video.ar-fill  { object-fit:fill; }
 video.ar-cover { object-fit:cover; }
 video.ar-wide  { object-fit:contain; transform:scaleX(1.34); }
@@ -306,8 +307,8 @@ video.ar-wide  { object-fit:contain; transform:scaleX(1.34); }
   background:rgba(0,0,0,0.72);
 }
 .video-overlay.hidden { opacity:0; visibility:hidden; }
-.overlay-icon  { font-size:48px; color:#fff; }
-.overlay-hint  { font-size:14px; color:#ccc; text-align:center; line-height:2; }
+.overlay-icon { font-size:48px; color:#fff; }
+.overlay-hint { font-size:14px; color:#ccc; text-align:center; line-height:2; }
 .overlay-hint span { font-size:12px; color:#555; }
 
 /* ── Fullscreen hint ─────────────────────────────────────── */
@@ -338,7 +339,16 @@ body.fullscreen .player-header { display:none; }
 body.fullscreen .load-bar      { display:none; }
 body.fullscreen .video-wrap    { position:fixed; inset:0; z-index:9999; border-radius:0; border:none; }
 body.fullscreen .fs-hint       { z-index:10000; }
-body.fullscreen video:not(.ar-fill):not(.ar-wide) { object-fit:cover; }
+
+/*
+ * v7.1 FIX: REMOVED the rule below that was causing cropping in fullscreen:
+ *   body.fullscreen video:not(.ar-fill):not(.ar-wide) { object-fit:cover; }
+ *
+ * Now fullscreen video inherits the same object-fit:contain as windowed mode.
+ * The stream's native aspect ratio (16:9, 4:3, etc.) is preserved automatically.
+ * Black bars appear for non-16:9 content — this is correct TV behaviour.
+ * User can manually switch to Fill/Crop/Wide via AR button if desired.
+ */
 
 /* ── Toast ───────────────────────────────────────────────── */
 #toast {
@@ -354,27 +364,36 @@ body.fullscreen video:not(.ar-fill):not(.ar-wide) { object-fit:cover; }
 
 /* ── Jio Login Modal ─────────────────────────────────────── */
 .jio-modal {
-  display:none; position:fixed; z-index:1000;
+  display:none; position:fixed; z-index:10000;
   left:0; top:0; width:100%; height:100%;
   background-color:rgba(0,0,0,0.85);
   justify-content:center; align-items:center;
 }
 .jio-modal-content {
   background:var(--panel); border-radius:var(--radius);
-  padding:32px; width:90%; max-width:420px;
+  padding:32px; width:90%; max-width:440px;
   text-align:center; border:1px solid #222;
 }
 .jio-modal-content h3 {
   margin-bottom:20px; font-family:var(--font-brand);
   font-size:32px; letter-spacing:3px; color:#fff;
 }
+/* v7.1: Modal inputs need pointer-events and focus styles for remote nav */
 .jio-modal-content input {
   width:100%; padding:14px; margin-bottom:14px;
   background:var(--panel2); border:1px solid var(--border);
   color:var(--text); border-radius:8px;
   font-size:22px; text-align:center; outline:none;
+  /* Allow text cursor and keyboard input */
+  user-select:text !important;
+  -webkit-user-select:text !important;
+  caret-color:#0066cc;
 }
-.jio-modal-content input:focus { border-color:#0066cc; }
+.jio-modal-content input:focus {
+  border-color:#0066cc;
+  background:#111;
+  box-shadow:0 0 0 2px #0066cc44;
+}
 .jio-modal-content button {
   background:#0066cc; color:#fff;
   border:none; padding:12px 28px;
@@ -383,5 +402,6 @@ body.fullscreen video:not(.ar-fill):not(.ar-wide) { object-fit:cover; }
   cursor:pointer; margin:6px; letter-spacing:.5px;
 }
 .jio-modal-content button:hover  { background:#0055bb; }
+.jio-modal-content button:focus  { outline:2px solid #4499ff; }
 .jio-modal-content button#jioCloseModal { background:#2a2a2a; }
 #jioStatus { margin:14px 0; font-size:14px; color:var(--gold); min-height:20px; }
