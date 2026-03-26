@@ -1,46 +1,75 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets"
-        xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://yourname.com/IPTVApp"
-        version="1.0.0"
-        viewmodes="maximized">
+<widget xmlns       = "http://www.w3.org/ns/widgets"
+        xmlns:tizen = "http://tizen.org/ns/widgets"
+        id          = "http://iptv.pro/IPTVPro"
+        version     = "1.4.0"
+        viewmodes   = "fullscreen">
 
-  <tizen:application id="IPTV12345.IPTVApp"
-                     package="IPTV12345"
-                     required_version="6.0"/>
+  <tizen:application id        = "IPTVPro.App"
+                     package   = "IPTVPro"
+                     required_version = "7.0"
+                     ambient_support  = "false"/>
 
+  <!-- Prelaunch: keeps app resident so channel switch is instant -->
+  <tizen:setting screen-orientation = "landscape"
+                 context-menu       = "disable"
+                 background-support = "enable"
+                 encryption         = "disable"
+                 install-location   = "auto"
+                 hwkey-event        = "enable"
+                 preload            = "true"
+                 prelaunch-mode     = "enable"/>
+
+  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
+
+  <!-- Content -->
   <content src="index.html"/>
-  <icon src="icon.png"/>
   <name>IPTV Pro</name>
-  <description>Telugu, India &amp; JioTV channels</description>
+  <icon src="icon.png"/>
+  <description>IPTV Player with JioTV — Tizen OS9</description>
 
-  <!-- Required privileges -->
-  <tizen:privilege name="http://tizen.org/privilege/internet"/>
-  <tizen:privilege name="http://tizen.org/privilege/display"/>
-  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
-
-  <!-- Allow all network access including Jio APIs -->
-  <access origin="*" subdomains="true"/>
-
-  <!-- Android TV spoof metadata — reported to external services -->
-  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support"     value="true"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/resume_app_on_standby" value="true"/>
-
-  <!-- CSP: allow Jio CDN, Akamai, and proxy -->
+  <!-- CSP — allow proxy + iptv-org + jsdelivr -->
   <tizen:content-security-policy>
-    default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;
-    media-src * blob: data:;
-    connect-src *;
+    default-src 'self';
+    script-src  'self' 'unsafe-inline' 'unsafe-eval';
+    style-src   'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src    'self' https://fonts.gstatic.com;
+    img-src     'self' data: https: http:;
+    media-src   'self' blob: https: http:;
+    connect-src 'self'
+                https://houser-3q3n.onrender.com
+                https://iptv-org.github.io
+                https://cdn.jsdelivr.net
+                https://jiotvapi.media.jio.com
+                https://prod-api-cloudfront.jio.com;
   </tizen:content-security-policy>
 
-  <!-- App settings -->
-  <tizen:setting screen-orientation="landscape"
-                 context-menu="disable"
-                 background-support="enable"
-                 encryption="disable"
-                 install-location="auto"
-                 hw-key-event="true"/>
+  <!-- Network access -->
+  <access origin="*" subdomains="true"/>
 
-  <feature name="http://tizen.org/feature/screen.size.all"/>
+  <!-- ── Privileges ──────────────────────────────────────── -->
+
+  <!-- Network -->
+  <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <tizen:privilege name="http://tizen.org/privilege/network.get"/>
+
+  <!-- Filesystem — required for dual-layer token persistence -->
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
+  <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
+
+  <!-- TV Input Device — remote key registration -->
+  <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+
+  <!-- Application lifecycle — exit() call -->
+  <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+
+  <!-- Storage (localStorage / WebSQL) -->
+  <tizen:privilege name="http://tizen.org/privilege/websetting"/>
+
+  <!-- TV Display -->
+  <tizen:privilege name="http://tizen.org/privilege/tv.display"/>
+
+  <!-- Prelaunch -->
+  <tizen:privilege name="http://tizen.org/privilege/tv.prelaunch"/>
 
 </widget>
