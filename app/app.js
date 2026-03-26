@@ -26,7 +26,7 @@
 // ================================================================
 
 /* ── Constants ───────────────────────────────────────────── */
-const PROXY          = 'https://houser-3q3n.onrender.com';
+const PROXY          = 'https://houser-af7j.onrender.com';
 const JIO_API_BASE   = PROXY + '/jio';
 const FAV_KEY        = 'iptv:favs';
 const PLAYLIST_KEY   = 'iptv:lastPl';
