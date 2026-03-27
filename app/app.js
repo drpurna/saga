@@ -1,6 +1,7 @@
 // ================================================================
-// IPTV Pro — app.js v13.0 | Samsung Tizen OS9 TV
+// IPTV Pro — app.js v14.0 | Samsung Tizen OS9 TV
 // JIO removed. All playlist fetches direct (no proxy).
+// Added: network indicator, auto-retry, fullscreen fill.
 // ================================================================
 
 const FAV_KEY = 'iptv:favs';
@@ -49,7 +50,7 @@ let isFullscreen  = false;
 let hasPlayed     = false;
 let player        = null;
 let arIdx         = 0;
-let preFullscreenArMode = null;   // store AR mode before fullscreen
+let preFullscreenArMode = null;
 let fsHintTimer   = null;
 let loadBarTimer  = null;
 let previewTimer  = null;
@@ -58,6 +59,12 @@ let dialTimer     = null;
 let toastEl       = null;
 let toastTm       = null;
 let favSet        = new Set();
+
+// --- Retry & network state ---
+let retryCount = 0;
+let retryTimer = null;
+let networkQuality = 'online'; // 'online', 'slow', 'offline'
+let connectionMonitor = null;
 
 // ── localStorage helpers ────────────────────────────────────────
 function lsSet(key, value) {
@@ -135,11 +142,8 @@ function finishLoadBar() {
 // ── M3U helpers ─────────────────────────────────────────────────
 function cleanName(raw) {
   return String(raw || '')
-    // Remove anything inside parentheses (including the parentheses)
     .replace(/\s*\([^)]*\)/g, '')
-    // Also strip brackets
     .replace(/\s*\[[^\]]*\]/g, '')
-    // Remove common tags like 4K, UHD, etc.
     .replace(/\b(4K|UHD|FHD|HLS|HEVC|H264|H\.264|SD|HD|576[piP]?|720[piP]?|1080[piP]?|2160[piP]?)\b/gi, '')
     .replace(/[\|\-–—]+\s*$/g, '')
     .replace(/\s{2,}/g, ' ')
@@ -370,7 +374,6 @@ function loadPlaylist(urlOv) {
   const cacheKey = 'plCache:' + rawUrl;
   const cacheTimeKey = 'plCacheTime:' + rawUrl;
 
-  // Serve from cache if < 10 min old
   try {
     const cached = lsGet(cacheKey);
     const cacheTime = parseInt(lsGet(cacheTimeKey) || '0', 10);
@@ -432,6 +435,77 @@ function loadPlaylist(urlOv) {
   }
 }
 
+// ── Network status monitor ─────────────────────────────────────
+function updateNetworkIndicator() {
+  const indicator = document.getElementById('networkIndicator');
+  if (!indicator) return;
+  indicator.className = 'network-indicator';
+  if (!navigator.onLine) {
+    networkQuality = 'offline';
+    indicator.classList.add('offline');
+    indicator.title = 'No internet connection';
+  } else if (navigator.connection && navigator.connection.downlink) {
+    const speed = navigator.connection.downlink; // Mbps
+    if (speed < 1) {
+      networkQuality = 'slow';
+      indicator.classList.add('slow');
+      indicator.title = `Slow network (${speed.toFixed(1)} Mbps)`;
+    } else {
+      networkQuality = 'online';
+      indicator.classList.add('online');
+      indicator.title = `Network OK (${speed.toFixed(1)} Mbps)`;
+    }
+  } else {
+    networkQuality = 'online';
+    indicator.classList.add('online');
+    indicator.title = 'Network online';
+  }
+
+  // Adjust Shaka buffering based on network speed
+  if (player) {
+    if (networkQuality === 'slow') {
+      player.configure({ streaming: { bufferingGoal: 5, rebufferingGoal: 1 } });
+    } else if (networkQuality === 'online') {
+      player.configure({ streaming: { bufferingGoal: 10, rebufferingGoal: 2 } });
+    }
+  }
+}
+
+function startNetworkMonitoring() {
+  updateNetworkIndicator();
+  if (navigator.connection) {
+    navigator.connection.addEventListener('change', updateNetworkIndicator);
+  }
+  window.addEventListener('online', updateNetworkIndicator);
+  window.addEventListener('offline', updateNetworkIndicator);
+  connectionMonitor = setInterval(updateNetworkIndicator, 10000);
+}
+
+function stopNetworkMonitoring() {
+  if (navigator.connection) {
+    navigator.connection.removeEventListener('change', updateNetworkIndicator);
+  }
+  window.removeEventListener('online', updateNetworkIndicator);
+  window.removeEventListener('offline', updateNetworkIndicator);
+  if (connectionMonitor) clearInterval(connectionMonitor);
+}
+
+// ── Auto‑retry on stream error ─────────────────────────────────
+function scheduleStreamRetry(channelUrl) {
+  if (retryTimer) clearTimeout(retryTimer);
+  const delay = Math.min(30000, 1000 * Math.pow(2, retryCount));
+  retryCount++;
+  setStatus(`Retrying in ${delay / 1000}s…`, 'loading');
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    doPlay(channelUrl).catch(err => {
+      console.error('Retry failed', err);
+      if (retryCount < 5) scheduleStreamRetry(channelUrl);
+      else setStatus('Playback failed', 'error');
+    });
+  }, delay);
+}
+
 // ── Shaka player ─────────────────────────────────────────────────
 async function initShaka() {
   shaka.polyfill.installAll();
@@ -449,14 +523,22 @@ async function initShaka() {
 
   player.addEventListener('error', e => {
     console.error('[Shaka]', e.detail);
-    setStatus('Stream error', 'error');
-    finishLoadBar();
+    const retryCodes = [1001, 1002, 1003, 1006, 1007, 6007, 6008];
+    if (retryCodes.includes(e.detail.code)) {
+      setStatus('Stream error, retrying…', 'error');
+      const currentUrl = video.src || (filtered[selectedIndex] && filtered[selectedIndex].url);
+      if (currentUrl) scheduleStreamRetry(currentUrl);
+    } else {
+      setStatus('Stream error', 'error');
+      finishLoadBar();
+    }
   });
 }
 
 async function doPlay(url) {
   if (!player) await initShaka();
   try {
+    retryCount = 0; // reset on successful play attempt
     await player.unload();
     video.removeAttribute('src');
     await player.load(url);
@@ -465,17 +547,22 @@ async function doPlay(url) {
     console.error('[Shaka] load error', err);
     setStatus('Play error', 'error');
     finishLoadBar();
+    if (err.code && [1001,1002,1003].includes(err.code)) {
+      scheduleStreamRetry(url);
+    }
   }
 }
 
 // ── Aspect ratio ─────────────────────────────────────────────────
 function resetAspectRatio() {
   video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
+  video.style.objectFit = ''; // remove inline style
   arIdx = 0; arBtn.textContent = '⛶ Native'; arBtn.className = 'ar-btn';
 }
 
 function cycleAR() {
   video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
+  video.style.objectFit = ''; // remove inline style
   arIdx = (arIdx + 1) % AR_MODES.length;
   const m = AR_MODES[arIdx];
   if (m.cls) video.classList.add(m.cls);
@@ -520,7 +607,7 @@ video.addEventListener('waiting', () => { setStatus('Buffering…', 'loading'); 
 video.addEventListener('stalled', () => setStatus('Buffering…', 'loading'));
 video.addEventListener('error',   () => { setStatus('Error', 'error'); finishLoadBar(); });
 
-// ── Fullscreen ───────────────────────────────────────────────────
+// ── Fullscreen with forced fill ─────────────────────────────────
 function showFsHint() {
   clearTimeout(fsHintTimer);
   fsHint.classList.add('visible');
@@ -535,16 +622,14 @@ function enterFS() {
   document.body.classList.add('fullscreen');
   isFullscreen = true;
 
-  // Store current AR mode before forcing fill
+  // Store current AR mode
   preFullscreenArMode = arIdx;
-  // Switch to Fill mode (index 1) if not already
-  if (arIdx !== 1) {
-    video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
-    video.classList.add('ar-fill');
-    arIdx = 1;
-    arBtn.textContent = '⛶ ' + AR_MODES[1].label;
-    arBtn.className = 'ar-btn ar-fill';
-  }
+
+  // Force fill via inline style (overrides classes)
+  video.style.objectFit = 'fill';
+  arIdx = 1;
+  arBtn.textContent = '⛶ ' + AR_MODES[1].label;
+  arBtn.className = 'ar-btn ar-fill';
   showFsHint();
 }
 
@@ -557,12 +642,13 @@ function exitFS() {
   isFullscreen = false;
   fsHint.classList.remove('visible');
 
-  // Restore previous AR mode if it was stored
+  // Restore previous AR mode if stored
   if (preFullscreenArMode !== null) {
+    video.style.objectFit = ''; // remove inline fill
     const restoreMode = preFullscreenArMode;
     preFullscreenArMode = null;
-    video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
     const m = AR_MODES[restoreMode];
+    video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
     if (m.cls) video.classList.add(m.cls);
     arIdx = restoreMode;
     arBtn.textContent = '⛶ ' + m.label;
@@ -572,17 +658,18 @@ function exitFS() {
 
 function toggleFS() { isFullscreen ? exitFS() : enterFS(); }
 
+// Listen for fullscreen changes (e.g., ESC key)
 document.addEventListener('fullscreenchange', () => {
   isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
   if (!isFullscreen) {
     document.body.classList.remove('fullscreen');
     fsHint.classList.remove('visible');
-    // If fullscreen exited without exitFS (e.g. via ESC), also restore AR mode
     if (preFullscreenArMode !== null) {
+      video.style.objectFit = '';
       const restoreMode = preFullscreenArMode;
       preFullscreenArMode = null;
-      video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
       const m = AR_MODES[restoreMode];
+      video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
       if (m.cls) video.classList.add(m.cls);
       arIdx = restoreMode;
       arBtn.textContent = '⛶ ' + m.label;
@@ -596,10 +683,11 @@ document.addEventListener('webkitfullscreenchange', () => {
     document.body.classList.remove('fullscreen');
     fsHint.classList.remove('visible');
     if (preFullscreenArMode !== null) {
+      video.style.objectFit = '';
       const restoreMode = preFullscreenArMode;
       preFullscreenArMode = null;
-      video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
       const m = AR_MODES[restoreMode];
+      video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
       if (m.cls) video.classList.add(m.cls);
       arIdx = restoreMode;
       arBtn.textContent = '⛶ ' + m.label;
@@ -761,6 +849,8 @@ document.addEventListener('tizenhwkey', e => {
 
   VS.init(channelListEl);
   await initShaka();
+
+  startNetworkMonitoring();   // start network indicator and monitoring
 
   loadPlaylist();
 })();
