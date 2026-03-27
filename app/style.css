@@ -1,11 +1,6 @@
 /* ================================================================
-IPTV Pro — style.css v7.1 | Samsung Tizen OS9 TV
-v7.1 Changes:
-  • FIX: Fullscreen no longer forces object-fit:cover on video
-         — stream plays at native aspect ratio in fullscreen
-  • FIX: video base rule is object-fit:contain (letterbox, no crop)
-  • AR classes still available for manual override via AR button
-  • ar-wide uses scaleX(1.34) only when user explicitly selects it
+IPTV Pro — style.css v7.2 | Samsung Tizen OS9 TV
+v7.2 – Removed red glow from brand title
 ================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
@@ -76,7 +71,8 @@ html,body {
   letter-spacing:6px; color:#fff;
   text-transform:uppercase; line-height:1;
   -webkit-text-stroke:2px #fff;
-  text-shadow:0 0 30px rgba(229,0,0,0.6), 0 2px 8px rgba(0,0,0,0.8);
+  /* removed the red glow */
+  text-shadow:0 2px 8px rgba(0,0,0,0.8);
 }
 
 /* ── Search ──────────────────────────────────────────────── */
@@ -286,15 +282,11 @@ html,body {
   border-radius:var(--radius); overflow:hidden; border:1px solid var(--border);
   transform:translateZ(0); -webkit-transform:translateZ(0);
 }
-
-/* v7.1 FIX: Default is contain — stream plays at native ratio, no cropping */
 video {
   width:100%; height:100%; display:block;
   background:#000;
-  object-fit:contain;          /* ← was missing explicit contain; fullscreen was overriding to cover */
+  object-fit:contain;
 }
-
-/* Manual AR overrides (user-selected via AR button) */
 video.ar-fill  { object-fit:fill; }
 video.ar-cover { object-fit:cover; }
 video.ar-wide  { object-fit:contain; transform:scaleX(1.34); }
@@ -340,16 +332,6 @@ body.fullscreen .load-bar      { display:none; }
 body.fullscreen .video-wrap    { position:fixed; inset:0; z-index:9999; border-radius:0; border:none; }
 body.fullscreen .fs-hint       { z-index:10000; }
 
-/*
- * v7.1 FIX: REMOVED the rule below that was causing cropping in fullscreen:
- *   body.fullscreen video:not(.ar-fill):not(.ar-wide) { object-fit:cover; }
- *
- * Now fullscreen video inherits the same object-fit:contain as windowed mode.
- * The stream's native aspect ratio (16:9, 4:3, etc.) is preserved automatically.
- * Black bars appear for non-16:9 content — this is correct TV behaviour.
- * User can manually switch to Fill/Crop/Wide via AR button if desired.
- */
-
 /* ── Toast ───────────────────────────────────────────────── */
 #toast {
   position:fixed; bottom:44px; left:50%; transform:translateX(-50%);
@@ -378,13 +360,11 @@ body.fullscreen .fs-hint       { z-index:10000; }
   margin-bottom:20px; font-family:var(--font-brand);
   font-size:32px; letter-spacing:3px; color:#fff;
 }
-/* v7.1: Modal inputs need pointer-events and focus styles for remote nav */
 .jio-modal-content input {
   width:100%; padding:14px; margin-bottom:14px;
   background:var(--panel2); border:1px solid var(--border);
   color:var(--text); border-radius:8px;
   font-size:22px; text-align:center; outline:none;
-  /* Allow text cursor and keyboard input */
   user-select:text !important;
   -webkit-user-select:text !important;
   caret-color:#0066cc;
