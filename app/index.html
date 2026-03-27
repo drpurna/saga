@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>IPTV Pro</title>
 
+  <!-- CSP updated – no proxy, allow necessary sources -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;
                  media-src * blob: data:;
                  connect-src *;
                  font-src * data:;"/>
 
+  <!-- Google Font — Bebas Neue for brand title -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
@@ -21,8 +23,10 @@
 
 <div class="app">
 
+  <!-- SIDEBAR -->
   <div class="sidebar">
 
+    <!-- Brand -->
     <div class="brand">
       <div class="brand-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff"
@@ -34,6 +38,7 @@
       <span class="brand-title">IPTV</span>
     </div>
 
+    <!-- Search -->
     <div class="search-wrap" id="searchWrap">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2">
@@ -45,24 +50,28 @@
              autocomplete="off" autocorrect="off" spellcheck="false"/>
     </div>
 
-    <!-- Tabs: Telugu, India, Favs -->
+    <!-- Tabs (Telugu, India, Favs) -->
     <div class="tab-bar" id="tabBar">
       <button class="tab active">Telugu</button>
       <button class="tab">India</button>
       <button class="tab fav-tab">★ Favs</button>
     </div>
 
+    <!-- List header -->
     <div class="list-head">
       <span class="lbl">Channels</span>
       <span id="countBadge">0</span>
     </div>
 
+    <!-- Virtual-scroll channel list -->
     <ul id="channelList"></ul>
 
+    <!-- Number dialer overlay -->
     <div class="ch-dialer" id="chDialer">
       <div id="chDialerNum">—</div>
     </div>
 
+    <!-- Remote control hints -->
     <div class="hint-bar">
       <div class="hint-item"><div class="dot red"></div><span>Tab</span></div>
       <div class="hint-item"><div class="dot green"></div><span>Fav</span></div>
@@ -70,8 +79,9 @@
       <div class="hint-item"><div class="dot blue"></div><span>FS</span></div>
     </div>
 
-  </div>
+  </div><!-- /sidebar -->
 
+  <!-- PLAYER AREA -->
   <div class="player-area">
 
     <div class="player-header">
@@ -81,15 +91,24 @@
       </div>
       <div class="player-controls">
         <button class="ar-btn" id="arBtn">⛶ Fit</button>
+        <!-- Network indicator -->
+        <div class="network-indicator" id="networkIndicator" title="Network status">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M2 12l2 2 4-4 4 4 4-4 4 4 2-2-6-6-4 4-4-4-4 4z"/>
+          </svg>
+        </div>
         <span class="status-badge idle" id="statusBadge">IDLE</span>
       </div>
     </div>
 
+    <!-- Buffering progress bar -->
     <div class="load-bar" id="loadBar"></div>
 
+    <!-- Video container -->
     <div class="video-wrap" id="videoWrap">
       <video id="video" playsinline autoplay></video>
 
+      <!-- Idle overlay -->
       <div class="video-overlay" id="videoOverlay">
         <div class="overlay-icon">▶</div>
         <div class="overlay-hint">
@@ -98,13 +117,15 @@
         </div>
       </div>
 
+      <!-- Fullscreen exit hint -->
       <div class="fs-hint" id="fsHint">Press BACK or ENTER to exit fullscreen</div>
     </div>
 
-  </div>
+  </div><!-- /player-area -->
 
-</div>
+</div><!-- /app -->
 
+<!-- SCRIPTS -->
 <script src="shaka.js"></script>
 <script src="app.js"></script>
 
