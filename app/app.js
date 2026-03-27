@@ -10,9 +10,8 @@ const PREVIEW_DELAY = 700;
 const PLAYLISTS = [
   { name: 'Telugu', url: 'https://iptv-org.github.io/iptv/languages/tel.m3u' },
   { name: 'India',  url: 'https://iptv-org.github.io/iptv/countries/in.m3u'  },
-  { name: 'DISTRO', url: 'https://raw.githubusercontent.com/iptv-org/iptv/master/streams/in_distro.m3u' },
 ];
-const FAV_IDX = 3;  // Favs is the 4th tab
+const FAV_IDX = 2;  // Favs is the 3rd tab
 
 const AR_MODES = [
   { cls: '',          label: 'Native' },
