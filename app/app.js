@@ -537,7 +537,7 @@ function enterFS() {
 
   // Store current AR mode before forcing fill
   preFullscreenArMode = arIdx;
-  // Switch to fill mode (index 1) if not already
+  // Switch to Fill mode (index 1) if not already
   if (arIdx !== 1) {
     video.classList.remove('ar-fill', 'ar-cover', 'ar-wide');
     video.classList.add('ar-fill');
