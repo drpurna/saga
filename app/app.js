@@ -1,10 +1,6 @@
 // ================================================================
-// SAGA IPTV — app.js v19.0 | Samsung Tizen OS9 TV
-// Fixes: variable shadowing, fullscreen handler dedup, AV sync,
-//        EPG base64 decode, loadMode async race, Xtream auth check,
-//        stream TS→M3U8 fallback, dial race condition, memory leaks.
-// Additions: AV sync controls (+/- 50ms), sleep timer, stall watchdog,
-//            auto-reconnect, group label in channel list.
+// SAGA IPTV — app.js v20.0 | Samsung Tizen OS9 TV
+// Tile-style channel list, persistent clock, remote improvements
 // ================================================================
 
 const FAV_KEY              = 'iptv:favs';
@@ -107,7 +103,7 @@ let currentPlayUrl    = '';
 let xtreamClient      = null;
 let xtreamMode        = false;
 let xtreamCategories  = [];
-let xtreamChannelList = [];  // FIX: renamed – was 'xtreamChannels' which shadowed local vars
+let xtreamChannelList = [];
 
 // ── Xtream DOM ────────────────────────────────────────────────────
 const xtreamModal       = document.getElementById('xtreamLoginModal');
@@ -253,12 +249,10 @@ function loadAvSync() {
 function saveAvSync() { lsSet(AV_SYNC_KEY, String(avSyncOffset)); }
 
 function applyAvSync() {
-  // Apply by nudging currentTime; works for live HLS/MPEG-TS on Tizen
   if (!video || !hasPlayed) return;
   if (avSyncOffset === 0) return;
   try {
     if (video.readyState >= 2) {
-      // Clamp so we don't seek to negative time
       var target = video.currentTime - (avSyncOffset / 1000);
       if (target >= 0) video.currentTime = target;
     }
@@ -375,9 +369,9 @@ video.addEventListener('timeupdate', function() {
   if (!video.paused) lastPlayTime = Date.now();
 });
 
-// ── Virtual scroll ────────────────────────────────────────────────
+// ── Virtual scroll (tile style) ──────────────────────────────────
 var VS = {
-  ITEM_H: 98,
+  ITEM_H: 130,
   OVERSCAN: 6,
   c: null, inner: null, vh: 0, st: 0,
   total: 0, rs: -1, re: -1, nodes: [], raf: null,
@@ -409,9 +403,17 @@ var VS = {
   },
 
   scrollToIndex: function(idx) {
-    var top = idx * this.ITEM_H, bot = top + this.ITEM_H, st = this.c.scrollTop;
-    if (top < st) this.c.scrollTop = top;
-    else if (bot > st + this.vh) this.c.scrollTop = bot - this.vh;
+    var top = idx * this.ITEM_H;
+    var bottom = top + this.ITEM_H;
+    var scrollTop = this.c.scrollTop;
+    var visibleHeight = this.vh;
+    var padding = 24;
+
+    if (top < scrollTop + padding) {
+      this.c.scrollTop = Math.max(0, top - padding);
+    } else if (bottom > scrollTop + visibleHeight - padding) {
+      this.c.scrollTop = bottom - visibleHeight + padding;
+    }
     this.st = this.c.scrollTop;
     this.paint();
   },
@@ -633,9 +635,14 @@ function stopNetworkMonitoring() {
 // ── Clock ──────────────────────────────────────────────────────────
 function updateClock() {
   var now = new Date();
-  var te = document.getElementById('currentTime'), de = document.getElementById('currentDate');
-  if (te) te.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (de) de.textContent = now.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short' });
+  var te = document.getElementById('currentTime');
+  var de = document.getElementById('currentDate');
+  var clk = document.getElementById('clockDisplay');
+  var timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  var dateStr = now.toLocaleDateString([], { weekday: 'short', day: '2-digit', month: 'short' });
+  if (te) te.textContent = timeStr;
+  if (de) de.textContent = dateStr;
+  if (clk) clk.textContent = timeStr;
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -754,6 +761,14 @@ async function startPreview(idx) {
   if (!filtered.length) return;
   var ch = filtered[idx];
   if (!ch) return;
+
+  // Hide overlays when playing a channel
+  if (overlayTop && overlayBottom && overlaysVisible) {
+    overlayTop.classList.remove('info-visible');
+    overlayBottom.classList.remove('info-visible');
+    overlaysVisible = false;
+  }
+
   resetAspectRatio();
   nowPlayingEl.textContent = ch.name;
   if (overlayChannelName) overlayChannelName.textContent = ch.name;
@@ -787,7 +802,6 @@ function showFsHint() {
   fsHintTimer = setTimeout(function() { fsHint.classList.remove('visible'); }, 3000);
 }
 
-// FIX: deduplicated into one function called from both enterFS and fullscreenchange
 function applyExitFSState() {
   document.body.classList.remove('fullscreen');
   isFullscreen = false;
@@ -832,7 +846,6 @@ function exitFS() {
 }
 function toggleFS() { if (isFullscreen) exitFS(); else enterFS(); }
 
-// FIX: single handler covers both prefixed variants — no duplicate code
 function onFsChange() {
   var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
   if (!isFs && isFullscreen) applyExitFSState();
@@ -858,7 +871,7 @@ function toggleOverlays() {
 // ── Channel dialer ────────────────────────────────────────────────
 function commitChannelNumber() {
   var num = parseInt(dialBuffer, 10);
-  dialBuffer = '';  // FIX: clear BEFORE async work to prevent race condition
+  dialBuffer = '';
   chDialer.classList.remove('visible');
   if (!filtered.length || isNaN(num)) return;
   var idx = Math.max(0, Math.min(filtered.length - 1, num - 1));
@@ -869,7 +882,7 @@ function commitChannelNumber() {
   showToast('CH ' + (idx + 1) + ' · ' + filtered[idx].name);
 }
 function handleDigit(d) {
-  clearTimeout(dialTimer);  // FIX: always clear before reassigning
+  clearTimeout(dialTimer);
   dialBuffer += d;
   chDialerNum.textContent = dialBuffer;
   chDialer.classList.add('visible');
@@ -880,6 +893,11 @@ function handleDigit(d) {
 function moveSel(d) {
   if (!filtered.length) return;
   cancelPreview();
+  // Clear any pending channel number input
+  clearTimeout(dialTimer);
+  dialTimer = null;
+  dialBuffer = '';
+  chDialer.classList.remove('visible');
   selectedIndex = Math.max(0, Math.min(filtered.length - 1, selectedIndex + d));
   VS.scrollToIndex(selectedIndex);
   VS.refresh();
@@ -991,7 +1009,6 @@ async function xtreamLogin() {
   try {
     var client   = new XtreamClient({ serverUrl: serverUrl, username: username, password: password, timeout: 15000 });
     var response = await client.getUserInfo(false);
-    // FIX: Xtream API v2 wraps user_info; check both shapes
     var ui   = response && response.user_info ? response.user_info : response;
     var auth = ui && (ui.auth === 1 || ui.auth === '1');
     if (auth) {
@@ -1026,7 +1043,6 @@ async function loadXtreamChannels() {
   setStatus('Loading Xtream channels...', 'loading');
   startLoadBar();
   try {
-    // FIX: use local variables so we never shadow module-level `channels`
     var results = await Promise.all([
       xtreamClient.getLiveCategories(true),
       xtreamClient.getLiveStreams(null, true),
@@ -1100,7 +1116,6 @@ function switchToM3uMode() {
   saveMode();
 }
 
-// FIX: decode base64 EPG titles/descriptions from Xtream
 function atob_safe(str) {
   if (!str) return '';
   try { return decodeURIComponent(escape(atob(str))); } catch(e) { return str; }
@@ -1112,7 +1127,6 @@ async function updateXtreamEpg() {
   if (!ch || !ch.streamId) return;
   try {
     var epgData = await xtreamClient.getShortEpg(ch.streamId, 3, true);
-    // FIX: Xtream returns { epg_listings: [...] } — not a bare array
     var list = Array.isArray(epgData) ? epgData
              : (epgData && Array.isArray(epgData.epg_listings)) ? epgData.epg_listings : [];
     if (list.length > 0) {
@@ -1155,7 +1169,6 @@ function saveMode() {
   }
 }
 
-// FIX: now properly async so boot awaits it
 async function loadMode() {
   var mode = lsGet('iptv:mode');
   if (mode === 'xtream') {
@@ -1178,11 +1191,17 @@ async function loadMode() {
 function registerKeys() {
   try {
     if (window.tizen && tizen.tvinputdevice) {
-      ['MediaPlay','MediaPause','MediaPlayPause','MediaStop','MediaFastForward','MediaRewind',
-       'ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
-       'ChannelUp','ChannelDown','Back','Info',
-       '0','1','2','3','4','5','6','7','8','9'
-      ].forEach(function(k){ try { tizen.tvinputdevice.registerKey(k); } catch(e){} });
+      var keys = [
+        'MediaPlay','MediaPause','MediaPlayPause','MediaStop','MediaFastForward','MediaRewind',
+        'ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
+        'ChannelUp','ChannelDown','Back','Info',
+        '0','1','2','3','4','5','6','7','8','9',
+        'VolumeUp', 'VolumeDown', 'Mute',
+        'Exit', 'Guide', 'ChannelList', 'Return', 'PreCh', 'ADSUBT', 'Settings'
+      ];
+      keys.forEach(function(k) {
+        try { tizen.tvinputdevice.registerKey(k); } catch(e) {}
+      });
     }
   } catch(e) {}
 }
@@ -1191,8 +1210,22 @@ function registerKeys() {
 window.addEventListener('keydown', function(e) {
   var k = e.key, c = e.keyCode;
 
+  // Close any open modal first
+  if (xtreamModal.style.display === 'flex' || playlistModal.style.display === 'flex') {
+    if (k === 'Escape' || k === 'Back' || k === 'Return' || k === 'Exit' || c === 27 || c === 10009 || c === 10182) {
+      closeXtreamLogin();
+      closeAddPlaylistModal();
+      e.preventDefault();
+      return;
+    }
+  }
+
   if ((c >= 48 && c <= 57) || (c >= 96 && c <= 105)) {
-    if (focusArea !== 'search') { handleDigit(String(c >= 96 ? c - 96 : c - 48)); e.preventDefault(); return; }
+    if (focusArea !== 'search' && xtreamModal.style.display !== 'flex' && playlistModal.style.display !== 'flex') {
+      handleDigit(String(c >= 96 ? c - 96 : c - 48));
+      e.preventDefault();
+      return;
+    }
   }
 
   if (chDialer.classList.contains('visible')) {
@@ -1268,6 +1301,28 @@ window.addEventListener('keydown', function(e) {
   if (k === 'ColorF1Green'  || c === 404) { if (filtered.length && focusArea === 'list') toggleFav(filtered[selectedIndex]); e.preventDefault(); return; }
   if (k === 'ColorF2Yellow' || c === 405) { setFocus('search'); e.preventDefault(); return; }
   if (k === 'ColorF3Blue'   || c === 406) { if (hasPlayed) toggleFS(); e.preventDefault(); return; }
+
+  // Additional remote keys
+  if (k === 'VolumeUp' || c === 447) {
+    video.volume = Math.min(1, video.volume + 0.05);
+    e.preventDefault();
+    return;
+  }
+  if (k === 'VolumeDown' || c === 448) {
+    video.volume = Math.max(0, video.volume - 0.05);
+    e.preventDefault();
+    return;
+  }
+  if (k === 'Mute' || c === 449) {
+    video.muted = !video.muted;
+    e.preventDefault();
+    return;
+  }
+  if (k === 'Guide' || c === 457) {
+    toggleOverlays();
+    e.preventDefault();
+    return;
+  }
 });
 
 document.addEventListener('tizenhwkey', function(e) {
@@ -1298,13 +1353,12 @@ function handleSavePlaylist() {
   buildAvSyncBar();
   startNetworkMonitoring();
 
-  // FIX: await loadMode — Xtream auto-login must complete before UI settles
   await loadMode();
 
   if (overlayTop && overlayBottom) {
-    overlayTop.classList.add('info-visible');
-    overlayBottom.classList.add('info-visible');
-    overlaysVisible = true;
+    overlayTop.classList.remove('info-visible');
+    overlayBottom.classList.remove('info-visible');
+    overlaysVisible = false;
   }
 
   if (addPlaylistBtn)     addPlaylistBtn.addEventListener('click', openAddPlaylistModal);
