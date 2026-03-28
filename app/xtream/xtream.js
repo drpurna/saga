@@ -1,6 +1,6 @@
-// xtream.js – non‑module version of all Xtream classes
+// xtream.js – combined non‑module Xtream classes
 
-// ===== XtreamCache =====
+// ==================== XtreamCache ====================
 class XtreamCache {
   constructor(defaultTTL = 300000) {
     this.cache = new Map();
@@ -39,7 +39,7 @@ class XtreamCache {
   }
 }
 
-// ===== XtreamAuth =====
+// ==================== XtreamAuth ====================
 class XtreamAuth {
   constructor() {
     this.cache = new XtreamCache(3600000);
@@ -108,7 +108,7 @@ class XtreamAuth {
   }
 }
 
-// ===== XtreamClient =====
+// ==================== XtreamClient ====================
 class XtreamClient {
   constructor(config) {
     this.config = {
