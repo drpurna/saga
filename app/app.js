@@ -1,7 +1,6 @@
 // ================================================================
-// IPTV Pro — app.js v16.0 | Samsung Tizen OS9 TV
-// Features: M3U playlists, Favourites, Network indicator, Overlays,
-//           Fullscreen fill, Channel dialer, Xtream Codes API
+// IPTV Pro — app.js v17.0 | Samsung Tizen OS9 TV
+// M3U playlists, Xtream tab, AV sync tweaks, auto‑login fallback
 // ================================================================
 
 const FAV_KEY = 'iptv:favs';
@@ -16,7 +15,9 @@ const DEFAULT_PLAYLISTS = [
 
 let allPlaylists = [];
 let customPlaylists = [];
-let plIdx = 0;
+let plIdx = 0;               // index in allPlaylists (for M3U) or Xtream/Favs
+let xtreamTabIndex = -1;     // will be set dynamically
+let lastM3uIndex = 0;
 
 const AR_MODES = [
   { cls: '',          label: 'Native' },
@@ -81,8 +82,8 @@ let favSet        = new Set();
 let networkQuality = 'online';
 let connectionMonitor = null;
 let progressInterval = null;
-let currentProgramDuration = 300; // default 5 minutes for simulated progress
-let overlaysVisible = true;        // track overlay visibility for fullscreen
+let currentProgramDuration = 300;
+let overlaysVisible = true;
 
 // ── Xtream specific state ──────────────────────────────────────
 let xtreamClient = null;
@@ -99,7 +100,6 @@ const xtreamLoginBtn = document.getElementById('xtreamLoginBtn');
 const xtreamCancelBtn = document.getElementById('xtreamCancelBtn');
 const xtreamLoginStatus = document.getElementById('xtreamLoginStatus');
 const xtreamAccountInfo = document.getElementById('xtreamAccountInfo');
-const xtreamLoginHint = document.getElementById('xtreamLoginHint');
 
 // ── localStorage helpers ────────────────────────────────────────
 function lsSet(key, value) {
@@ -124,7 +124,7 @@ function toggleFav(ch) {
   const k = ch.url;
   if (favSet.has(k)) favSet.delete(k); else favSet.add(k);
   saveFavs();
-  if (plIdx === allPlaylists.length) showFavourites();
+  if (plIdx === allPlaylists.length + 1) showFavourites();
   if (VS.refresh) VS.refresh();
   showToast(isFav(ch) ? '★ Added to Favourites' : '✕ Removed');
 }
@@ -227,7 +227,7 @@ function initials(n) {
     .map(w => w[0] || '').join('').toUpperCase() || '?';
 }
 
-// ── Program info (simulated, no EPG required) ───────────────────
+// ── Program info (simulated) ───────────────────────────────────
 function getProgramInfo(channelName) {
   const programs = [
     { time: 'Now', title: 'Live Broadcast', desc: 'Currently airing' },
@@ -239,13 +239,11 @@ function getProgramInfo(channelName) {
     { time: '17:00', title: 'Sports Update', desc: 'Live scores' },
     { time: '16:00', title: 'Music Mix', desc: 'Top hits' }
   ];
-  
   const hash = channelName.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0);
   const index = Math.abs(hash) % programs.length;
   const program = programs[index];
   const nextIndex = (index + 1) % programs.length;
   const nextProgram = programs[nextIndex];
-  
   return {
     current: program,
     next: nextProgram
@@ -255,7 +253,6 @@ function getProgramInfo(channelName) {
 function updateOverlayInfo(channelName, channelIndex) {
   if (overlayChannelName) overlayChannelName.textContent = channelName;
   if (npChNumEl) npChNumEl.textContent = 'CH ' + (channelIndex + 1);
-  
   const program = getProgramInfo(channelName);
   if (overlayProgramTitle) overlayProgramTitle.textContent = program.current.title;
   if (overlayProgramDesc) overlayProgramDesc.textContent = program.current.desc;
@@ -532,7 +529,7 @@ function mirrorUrl(url) {
 function loadPlaylist(urlOv) {
   cancelPreview();
 
-  if (plIdx === allPlaylists.length && !urlOv) {
+  if (plIdx === allPlaylists.length + 1 && !urlOv) {
     showFavourites();
     return;
   }
@@ -690,7 +687,7 @@ async function fetchWeather(lat, lon) {
   if (weatherInfo) weatherInfo.style.display = 'none';
 }
 
-// ── Shaka player ─────────────────────────────────────────────────
+// ── Shaka player (with AV sync tweaks) ──────────────────────────
 async function initShaka() {
   shaka.polyfill.installAll();
   if (!shaka.Player.isBrowserSupported()) {
@@ -706,6 +703,9 @@ async function initShaka() {
       bufferBehind: 20,
       stallEnabled: true,
       stallThreshold: 1,
+      autoCorrectDrift: true,          // AV sync improvement
+      gapDetectionThreshold: 0.5,      // helps with sync
+      durationBackoff: 1,
       retryParameters: { maxAttempts: 4, baseDelay: 500, backoffFactor: 2 },
     },
     abr: { enabled: true },
@@ -827,7 +827,6 @@ function enterFS() {
   arBtn.textContent = '⛶ ' + AR_MODES[1].label;
   arBtn.className = 'ar-btn ar-fill';
   
-  // Hide overlays when entering fullscreen
   if (overlayTop && overlayBottom) {
     overlayTop.classList.remove('info-visible');
     overlayBottom.classList.remove('info-visible');
@@ -858,7 +857,6 @@ function exitFS() {
     arBtn.className = 'ar-btn' + (m.cls ? ' ' + m.cls : '');
   }
   
-  // Restore overlays when exiting fullscreen (if they were visible before)
   if (overlayTop && overlayBottom && overlaysVisible) {
     overlayTop.classList.add('info-visible');
     overlayBottom.classList.add('info-visible');
@@ -867,7 +865,6 @@ function exitFS() {
 
 function toggleFS() { isFullscreen ? exitFS() : enterFS(); }
 
-// Handle fullscreen change events (ESC key)
 document.addEventListener('fullscreenchange', () => {
   isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
   if (!isFullscreen) {
@@ -884,7 +881,6 @@ document.addEventListener('fullscreenchange', () => {
       arBtn.textContent = '⛶ ' + m.label;
       arBtn.className = 'ar-btn' + (m.cls ? ' ' + m.cls : '');
     }
-    // Restore overlays when exiting fullscreen via ESC
     if (overlayTop && overlayBottom && overlaysVisible) {
       overlayTop.classList.add('info-visible');
       overlayBottom.classList.add('info-visible');
@@ -918,7 +914,6 @@ video.addEventListener('dblclick', toggleFS);
 // ── Toggle overlays with Info button ────────────────────────────
 function toggleOverlays() {
   if (!overlayTop || !overlayBottom) return;
-  
   if (overlayTop.classList.contains('info-visible')) {
     overlayTop.classList.remove('info-visible');
     overlayBottom.classList.remove('info-visible');
@@ -949,7 +944,6 @@ function handleDigit(d) {
   dialBuffer += d;
   chDialerNum.textContent = dialBuffer;
   chDialer.classList.add('visible');
-
   dialTimer = setTimeout(() => {
     commitChannelNumber();
   }, 800);
@@ -1016,32 +1010,74 @@ function rebuildAllPlaylists() {
 
 function rebuildTabs() {
   tabBar.innerHTML = '';
+
+  // M3U playlists
   for (let i = 0; i < allPlaylists.length; i++) {
     const playlist = allPlaylists[i];
     const btn = document.createElement('button');
     btn.className = 'tab';
-    if (i === plIdx) btn.classList.add('active');
+    if (!xtreamMode && i === plIdx) btn.classList.add('active');
     btn.textContent = playlist.name;
     btn.addEventListener('click', (function(idx) {
       return function() { switchTab(idx); };
     })(i));
     tabBar.appendChild(btn);
   }
+
+  // Xtream tab
+  const xtreamBtn = document.createElement('button');
+  xtreamBtn.className = 'tab xtream-tab';
+  if (xtreamMode && plIdx === allPlaylists.length) xtreamBtn.classList.add('active');
+  xtreamBtn.textContent = 'Xtream';
+  xtreamBtn.addEventListener('click', () => switchTab(allPlaylists.length));
+  tabBar.appendChild(xtreamBtn);
+  xtreamTabIndex = allPlaylists.length;
+
+  // Favourites tab
   const favBtn = document.createElement('button');
   favBtn.className = 'tab fav-tab';
-  if (plIdx === allPlaylists.length) favBtn.classList.add('active');
+  if (!xtreamMode && plIdx === allPlaylists.length + 1) favBtn.classList.add('active');
   favBtn.textContent = '★ Favs';
-  favBtn.addEventListener('click', () => switchTab(allPlaylists.length));
+  favBtn.addEventListener('click', () => switchTab(allPlaylists.length + 1));
   tabBar.appendChild(favBtn);
 }
 
 function switchTab(idx) {
-  plIdx = idx;
-  rebuildTabs();
-  if (idx === allPlaylists.length) {
+  const totalM3U = allPlaylists.length;
+
+  // M3U playlist tab
+  if (idx < totalM3U) {
+    if (xtreamMode) {
+      xtreamMode = false;
+      lastM3uIndex = idx;
+      plIdx = idx;
+      rebuildTabs();
+      loadPlaylist();
+    } else {
+      plIdx = idx;
+      rebuildTabs();
+      loadPlaylist();
+    }
+    saveMode();
+  }
+  // Xtream tab
+  else if (idx === totalM3U) {
+    if (!xtreamMode) {
+      if (xtreamClient && xtreamClient.logged_in) {
+        xtreamMode = true;
+        plIdx = totalM3U;
+        rebuildTabs();
+        loadXtreamChannels();
+      } else {
+        openXtreamLogin();
+      }
+    }
+  }
+  // Favourites tab
+  else if (idx === totalM3U + 1) {
     showFavourites();
-  } else {
-    loadPlaylist();
+    plIdx = idx;
+    rebuildTabs();
   }
 }
 
@@ -1057,6 +1093,18 @@ function openXtreamLogin() {
 
 function closeXtreamLogin() {
   xtreamModal.style.display = 'none';
+}
+
+function storeCredentials(server, user, pass) {
+  localStorage.setItem('xtream:server', server);
+  localStorage.setItem('xtream:username', user);
+  localStorage.setItem('xtream:password', pass);
+}
+
+function clearXtreamCredentials() {
+  localStorage.removeItem('xtream:server');
+  localStorage.removeItem('xtream:username');
+  localStorage.removeItem('xtream:password');
 }
 
 async function xtreamLogin() {
@@ -1076,56 +1124,24 @@ async function xtreamLogin() {
   try {
     const client = new XtreamClient({ serverUrl, username, password, timeout: 15000 });
     const userInfo = await client.getUserInfo(false);
-
     if (userInfo && userInfo.auth === 1) {
       xtreamClient = client;
       xtreamMode = true;
+      storeCredentials(serverUrl, username, password);
 
-      // Store credentials
-      localStorage.setItem('xtream:server', serverUrl);
-      localStorage.setItem('xtream:username', username);
-      localStorage.setItem('xtream:password', password);
-
-      // Display account info
       const expDate = new Date(parseInt(userInfo.exp_date, 10) * 1000);
       const daysLeft = Math.ceil((expDate - new Date()) / (1000 * 60 * 60 * 24));
       xtreamAccountInfo.innerHTML = `✅ Logged in as ${username}<br>Expires: ${expDate.toLocaleDateString()} (${daysLeft} days left)<br>Max connections: ${userInfo.max_connections}`;
       xtreamLoginStatus.textContent = 'Loading channels...';
       xtreamLoginStatus.style.color = '#e5b400';
 
-      // Fetch categories and channels
-      const [categories, channels] = await Promise.all([
-        client.getLiveCategories(false),
-        client.getLiveStreams(null, false)
-      ]);
-
-      xtreamCategories = categories;
-      xtreamChannels = channels;
-
-      // Convert to app channel format
-      const convertedChannels = channels.map(ch => ({
-        name: ch.name,
-        group: ch.category_name || 'Uncategorized',
-        logo: ch.stream_icon || '',
-        url: client.getLiveStreamUrl(ch.stream_id),
-        streamId: ch.stream_id,
-        epgChannelId: ch.epg_channel_id,
-        streamType: 'live'
-      }));
-
-      // Load into app
-      channels = convertedChannels;
-      allChannels = channels.slice();
-      filtered = channels.slice();
-      selectedIndex = 0;
-      renderList();
-      setStatus(`Xtream: ${channels.length} channels`, 'playing');
+      plIdx = allPlaylists.length; // Xtream tab index
+      rebuildTabs();
+      await loadXtreamChannels();
 
       closeXtreamLogin();
-      showToast(`Welcome ${username}! ${channels.length} channels loaded`);
-
-      // Auto-fetch EPG for current channel after a short delay
-      setTimeout(() => updateXtreamEpg(), 1500);
+      showToast(`Welcome ${username}!`);
+      saveMode();
     } else {
       throw new Error('Invalid credentials');
     }
@@ -1136,62 +1152,67 @@ async function xtreamLogin() {
   }
 }
 
+async function loadXtreamChannels() {
+  if (!xtreamClient) return;
+  setStatus('Loading Xtream channels…', 'loading');
+  startLoadBar();
+  try {
+    const [categories, channels] = await Promise.all([
+      xtreamClient.getLiveCategories(true),
+      xtreamClient.getLiveStreams(null, true)
+    ]);
+    xtreamCategories = categories;
+    xtreamChannels = channels;
+
+    const convertedChannels = channels.map(ch => ({
+      name: ch.name,
+      group: ch.category_name || 'Uncategorized',
+      logo: ch.stream_icon || '',
+      url: xtreamClient.getLiveStreamUrl(ch.stream_id),
+      streamId: ch.stream_id,
+      epgChannelId: ch.epg_channel_id,
+      streamType: 'live'
+    }));
+
+    channels = convertedChannels;
+    allChannels = channels.slice();
+    filtered = channels.slice();
+    selectedIndex = 0;
+    renderList();
+    setStatus(`Xtream: ${channels.length} channels`, 'playing');
+    finishLoadBar();
+    setTimeout(() => updateXtreamEpg(), 1000);
+  } catch (error) {
+    console.error('[Xtream] Failed to load channels:', error);
+    setStatus('Failed to load channels', 'error');
+    finishLoadBar();
+  }
+}
+
 async function loadSavedXtream() {
   const savedServer = localStorage.getItem('xtream:server');
   const savedUsername = localStorage.getItem('xtream:username');
   const savedPassword = localStorage.getItem('xtream:password');
-
   if (savedServer && savedUsername && savedPassword) {
     try {
-      const client = new XtreamClient({
-        serverUrl: savedServer,
-        username: savedUsername,
-        password: savedPassword,
-        timeout: 10000
-      });
-
+      const client = new XtreamClient({ serverUrl: savedServer, username: savedUsername, password: savedPassword, timeout: 10000 });
       const userInfo = await client.getUserInfo(false);
-
       if (userInfo && userInfo.auth === 1) {
         xtreamClient = client;
         xtreamMode = true;
-
-        const [categories, channels] = await Promise.all([
-          client.getLiveCategories(true),
-          client.getLiveStreams(null, true)
-        ]);
-
-        xtreamCategories = categories;
-        xtreamChannels = channels;
-
-        const convertedChannels = channels.map(ch => ({
-          name: ch.name,
-          group: ch.category_name || 'Uncategorized',
-          logo: ch.stream_icon || '',
-          url: client.getLiveStreamUrl(ch.stream_id),
-          streamId: ch.stream_id,
-          epgChannelId: ch.epg_channel_id,
-          streamType: 'live'
-        }));
-
-        channels = convertedChannels;
-        allChannels = channels.slice();
-        filtered = channels.slice();
-        selectedIndex = 0;
-        renderList();
-        setStatus(`Xtream: ${channels.length} channels`, 'playing');
+        plIdx = allPlaylists.length; // Xtream tab index
+        rebuildTabs();
+        await loadXtreamChannels();
         showToast(`Welcome back, ${savedUsername}`);
-
-        setTimeout(() => updateXtreamEpg(), 1000);
+        saveMode();
+        return true;
       }
     } catch (error) {
       console.warn('[Xtream] Auto-login failed:', error);
-      // Clear invalid credentials
-      localStorage.removeItem('xtream:server');
-      localStorage.removeItem('xtream:username');
-      localStorage.removeItem('xtream:password');
+      clearXtreamCredentials();
     }
   }
+  return false;
 }
 
 function switchToM3uMode() {
@@ -1199,23 +1220,16 @@ function switchToM3uMode() {
   xtreamClient = null;
   xtreamCategories = [];
   xtreamChannels = [];
-  localStorage.removeItem('xtream:server');
-  localStorage.removeItem('xtream:username');
-  localStorage.removeItem('xtream:password');
-  
-  // Reload default playlist (or last M3U)
-  if (plIdx !== undefined && plIdx < allPlaylists.length) {
-    loadPlaylist();
-  } else {
-    plIdx = 0;
-    loadPlaylist();
-  }
+  clearXtreamCredentials();
+  plIdx = lastM3uIndex;
+  rebuildTabs();
+  loadPlaylist();
   showToast('Switched to M3U mode');
+  saveMode();
 }
 
 async function updateXtreamEpg() {
   if (!xtreamMode || !xtreamClient || !filtered[selectedIndex]) return;
-
   const currentChannel = filtered[selectedIndex];
   if (!currentChannel.streamId) return;
 
@@ -1224,19 +1238,12 @@ async function updateXtreamEpg() {
     if (epg && epg.length > 0) {
       const current = epg[0];
       const next = epg[1];
-
-      if (overlayProgramTitle) {
-        overlayProgramTitle.textContent = current.title || 'No program info';
-      }
-      if (overlayProgramDesc) {
-        overlayProgramDesc.textContent = current.description || '';
-      }
+      if (overlayProgramTitle) overlayProgramTitle.textContent = current.title || 'No program info';
+      if (overlayProgramDesc) overlayProgramDesc.textContent = current.description || '';
       if (nextProgramInfo && next) {
         const nextTime = new Date(next.start_timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         nextProgramInfo.textContent = `Next: ${next.title} at ${nextTime}`;
       }
-
-      // Update progress bar if program has start/end times
       if (progressBar && current.start_timestamp && current.end_timestamp) {
         const now = Date.now() / 1000;
         const start = current.start_timestamp;
@@ -1256,19 +1263,15 @@ async function updateXtreamEpg() {
 const originalStartPreview = startPreview;
 startPreview = async function(idx) {
   await originalStartPreview(idx);
-  if (xtreamMode) {
-    setTimeout(() => updateXtreamEpg(), 1000);
-  }
+  if (xtreamMode) setTimeout(() => updateXtreamEpg(), 1000);
 };
 
-// Add periodic EPG update (every 30 seconds when playing)
+// Periodic EPG update
 let epgInterval = null;
 function startEpgUpdater() {
   if (epgInterval) clearInterval(epgInterval);
   epgInterval = setInterval(() => {
-    if (xtreamMode && !video.paused) {
-      updateXtreamEpg();
-    }
+    if (xtreamMode && !video.paused) updateXtreamEpg();
   }, 30000);
 }
 
@@ -1276,6 +1279,38 @@ function stopEpgUpdater() {
   if (epgInterval) {
     clearInterval(epgInterval);
     epgInterval = null;
+  }
+}
+
+// ── Mode persistence ────────────────────────────────────────────
+function saveMode() {
+  if (xtreamMode) {
+    lsSet('iptv:mode', 'xtream');
+  } else {
+    lsSet('iptv:mode', 'm3u');
+    lsSet('iptv:lastM3uIndex', String(plIdx));
+  }
+}
+
+function loadMode() {
+  const mode = lsGet('iptv:mode');
+  if (mode === 'xtream') {
+    if (!loadSavedXtream()) {
+      // fallback to M3U
+      xtreamMode = false;
+      const savedIdx = lsGet('iptv:lastM3uIndex');
+      plIdx = savedIdx ? parseInt(savedIdx, 10) : 0;
+      if (isNaN(plIdx) || plIdx >= allPlaylists.length) plIdx = 0;
+      rebuildTabs();
+      loadPlaylist();
+    }
+  } else {
+    xtreamMode = false;
+    const savedIdx = lsGet('iptv:lastM3uIndex');
+    plIdx = savedIdx ? parseInt(savedIdx, 10) : 0;
+    if (isNaN(plIdx) || plIdx >= allPlaylists.length) plIdx = 0;
+    rebuildTabs();
+    loadPlaylist();
   }
 }
 
@@ -1300,7 +1335,6 @@ function registerKeys() {
 window.addEventListener('keydown', e => {
   const k = e.key, c = e.keyCode;
 
-  // Handle number keys
   if ((c >= 48 && c <= 57) || (c >= 96 && c <= 105)) {
     if (focusArea !== 'search') {
       handleDigit(String(c >= 96 ? c - 96 : c - 48));
@@ -1309,7 +1343,6 @@ window.addEventListener('keydown', e => {
     }
   }
 
-  // Handle dialer special keys
   if (chDialer.classList.contains('visible')) {
     if (k === 'Enter' || c === 13) {
       clearTimeout(dialTimer);
@@ -1326,7 +1359,6 @@ window.addEventListener('keydown', e => {
     }
   }
 
-  // Handle escape/back
   if (k === 'Escape' || k === 'Back' || k === 'GoBack' || c === 10009 || c === 27) {
     if (isFullscreen) { exitFS(); e.preventDefault(); return; }
     if (focusArea === 'ar') { setFocus('list'); e.preventDefault(); return; }
@@ -1336,14 +1368,12 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // Handle Info button for overlays
   if (k === 'Info' || c === 457) {
     toggleOverlays();
     e.preventDefault();
     return;
   }
 
-  // Aspect ratio focus handling
   if (focusArea === 'ar') {
     if (k === 'Enter' || c === 13) { cycleAR(); e.preventDefault(); return; }
     if (k === 'ArrowLeft' || c === 37 || k === 'ArrowDown' || c === 40) { setFocus('list'); e.preventDefault(); return; }
@@ -1352,14 +1382,12 @@ window.addEventListener('keydown', e => {
     return;
   }
 
-  // Search focus handling
   if (focusArea === 'search') {
     if (k === 'Enter' || c === 13) { commitSearch(); e.preventDefault(); return; }
     if (k === 'ArrowDown' || k === 'ArrowUp' || c === 40 || c === 38) { commitSearch(); e.preventDefault(); return; }
     return;
   }
 
-  // Navigation
   if (k === 'ArrowUp' || c === 38) { isFullscreen ? showFsHint() : moveSel(-1); e.preventDefault(); return; }
   if (k === 'ArrowDown' || c === 40) { isFullscreen ? showFsHint() : moveSel(1); e.preventDefault(); return; }
 
@@ -1389,39 +1417,29 @@ window.addEventListener('keydown', e => {
   if (k === 'PageUp') { moveSel(-10); e.preventDefault(); return; }
   if (k === 'PageDown') { moveSel(10); e.preventDefault(); return; }
 
-  // Media keys
   if (k === 'MediaPlayPause' || c === 10252) {
-    if (video.paused) video.play().catch(() => {});
-    else video.pause();
+    if (video.paused) video.play().catch(()=>{}); else video.pause();
     e.preventDefault();
     return;
   }
-  if (k === 'MediaPlay' || c === 415) { video.play().catch(() => {}); e.preventDefault(); return; }
+  if (k === 'MediaPlay' || c === 415) { video.play().catch(()=>{}); e.preventDefault(); return; }
   if (k === 'MediaPause' || c === 19) { video.pause(); e.preventDefault(); return; }
 
   if (k === 'MediaStop' || c === 413) {
-    cancelPreview();
-    if (player) player.unload();
-    video.pause();
-    video.removeAttribute('src');
-    setStatus('Stopped', 'idle');
-    finishLoadBar();
+    cancelPreview(); if (player) player.unload();
+    video.pause(); video.removeAttribute('src');
+    setStatus('Stopped', 'idle'); finishLoadBar();
     e.preventDefault();
     return;
   }
 
-  if (k === 'MediaFastForward' || c === 417 || k === 'ChannelUp' || c === 427) { moveSel(1); e.preventDefault(); return; }
-  if (k === 'MediaRewind' || c === 412 || k === 'ChannelDown' || c === 428) { moveSel(-1); e.preventDefault(); return; }
+  if (k === 'MediaFastForward'|| c === 417 || k === 'ChannelUp'  || c === 427) { moveSel(1); e.preventDefault(); return; }
+  if (k === 'MediaRewind'     || c === 412 || k === 'ChannelDown'|| c === 428) { moveSel(-1); e.preventDefault(); return; }
 
-  // Color buttons
-  if (k === 'ColorF0Red' || c === 403) { switchTab((plIdx + 1) % (allPlaylists.length + 1)); e.preventDefault(); return; }
-  if (k === 'ColorF1Green' || c === 404) {
-    if (filtered.length && focusArea === 'list') toggleFav(filtered[selectedIndex]);
-    e.preventDefault();
-    return;
-  }
+  if (k === 'ColorF0Red'    || c === 403) { switchTab((plIdx + 1) % (allPlaylists.length + 2)); e.preventDefault(); return; }
+  if (k === 'ColorF1Green'  || c === 404) { if (filtered.length && focusArea === 'list') toggleFav(filtered[selectedIndex]); e.preventDefault(); return; }
   if (k === 'ColorF2Yellow' || c === 405) { setFocus('search'); e.preventDefault(); return; }
-  if (k === 'ColorF3Blue' || c === 406) { if (hasPlayed) toggleFS(); e.preventDefault(); }
+  if (k === 'ColorF3Blue'   || c === 406) { if (hasPlayed) toggleFS(); e.preventDefault(); }
 });
 
 document.addEventListener('tizenhwkey', e => {
@@ -1463,30 +1481,12 @@ function handleSavePlaylist() {
   loadCustomPlaylists();
   allPlaylists = [...DEFAULT_PLAYLISTS, ...customPlaylists];
 
-  try {
-    const s = lsGet(PLAYLIST_KEY);
-    if (s !== null) {
-      const idx = parseInt(s, 10);
-      if (!isNaN(idx) && idx >= 0 && idx <= allPlaylists.length) plIdx = idx;
-    }
-  } catch (e) {}
-
-  if (plIdx >= allPlaylists.length) plIdx = 0;
-
-  rebuildTabs();
-
   VS.init(channelListEl);
   await initShaka();
 
   startNetworkMonitoring();
 
-  // Load M3U or Xtream
-  if (plIdx < allPlaylists.length) {
-    loadPlaylist();
-  } else {
-    plIdx = 0;
-    loadPlaylist();
-  }
+  loadMode();   // sets xtreamMode, plIdx, loads either Xtream or M3U
 
   // Initialize overlays (visible by default)
   if (overlayTop && overlayBottom) {
@@ -1503,21 +1503,17 @@ function handleSavePlaylist() {
     if (e.target === playlistModal) closeAddPlaylistModal();
   });
 
-  // Xtream event listeners
+  // Xtream modal listeners
   if (xtreamLoginBtn) xtreamLoginBtn.addEventListener('click', xtreamLogin);
   if (xtreamCancelBtn) xtreamCancelBtn.addEventListener('click', closeXtreamLogin);
   if (xtreamModal) xtreamModal.addEventListener('click', (e) => {
     if (e.target === xtreamModal) closeXtreamLogin();
   });
-  if (xtreamLoginHint) xtreamLoginHint.addEventListener('click', openXtreamLogin);
 
-  // Start EPG updater when video plays
+  // EPG updater
   video.addEventListener('playing', startEpgUpdater);
   video.addEventListener('pause', stopEpgUpdater);
   video.addEventListener('ended', stopEpgUpdater);
-
-  // Load saved Xtream credentials (if any)
-  await loadSavedXtream();
 
   // Optional weather
   if (navigator.geolocation) {
