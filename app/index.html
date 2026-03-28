@@ -5,14 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>IPTV Pro</title>
 
-  <!-- CSP updated – no proxy, allow necessary sources -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;
                  media-src * blob: data:;
                  connect-src *;
                  font-src * data:;"/>
 
-  <!-- Google Font — Bebas Neue for brand title -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet"/>
@@ -50,23 +48,22 @@
              autocomplete="off" autocorrect="off" spellcheck="false"/>
     </div>
 
-    <!-- Tabs (Telugu, India, Favs) -->
-    <div class="tab-bar" id="tabBar">
-      <button class="tab active">Telugu</button>
-      <button class="tab">India</button>
-      <button class="tab fav-tab">★ Favs</button>
-    </div>
+    <!-- Playlist tabs (dynamically generated) -->
+    <div class="tab-bar" id="tabBar"></div>
 
-    <!-- List header -->
+    <!-- List header with add playlist button -->
     <div class="list-head">
-      <span class="lbl">Channels</span>
-      <span id="countBadge">0</span>
+      <span class="lbl">CHANNELS</span>
+      <div class="list-head-actions">
+        <button id="addPlaylistBtn" class="add-playlist-btn" title="Add playlist">+</button>
+        <span id="countBadge">0</span>
+      </div>
     </div>
 
-    <!-- Virtual-scroll channel list -->
+    <!-- Channel list (virtual scroll) -->
     <ul id="channelList"></ul>
 
-    <!-- Number dialer overlay -->
+    <!-- Channel number dialer -->
     <div class="ch-dialer" id="chDialer">
       <div id="chDialerNum">—</div>
     </div>
@@ -77,6 +74,7 @@
       <div class="hint-item"><div class="dot green"></div><span>Fav</span></div>
       <div class="hint-item"><div class="dot yellow"></div><span>Search</span></div>
       <div class="hint-item"><div class="dot blue"></div><span>FS</span></div>
+      <div class="hint-item"><div class="dot info"></div><span>Info</span></div>
     </div>
 
   </div><!-- /sidebar -->
@@ -91,7 +89,6 @@
       </div>
       <div class="player-controls">
         <button class="ar-btn" id="arBtn">⛶ Fit</button>
-        <!-- Network indicator -->
         <div class="network-indicator" id="networkIndicator" title="Network status">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M2 12l2 2 4-4 4 4 4-4 4 4 2-2-6-6-4 4-4-4-4 4z"/>
@@ -101,12 +98,38 @@
       </div>
     </div>
 
-    <!-- Buffering progress bar -->
     <div class="load-bar" id="loadBar"></div>
 
-    <!-- Video container -->
     <div class="video-wrap" id="videoWrap">
       <video id="video" playsinline autoplay></video>
+
+      <!-- Top overlay with time and weather -->
+      <div class="overlay-top" id="overlayTop">
+        <div class="time-date">
+          <span id="currentTime"></span>
+          <span id="currentDate"></span>
+        </div>
+        <div class="weather-info" id="weatherInfo">
+          <span id="weatherTemp"></span>
+          <span id="weatherDesc"></span>
+        </div>
+      </div>
+
+      <!-- Bottom overlay with channel and program info -->
+      <div class="overlay-bottom" id="overlayBottom">
+        <div class="channel-details">
+          <div class="channel-name" id="overlayChannelName">Channel</div>
+          <div class="channel-tech" id="overlayChannelTech"></div>
+        </div>
+        <div class="program-info">
+          <div class="program-title" id="overlayProgramTitle">Now Playing</div>
+          <div class="program-desc" id="overlayProgramDesc"></div>
+          <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div class="next-program" id="nextProgramInfo"></div>
+        </div>
+      </div>
 
       <!-- Idle overlay -->
       <div class="video-overlay" id="videoOverlay">
@@ -125,7 +148,19 @@
 
 </div><!-- /app -->
 
-<!-- SCRIPTS -->
+<!-- Add Playlist Modal -->
+<div id="addPlaylistModal" class="modal">
+  <div class="modal-content">
+    <h3>Add Playlist</h3>
+    <input type="text" id="playlistName" placeholder="Playlist name" autocomplete="off" />
+    <input type="url" id="playlistUrl" placeholder="M3U URL" autocomplete="off" />
+    <div class="modal-buttons">
+      <button id="savePlaylistBtn">Save</button>
+      <button id="cancelPlaylistBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script src="shaka.js"></script>
 <script src="app.js"></script>
 
