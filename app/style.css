@@ -1,6 +1,6 @@
 /* ================================================================
 IPTV Pro — style.css v10.0 | Samsung Tizen OS9 TV
-Dark theme, white accents, persistent overlays, modern design
+Dark theme with white accents, persistent overlays, modern design
 ================================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
@@ -137,9 +137,13 @@ html, body {
   background: #1a1a1a;
 }
 
-#searchInput::placeholder { color: var(--muted); }
+#searchInput::placeholder {
+  color: var(--muted);
+}
 
-.search-wrap.active #searchInput { border-color: #fff; }
+.search-wrap.active #searchInput {
+  border-color: #fff;
+}
 
 /* ── Tabs ────────────────────────────────────────────────── */
 .tab-bar {
@@ -150,7 +154,9 @@ html, body {
   scrollbar-width: none;
 }
 
-.tab-bar::-webkit-scrollbar { display: none; }
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
 
 .tab {
   flex-shrink: 0;
@@ -476,8 +482,12 @@ html, body {
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ── Number dialer ───────────────────────────────────────── */
@@ -535,11 +545,25 @@ html, body {
   flex-shrink: 0;
 }
 
-.dot.red    { background: #ff4444; }
-.dot.green  { background: #00b259; }
-.dot.yellow { background: #e5b400; }
-.dot.blue   { background: #4488ff; }
-.dot.info   { background: #fff; }
+.dot.red {
+  background: #ff4444;
+}
+
+.dot.green {
+  background: #00b259;
+}
+
+.dot.yellow {
+  background: #e5b400;
+}
+
+.dot.blue {
+  background: #4488ff;
+}
+
+.dot.info {
+  background: #fff;
+}
 
 /* ── Player area ─────────────────────────────────────────── */
 .player-area {
@@ -623,9 +647,20 @@ html, body {
   background: #1e1e1e;
 }
 
-.ar-btn.ar-fill  { border-color: #fff; color: #fff; }
-.ar-btn.ar-cover { border-color: #fff; color: #fff; }
-.ar-btn.ar-wide  { border-color: #fff; color: #fff; }
+.ar-btn.ar-fill {
+  border-color: #fff;
+  color: #fff;
+}
+
+.ar-btn.ar-cover {
+  border-color: #fff;
+  color: #fff;
+}
+
+.ar-btn.ar-wide {
+  border-color: #fff;
+  color: #fff;
+}
 
 /* ── Network indicator ───────────────────────────────────── */
 .network-indicator {
@@ -672,11 +707,33 @@ html, body {
   border: 1px solid;
 }
 
-.status-badge.idle    { color: var(--muted); border-color: #2a2a2a; }
-.status-badge.loading { color: #e5b400; border-color: #e5b40044; background: #e5b40011; }
-.status-badge.playing { color: #fff; border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); }
-.status-badge.paused  { color: #777; border-color: #2a2a2a; }
-.status-badge.error   { color: #ff4444; border-color: #ff444444; background: #ff444411; }
+.status-badge.idle {
+  color: var(--muted);
+  border-color: #2a2a2a;
+}
+
+.status-badge.loading {
+  color: #e5b400;
+  border-color: #e5b40044;
+  background: #e5b40011;
+}
+
+.status-badge.playing {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.status-badge.paused {
+  color: #777;
+  border-color: #2a2a2a;
+}
+
+.status-badge.error {
+  color: #ff4444;
+  border-color: #ff444444;
+  background: #ff444411;
+}
 
 /* ── Video ───────────────────────────────────────────────── */
 .video-wrap {
@@ -696,9 +753,18 @@ video {
   object-fit: contain;
 }
 
-video.ar-fill  { object-fit: fill; }
-video.ar-cover { object-fit: cover; }
-video.ar-wide  { object-fit: contain; transform: scaleX(1.34); }
+video.ar-fill {
+  object-fit: fill;
+}
+
+video.ar-cover {
+  object-fit: cover;
+}
+
+video.ar-wide {
+  object-fit: contain;
+  transform: scaleX(1.34);
+}
 
 /* ── Video overlays (always visible in fullscreen) ───────── */
 .video-overlay {
@@ -738,7 +804,7 @@ video.ar-wide  { object-fit: contain; transform: scaleX(1.34); }
   color: #777;
 }
 
-/* Top and bottom overlays - always visible in fullscreen */
+/* Top and bottom overlays */
 .overlay-top, .overlay-bottom {
   position: absolute;
   left: 0;
@@ -763,6 +829,19 @@ video.ar-wide  { object-fit: contain; transform: scaleX(1.34); }
 .overlay-bottom {
   bottom: 0;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+}
+
+/* Overlay visibility control */
+.overlay-top.info-visible,
+.overlay-bottom.info-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.overlay-top:not(.info-visible),
+.overlay-bottom:not(.info-visible) {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .time-date {
@@ -848,27 +927,6 @@ video.ar-wide  { object-fit: contain; transform: scaleX(1.34); }
   text-overflow: ellipsis;
 }
 
-/* ── Fullscreen mode (overlays stay visible) ────────────── */
-body.fullscreen .sidebar { display: none; }
-body.fullscreen .app { grid-template-columns: 1fr; }
-body.fullscreen .player-area { padding: 0; gap: 0; }
-body.fullscreen .player-header { display: none; }
-body.fullscreen .load-bar { display: none; }
-body.fullscreen .video-wrap {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  border-radius: 0;
-  border: none;
-}
-body.fullscreen .fs-hint { z-index: 10001; }
-body.fullscreen .overlay-top,
-body.fullscreen .overlay-bottom {
-  z-index: 10002;
-  opacity: 1 !important;
-  visibility: visible !important;
-}
-
 /* ── Fullscreen hint ─────────────────────────────────────── */
 .fs-hint {
   position: absolute;
@@ -887,7 +945,9 @@ body.fullscreen .overlay-bottom {
   z-index: 100;
 }
 
-.fs-hint.visible { opacity: 1; }
+.fs-hint.visible {
+  opacity: 1;
+}
 
 /* ── Load bar ────────────────────────────────────────────── */
 .load-bar {
@@ -900,7 +960,49 @@ body.fullscreen .overlay-bottom {
   flex-shrink: 0;
 }
 
-.load-bar.active { opacity: 1; }
+.load-bar.active {
+  opacity: 1;
+}
+
+/* ── Fullscreen mode (overlays controlled by class) ────────────── */
+body.fullscreen .sidebar {
+  display: none;
+}
+
+body.fullscreen .app {
+  grid-template-columns: 1fr;
+}
+
+body.fullscreen .player-area {
+  padding: 0;
+  gap: 0;
+}
+
+body.fullscreen .player-header {
+  display: none;
+}
+
+body.fullscreen .load-bar {
+  display: none;
+}
+
+body.fullscreen .video-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  border-radius: 0;
+  border: none;
+}
+
+body.fullscreen .fs-hint {
+  z-index: 10001;
+}
+
+/* Overlays in fullscreen - higher z-index */
+body.fullscreen .overlay-top,
+body.fullscreen .overlay-bottom {
+  z-index: 10002;
+}
 
 /* ── Modal ───────────────────────────────────────────────── */
 .modal {
@@ -1007,4 +1109,6 @@ body.fullscreen .overlay-bottom {
   white-space: nowrap;
 }
 
-* { outline: none; }
+* {
+  outline: none;
+}
