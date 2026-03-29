@@ -50,7 +50,6 @@
       https://raw.githubusercontent.com
       https://cdn.jsdelivr.net;
     media-src 'self'
-      https://houser-af7j.onrender.com
       blob:
       https:;
     img-src 'self'
