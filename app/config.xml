@@ -1,24 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://yourdomain.com/IPTVPro"
-        version="11.5"
+        id="http://yourdomain.com/SagaIPTV"
+        version="22.0"
         viewmodes="maximized">
 
-  <tizen:application id="IPTV.Pro" package="IPTVPro" required_version="6.0"/>
-  
+  <tizen:application id="SAGA.IPTV" package="SAGAIPTVx" required_version="6.0"/>
+
   <content src="index.html"/>
-  
+
   <icon src="icon.png"/>
-  
-  <name>IPTV Pro</name>
-  <description>Professional IPTV Player with Xtream Codes Support</description>
-  
-  <author href="http://yourdomain.com">IPTV Pro Team</author>
-  
+
+  <name>SAGA IPTV</name>
+  <description>Premium IPTV Player — Xtream Codes &amp; M3U Support</description>
+
+  <author href="http://yourdomain.com">SAGA IPTV</author>
   <license>All rights reserved</license>
-  
-  <!-- Required privileges for Tizen TV -->
+
+  <!-- Required Tizen TV privileges -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.read"/>
   <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
@@ -27,48 +26,37 @@
   <tizen:privilege name="http://tizen.org/privilege/display"/>
   <tizen:privilege name="http://tizen.org/privilege/mediastorage"/>
   <tizen:privilege name="http://tizen.org/privilege/externalstorage"/>
-  
-  <!-- Network access for streaming -->
+
+  <!-- Allow all network access for streaming -->
   <access origin="*" subdomains="true"/>
-  
-  <!-- Content Security Policy for Tizen -->
+
+  <!-- Content Security Policy -->
   <tizen:content-security-policy>
     default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval' 
-      https://cdn.jsdelivr.net 
-      https://fonts.googleapis.com 
+    script-src 'self' 'unsafe-inline' 'unsafe-eval'
+      https://cdn.jsdelivr.net
+      https://fonts.googleapis.com
       https://fonts.gstatic.com;
-    style-src 'self' 'unsafe-inline' 
+    style-src 'self' 'unsafe-inline'
       https://fonts.googleapis.com;
-    connect-src 'self' 
-      * 
-      https://iptv-org.github.io 
-      https://raw.githubusercontent.com 
-      https://cdn.jsdelivr.net 
-      wss://* 
-      ws://*;
-    media-src 'self' 
-      * 
-      blob: 
-      https: 
-      http:;
-    img-src 'self' 
-      * 
-      data: 
-      https: 
-      http:;
-    font-src 'self' 
-      data: 
-      https://fonts.gstatic.com;
+    connect-src 'self' *
+      https://iptv-org.github.io
+      https://raw.githubusercontent.com
+      https://cdn.jsdelivr.net
+      wss://* ws://*;
+    media-src 'self' * blob: https: http:;
+    img-src 'self' * data: https: http:;
+    font-src 'self' data: https://fonts.gstatic.com;
     frame-src 'none';
     object-src 'none';
   </tizen:content-security-policy>
-  
-  <tizen:setting screen-orientation="landscape"
-                 context-menu="disable"
-                 background-support="enable"
-                 encryption="disable"
-                 install-location="auto"
-                 hwkey-event="enable"/>
-  
+
+  <tizen:setting
+    screen-orientation="landscape"
+    context-menu="disable"
+    background-support="enable"
+    encryption="disable"
+    install-location="auto"
+    hwkey-event="enable"/>
+
 </widget>
