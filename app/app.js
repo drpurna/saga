@@ -1,6 +1,6 @@
 // ================================================================
 // SAGA IPTV — app.js v24.0  |  Samsung Tizen OS9  |  BN59-01199F
-// Tab order: M3U… | ★ Favs | Xtream | JioTV
+// Tab order: M3U… | ★ Favs | JioTV
 // focusArea: 'tabs' | 'list' | 'ar' | 'search'
 // ================================================================
 'use strict';
@@ -38,18 +38,16 @@ const KEY = {
 // ── Tab index layout ──────────────────────────────────────────────
 // 0 … N-1  = M3U playlists
 // N         = ★ Favs
-// N+1       = Xtream
-// N+2       = JioTV
+// N+1       = JioTV
 function TAB_FAV()    { return allPlaylists.length; }
-function TAB_XTREAM() { return allPlaylists.length + 1; }
-function TAB_JIOTV()  { return allPlaylists.length + 2; }
-function TAB_TOTAL()  { return allPlaylists.length + 3; }
+function TAB_JIOTV()  { return allPlaylists.length + 1; }
+function TAB_TOTAL()  { return allPlaylists.length + 2; }
 
 // ── Playlists ─────────────────────────────────────────────────────
 let allPlaylists    = [];
 let customPlaylists = [];
 let plIdx           = 0;   // active tab index
-let lastM3uIndex    = 0;   // last M3U tab visited, for returning from Xtream/JioTV
+let lastM3uIndex    = 0;   // last M3U tab visited, for returning from JioTV
 
 // ── AV Sync ───────────────────────────────────────────────────────
 let avSyncOffset = 0, avSyncLabel = null;
@@ -97,17 +95,6 @@ const nextProgramInfo    = document.getElementById('nextProgramInfo');
 const programInfoBox     = document.getElementById('programInfoBox');
 const toastEl            = document.getElementById('toast');
 
-// ── Xtream ────────────────────────────────────────────────────────
-let xtreamClient = null, xtreamMode = false;
-const xtreamModal       = document.getElementById('xtreamLoginModal');
-const xtreamServerUrl   = document.getElementById('xtreamServerUrl');
-const xtreamUsername    = document.getElementById('xtreamUsername');
-const xtreamPassword    = document.getElementById('xtreamPassword');
-const xtreamLoginBtn    = document.getElementById('xtreamLoginBtn');
-const xtreamCancelBtn   = document.getElementById('xtreamCancelBtn');
-const xtreamLoginStatus = document.getElementById('xtreamLoginStatus');
-const xtreamAccountInfo = document.getElementById('xtreamAccountInfo');
-
 // ── JioTV ─────────────────────────────────────────────────────────
 let jiotvClient = null, jiotvMode = false;
 const jiotvModal       = document.getElementById('jiotvLoginModal');
@@ -122,9 +109,8 @@ const jiotvAccountInfo = document.getElementById('jiotvAccountInfo');
 // ── App state ─────────────────────────────────────────────────────
 let channels = [], allChannels = [], filtered = [];
 let selectedIndex = 0;
-// focusArea: 'tabs' | 'list' | 'ar' | 'search'
 let focusArea = 'list';
-let tabFocusIdx = 0;  // which tab button is highlighted when focusArea==='tabs'
+let tabFocusIdx = 0;
 let isFullscreen = false, hasPlayed = false;
 let player = null, arIdx = 0, preFullscreenArMode = null;
 let fsHintTimer = null, loadBarTimer = null, previewTimer = null;
@@ -179,7 +165,6 @@ function finishLoadBar(){
 }
 function refreshLbl(){
   if(jiotvMode)              setLbl('JIOTV',channels.length);
-  else if(xtreamMode)        setLbl('XTREAM',channels.length);
   else if(plIdx===TAB_FAV()) setLbl('FAVOURITES',filtered.length);
   else                       setLbl('CHANNELS',channels.length);
 }
@@ -291,7 +276,7 @@ video.addEventListener('timeupdate',function(){if(!video.paused)lastPlayTime=Dat
 // VIRTUAL SCROLL — GPU compositing, node pooling
 // ══════════════════════════════════════════════════════════════════
 var VS={
-  IH:92, GAP:7, OS:4,    // item height 92px, gap 7px — matches CSS --item-h
+  IH:92, GAP:7, OS:4,
   c:null,inner:null,vh:0,st:0,total:0,
   pool:[],nodes:{},raf:null,
 
@@ -521,7 +506,6 @@ function buildDrmConfig(info){
     cfg.servers['com.widevine.alpha']=info.drm_url;
     cfg.advanced={'com.widevine.alpha':{videoRobustness:'HW_SECURE_ALL',audioRobustness:'HW_SECURE_CRYPTO'}};
   }else if(info.key&&info.iv){
-    // ClearKey fallback
     cfg.servers['org.w3.clearkey']='';
     cfg.clearKeys={};
     var kid=info.key_id||info.kid||info.key;
@@ -579,7 +563,7 @@ async function startPreview(idx){
   nowPlayingEl.textContent=ch.name;
   if(overlayChannelName)overlayChannelName.textContent=ch.name;
   if(npChNumEl)npChNumEl.textContent='CH '+(idx+1);
-  if(!xtreamMode&&!jiotvMode){
+  if(!jiotvMode){
     if(overlayProgramTitle)overlayProgramTitle.textContent='';
     if(overlayProgramDesc) overlayProgramDesc.textContent='';
     if(nextProgramInfo)    nextProgramInfo.textContent='';
@@ -594,14 +578,12 @@ async function startPreview(idx){
       var info=await jiotvClient.getStreamInfo(ch.jioId);
       var playUrl=info&&info.url?info.url:ch.url;
       await doPlay(playUrl,info);
-      // EPG: fire and forget
       setTimeout(function(){updateJioEpg(ch.jioId);},800);
     }catch(e){
       await doPlay(ch.url,null);
     }
   } else {
     await doPlay(ch.url,null);
-    if(xtreamMode)setTimeout(updateXtreamEpg,1200);
   }
 }
 function playSelected(){cancelPreview();startPreview(selectedIndex);}
@@ -668,19 +650,16 @@ function getDigit(e){
 }
 
 // ── Focus management ──────────────────────────────────────────────
-// focusArea: 'tabs' | 'list' | 'ar' | 'search'
 function setFocus(a){
   focusArea=a;
   setARFocus(a==='ar');
   tabBar.classList.toggle('tab-bar-focused',a==='tabs');
   if(a==='search'){searchWrap.classList.add('active');searchInput.focus();}
   else{searchWrap.classList.remove('active');if(document.activeElement===searchInput)searchInput.blur();}
-  // sync visual highlight on tab buttons
   if(a==='tabs') syncTabHighlight();
   else clearTabHighlight();
 }
 
-// Highlight the tab at tabFocusIdx visually (keyboard focus indicator)
 function syncTabHighlight(){
   var btns=tabBar.querySelectorAll('.tab');
   btns.forEach(function(b,i){b.classList.toggle('kbd-focus',i===tabFocusIdx);});
@@ -697,17 +676,14 @@ function moveSel(d){
   VS.scrollTo(selectedIndex);VS.refresh();schedulePreview();
 }
 
-// Move tab focus left/right within the tab row
 function moveTabFocus(d){
   var total=TAB_TOTAL();
   tabFocusIdx=((tabFocusIdx+d)%total+total)%total;
   syncTabHighlight();
-  // scroll tab bar so focused tab is visible
   var btns=tabBar.querySelectorAll('.tab');
   if(btns[tabFocusIdx]) btns[tabFocusIdx].scrollIntoView({inline:'nearest',block:'nearest'});
 }
 
-// Activate the currently keyboard-focused tab
 function activateFocusedTab(){
   switchTab(tabFocusIdx);
   setFocus('list');
@@ -733,21 +709,16 @@ function registerKeys(){
 window.addEventListener('keydown',function(e){
   var k=e.key,kc=e.keyCode;
 
-  // ── Any modal open — only Escape/Back closes it; everything else pass-through for text input
-  var anyModal=(xtreamModal&&xtreamModal.style.display==='flex')||
-               (playlistModal&&playlistModal.style.display==='flex')||
+  // Any modal open — only Escape/Back closes it
+  var anyModal=(playlistModal&&playlistModal.style.display==='flex')||
                (jiotvModal&&jiotvModal.style.display==='flex');
   if(anyModal){
     if(k==='Escape'||k==='Back'||kc===KEY.BACK||kc===KEY.EXIT||kc===27){
       closeAllModals();e.preventDefault();return;
     }
-    // Enter on JioTV modal → always trigger login action
     if(k==='Enter'||kc===KEY.ENTER){
       if(jiotvModal&&jiotvModal.style.display==='flex'){
         jiotvLoginAction();e.preventDefault();return;
-      }
-      if(xtreamModal&&xtreamModal.style.display==='flex'){
-        xtreamLogin();e.preventDefault();return;
       }
       if(playlistModal&&playlistModal.style.display==='flex'){
         handleSavePlaylist();e.preventDefault();return;
@@ -755,21 +726,17 @@ window.addEventListener('keydown',function(e){
       var focused=document.activeElement;
       if(focused&&focused.tagName==='BUTTON'){focused.click();e.preventDefault();return;}
     }
-    // Allow all other keys to reach text inputs
     return;
   }
 
-  // ── Digit → channel dialer (not during search or when fullscreen nav)
   var dig=getDigit(e);
   if(dig!==null&&focusArea!=='search'&&focusArea!=='tabs'){handleDigit(dig);e.preventDefault();return;}
 
-  // ── Dialer visible
   if(chDialer.classList.contains('visible')){
     if(kc===KEY.ENTER||k==='Enter'){clearTimeout(dialTimer);dialTimer=null;commitChannelNumber();e.preventDefault();return;}
     if(k==='Back'||k==='Escape'||kc===KEY.BACK||kc===27){clearTimeout(dialTimer);dialTimer=null;dialBuffer='';chDialer.classList.remove('visible');e.preventDefault();return;}
   }
 
-  // ── Back / Escape hierarchy
   if(k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27){
     if(isFullscreen)          {exitFS();e.preventDefault();return;}
     if(focusArea==='ar')      {setFocus('list');e.preventDefault();return;}
@@ -779,22 +746,17 @@ window.addEventListener('keydown',function(e){
     e.preventDefault();return;
   }
 
-  // ── Info / Guide
   if(k==='Info'||kc===KEY.INFO||k==='Guide'||kc===KEY.GUIDE){toggleOverlays();e.preventDefault();return;}
 
-  // ── TAB ROW focus mode ────────────────────────────────────────────
   if(focusArea==='tabs'){
     if(k==='ArrowLeft' ||kc===KEY.LEFT) {moveTabFocus(-1);e.preventDefault();return;}
     if(k==='ArrowRight'||kc===KEY.RIGHT){moveTabFocus(+1);e.preventDefault();return;}
     if(k==='Enter'||kc===KEY.ENTER)     {activateFocusedTab();e.preventDefault();return;}
-    // Down drops back to list
     if(k==='ArrowDown'||kc===KEY.DOWN)  {setFocus('list');e.preventDefault();return;}
-    // Up stays in tabs
     if(k==='ArrowUp'||kc===KEY.UP)      {e.preventDefault();return;}
     e.preventDefault();return;
   }
 
-  // ── AR focus mode
   if(focusArea==='ar'){
     if(k==='Enter'||kc===KEY.ENTER){cycleAR();e.preventDefault();return;}
     if(k==='ArrowLeft'||kc===KEY.LEFT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}
@@ -802,34 +764,27 @@ window.addEventListener('keydown',function(e){
     e.preventDefault();return;
   }
 
-  // ── SEARCH focus mode
   if(focusArea==='search'){
     if(k==='Enter'||kc===KEY.ENTER)                          {commitSearch();e.preventDefault();return;}
     if(k==='ArrowDown'||k==='ArrowUp'||kc===KEY.DOWN||kc===KEY.UP){commitSearch();e.preventDefault();return;}
-    return; // let keystrokes reach the input
+    return;
   }
 
-  // ── LIST focus mode ───────────────────────────────────────────────
-  // Up/Down: move channel selection (or fs hint)
   if(k==='ArrowUp'   ||kc===KEY.UP)  {if(isFullscreen)showFsHint();else moveSel(-1);e.preventDefault();return;}
   if(k==='ArrowDown' ||kc===KEY.DOWN){if(isFullscreen)showFsHint();else moveSel(1); e.preventDefault();return;}
 
-  // Left: enter tab-row focus (allows switching playlists)
   if(k==='ArrowLeft'||kc===KEY.LEFT){
     if(isFullscreen){exitFS();e.preventDefault();return;}
-    // Enter tab navigation mode — set focus to the currently active tab
     tabFocusIdx=plIdx;
     setFocus('tabs');
     e.preventDefault();return;
   }
 
-  // Right: enter AR mode
   if(k==='ArrowRight'||kc===KEY.RIGHT){
     if(isFullscreen){showFsHint();e.preventDefault();return;}
     setFocus('ar');e.preventDefault();return;
   }
 
-  // Enter: play + fullscreen
   if(k==='Enter'||kc===KEY.ENTER){
     if(isFullscreen){exitFS();e.preventDefault();return;}
     if(focusArea==='list'){playSelected();setTimeout(function(){if(hasPlayed)enterFS();},700);}
@@ -839,7 +794,6 @@ window.addEventListener('keydown',function(e){
   if(k==='PageUp'  ||kc===KEY.PAGE_UP)  {moveSel(-10);e.preventDefault();return;}
   if(k==='PageDown'||kc===KEY.PAGE_DOWN){moveSel(10); e.preventDefault();return;}
 
-  // Media
   if(k==='MediaPlayPause'||kc===KEY.PLAY_PAUSE){if(video.paused)video.play().catch(function(){});else video.pause();e.preventDefault();return;}
   if(k==='MediaPlay'     ||kc===KEY.PLAY)  {video.play().catch(function(){});e.preventDefault();return;}
   if(k==='MediaPause'    ||kc===KEY.PAUSE) {video.pause();e.preventDefault();return;}
@@ -850,7 +804,6 @@ window.addEventListener('keydown',function(e){
   if(k==='MediaFastForward'||kc===KEY.FF   ||k==='ChannelUp'  ||kc===KEY.CH_UP)  {moveSel(1); e.preventDefault();return;}
   if(k==='MediaRewind'     ||kc===KEY.RW   ||k==='ChannelDown'||kc===KEY.CH_DOWN){moveSel(-1);e.preventDefault();return;}
 
-  // Colour buttons
   if(k==='ColorF0Red'   ||kc===KEY.RED)   {switchTab((plIdx+1)%TAB_TOTAL());e.preventDefault();return;}
   if(k==='ColorF1Green' ||kc===KEY.GREEN) {if(filtered.length&&focusArea==='list')toggleFav(filtered[selectedIndex]);e.preventDefault();return;}
   if(k==='ColorF2Yellow'||kc===KEY.YELLOW){setFocus('search');e.preventDefault();return;}
@@ -868,7 +821,6 @@ document.addEventListener('tizenhwkey',function(e){
 // ── Modals ────────────────────────────────────────────────────────
 function closeAllModals(){
   if(playlistModal)playlistModal.style.display='none';
-  if(xtreamModal)  xtreamModal.style.display='none';
   if(jiotvModal)   jiotvModal.style.display='none';
 }
 
@@ -894,46 +846,34 @@ function addCustomPlaylist(name,url){
 }
 function rebuildAllPlaylists(){
   allPlaylists=DEFAULT_PLAYLISTS.concat(customPlaylists);
-  if(plIdx>=TAB_FAV())plIdx=0;   // clamp only if not a special tab
+  if(plIdx>=TAB_FAV())plIdx=0;
   rebuildTabs();loadPlaylist();
 }
 
 // ── Tab builder ───────────────────────────────────────────────────
-// Order: Telugu | India | [custom…] | ★ Favs | Xtream | JioTV
+// Order: M3U playlists | ★ Favs | JioTV
 function rebuildTabs(){
   tabBar.innerHTML='';
   var totalTabs=TAB_TOTAL();
 
-  // M3U playlist tabs (indices 0…N-1)
   for(var i=0;i<allPlaylists.length;i++){
     var btn=document.createElement('button');
     btn.className='tab';
-    if(!xtreamMode&&!jiotvMode&&i===plIdx) btn.classList.add('active');
+    if(!jiotvMode&&i===plIdx) btn.classList.add('active');
     btn.textContent=allPlaylists[i].name;
     btn.dataset.tabIdx=String(i);
     (function(idx){btn.addEventListener('click',function(){switchTab(idx);});})(i);
     tabBar.appendChild(btn);
   }
 
-  // ★ Favs tab (index N)
   var fBtn=document.createElement('button');
   fBtn.className='tab fav-tab';
   fBtn.dataset.tabIdx=String(TAB_FAV());
-  if(!xtreamMode&&!jiotvMode&&plIdx===TAB_FAV()) fBtn.classList.add('active');
+  if(!jiotvMode&&plIdx===TAB_FAV()) fBtn.classList.add('active');
   fBtn.innerHTML='★ Favs';
   fBtn.addEventListener('click',function(){switchTab(TAB_FAV());});
   tabBar.appendChild(fBtn);
 
-  // Xtream tab (index N+1)
-  var xBtn=document.createElement('button');
-  xBtn.className='tab xtream-tab';
-  xBtn.dataset.tabIdx=String(TAB_XTREAM());
-  if(xtreamMode) xBtn.classList.add('active');
-  xBtn.innerHTML='<svg viewBox="0 0 24 24" fill="none" width="11" height="11" style="opacity:0.7"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M2 12h5M17 12h5M12 2v5M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Xtream';
-  xBtn.addEventListener('click',function(){switchTab(TAB_XTREAM());});
-  tabBar.appendChild(xBtn);
-
-  // JioTV tab (index N+2)
   var jBtn=document.createElement('button');
   jBtn.className='tab jiotv-tab';
   jBtn.dataset.tabIdx=String(TAB_JIOTV());
@@ -942,46 +882,22 @@ function rebuildTabs(){
   jBtn.addEventListener('click',function(){switchTab(TAB_JIOTV());});
   tabBar.appendChild(jBtn);
 
-  // Re-apply keyboard-focus highlight if we're in tab mode
   if(focusArea==='tabs') syncTabHighlight();
 }
 
-// ── switchTab — THE critical function ────────────────────────────
-// Fixes:
-// 1. Clicking any M3U tab from Xtream/JioTV properly resets mode and loads
-// 2. Clicking Xtream tab when already in Xtream → reload channels
-// 3. Clicking JioTV tab when already in JioTV → reload channels
-// 4. Opening Xtream/JioTV login stores which M3U tab to return to
+// ── switchTab ────────────────────────────────────────────────────
 function switchTab(idx){
-  var tFav=TAB_FAV(), tX=TAB_XTREAM(), tJ=TAB_JIOTV();
+  var tFav=TAB_FAV(), tJ=TAB_JIOTV();
 
   if(idx<tFav){
-    // ── M3U playlist tab ──────────────────────────────────────────
-    xtreamMode=false; jiotvMode=false;
+    jiotvMode=false;
     lastM3uIndex=idx; plIdx=idx;
     rebuildTabs(); loadPlaylist(); saveMode();
-
   } else if(idx===tFav){
-    // ── Favourites ────────────────────────────────────────────────
-    xtreamMode=false; jiotvMode=false;
+    jiotvMode=false;
     plIdx=tFav;
     rebuildTabs(); showFavourites(); saveMode();
-
-  } else if(idx===tX){
-    // ── Xtream ───────────────────────────────────────────────────
-    // Always attempt to load (allow re-entering when already in Xtream)
-    jiotvMode=false;
-    if(xtreamClient&&xtreamClient.logged_in){
-      xtreamMode=true; plIdx=tX;
-      rebuildTabs(); loadXtreamChannels(); saveMode();
-    } else {
-      // Open login; on success we'll switch to Xtream
-      openXtreamLogin();
-    }
-
   } else if(idx===tJ){
-    // ── JioTV ────────────────────────────────────────────────────
-    xtreamMode=false;
     if(jiotvClient&&jiotvClient.logged_in){
       jiotvMode=true; plIdx=tJ;
       rebuildTabs(); loadJioChannels(); saveMode();
@@ -989,112 +905,8 @@ function switchTab(idx){
       openJioLogin();
     }
   }
-
   setFocus('list');
 }
-
-// ── Xtream ────────────────────────────────────────────────────────
-function openXtreamLogin(){
-  if(xtreamServerUrl) xtreamServerUrl.value=lsGet('xtream:server')||'';
-  if(xtreamUsername)  xtreamUsername.value =lsGet('xtream:username')||'';
-  if(xtreamPassword)  xtreamPassword.value ='';
-  if(xtreamLoginStatus) xtreamLoginStatus.textContent='';
-  if(xtreamAccountInfo) xtreamAccountInfo.textContent='';
-  if(xtreamModal) xtreamModal.style.display='flex';
-  setTimeout(function(){if(xtreamServerUrl)xtreamServerUrl.focus();},120);
-}
-function storeXtreamCreds(s,u,p){lsSet('xtream:server',s);lsSet('xtream:username',u);lsSet('xtream:password',p);}
-function clearXtreamCreds(){['xtream:server','xtream:username','xtream:password'].forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});}
-
-async function xtreamLogin(){
-  var sv=(xtreamServerUrl?xtreamServerUrl.value:'').trim();
-  var un=(xtreamUsername ?xtreamUsername.value :'').trim();
-  var pw=(xtreamPassword ?xtreamPassword.value :'').trim();
-  if(!sv||!un||!pw){if(xtreamLoginStatus){xtreamLoginStatus.textContent='Fill in all fields';xtreamLoginStatus.style.color='var(--red)';}return;}
-  if(xtreamLoginBtn)xtreamLoginBtn.disabled=true;
-  if(xtreamLoginStatus){xtreamLoginStatus.textContent='Connecting…';xtreamLoginStatus.style.color='var(--gold)';}
-  try{
-    var c=new XtreamClient({serverUrl:sv,username:un,password:pw,timeout:15000});
-    var res=await c.getUserInfo(false);
-    var ui=res&&res.user_info?res.user_info:res;
-    if(ui&&(ui.auth===1||ui.auth==='1')){
-      xtreamClient=c;xtreamClient.logged_in=true;xtreamMode=true;
-      storeXtreamCreds(sv,un,pw);
-      var exp=new Date(parseInt(ui.exp_date,10)*1000);
-      var dl=Math.ceil((exp-new Date())/86400000);
-      if(xtreamAccountInfo)xtreamAccountInfo.innerHTML='✅ '+un+' · Exp: '+exp.toLocaleDateString()+' ('+dl+'d) · Max: '+ui.max_connections;
-      if(xtreamLoginStatus){xtreamLoginStatus.textContent='Loading channels…';xtreamLoginStatus.style.color='var(--gold)';}
-      plIdx=TAB_XTREAM();rebuildTabs();
-      await loadXtreamChannels();
-      if(xtreamModal)xtreamModal.style.display='none';
-      showToast('Welcome, '+un+'!');saveMode();
-    }else throw new Error('Auth failed');
-  }catch(err){
-    if(xtreamLoginStatus){xtreamLoginStatus.textContent='Login failed: '+err.message;xtreamLoginStatus.style.color='var(--red)';}
-  }finally{if(xtreamLoginBtn)xtreamLoginBtn.disabled=false;}
-}
-
-async function loadXtreamChannels(){
-  if(!xtreamClient)return;
-  setStatus('Loading Xtream…','loading');startLoadBar();
-  try{
-    var res=await Promise.all([xtreamClient.getLiveCategories(true),xtreamClient.getLiveStreams(null,true)]);
-    var conv=res[1].map(function(ch){
-      return{name:ch.name,group:ch.category_name||'Uncategorized',logo:ch.stream_icon||'',
-             url:xtreamClient.getLiveStreamUrl(ch.stream_id),streamId:ch.stream_id,
-             epgChannelId:ch.epg_channel_id,streamType:'live'};
-    });
-    channels=conv;allChannels=conv.slice();filtered=conv.slice();selectedIndex=0;
-    renderList();setLbl('XTREAM',conv.length);setStatus('Xtream · '+conv.length+' ch','playing');finishLoadBar();
-  }catch(err){setStatus('Failed to load channels','error');finishLoadBar();}
-}
-
-async function loadSavedXtream(){
-  var sv=lsGet('xtream:server'),un=lsGet('xtream:username'),pw=lsGet('xtream:password');
-  if(!sv||!un||!pw)return false;
-  try{
-    var c=new XtreamClient({serverUrl:sv,username:un,password:pw,timeout:10000});
-    var res=await c.getUserInfo(false);var ui=res&&res.user_info?res.user_info:res;
-    if(ui&&(ui.auth===1||ui.auth==='1')){
-      xtreamClient=c;xtreamClient.logged_in=true;xtreamMode=true;
-      plIdx=TAB_XTREAM();rebuildTabs();await loadXtreamChannels();
-      showToast('Xtream: welcome back, '+un);saveMode();return true;
-    }
-  }catch(e){clearXtreamCreds();}
-  return false;
-}
-
-function atob_safe(s){if(!s)return'';try{return decodeURIComponent(escape(atob(s)));}catch(e){return s;}}
-
-async function updateXtreamEpg(){
-  if(!xtreamMode||!xtreamClient)return;
-  var ch=filtered[selectedIndex];if(!ch||!ch.streamId)return;
-  try{
-    var d=await xtreamClient.getShortEpg(ch.streamId,3,true);
-    var list=Array.isArray(d)?d:(d&&Array.isArray(d.epg_listings))?d.epg_listings:[];
-    if(list.length>0){
-      var cur=list[0],nxt=list[1];
-      if(overlayProgramTitle)overlayProgramTitle.textContent=atob_safe(cur.title)||'No program info';
-      if(overlayProgramDesc) overlayProgramDesc.textContent =atob_safe(cur.description)||'';
-      if(nextProgramInfo)nextProgramInfo.textContent=nxt?'Next: '+atob_safe(nxt.title)+' at '+new Date(nxt.start_timestamp*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-      if(programInfoBox)programInfoBox.style.display='';
-    }else{if(overlayProgramTitle)overlayProgramTitle.textContent='No EPG';if(programInfoBox)programInfoBox.style.display='none';}
-  }catch(e){}
-}
-
-var epgInterval=null;
-function startEpgUpdater(){
-  if(epgInterval)clearInterval(epgInterval);
-  epgInterval=setInterval(function(){
-    if(video.paused)return;
-    if(xtreamMode)updateXtreamEpg();
-    else if(jiotvMode){
-      var ch=filtered[selectedIndex];
-      if(ch&&ch.jioId)updateJioEpg(ch.jioId);
-    }
-  },30000);
-}
-function stopEpgUpdater(){if(epgInterval){clearInterval(epgInterval);epgInterval=null;}}
 
 // ── JioTV ─────────────────────────────────────────────────────────
 function openJioLogin(){
@@ -1107,7 +919,6 @@ function openJioLogin(){
   if(jiotvModal) jiotvModal.style.display='flex';
   setTimeout(function(){if(jiotvServerUrl)jiotvServerUrl.focus();},120);
 
-  // Auto-discover if no saved URL or saved URL is blank
   if(!saved){
     if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning 172.20.10.1–200 for JioTV Go…';jiotvLoginStatus.style.color='var(--gold)';}
     JioTVClient.discover(null).then(function(found){
@@ -1133,7 +944,6 @@ async function jiotvLoginAction(){
     var c=new JioTVClient({serverUrl:sv,timeout:12000});
     var alive=await c.checkStatus();
     if(!alive){
-      // Server reachable but not logged in — tell user to login on phone first
       if(jiotvLoginStatus){
         jiotvLoginStatus.textContent='⚠️ Server found but not logged in. Open http://'+sv.replace('http://','').replace('https://','').split(':')[0]+':5001 on your phone and login via OTP first.';
         jiotvLoginStatus.style.color='var(--gold)';
@@ -1166,7 +976,6 @@ async function loadJioChannels(){
 
 async function loadSavedJiotv(){
   var sv=lsGet('jiotv:server');
-  // Try saved URL first; if dead, auto-discover on 172.20.10.x
   try{
     if(sv){
       var c=new JioTVClient({serverUrl:sv,timeout:5000});
@@ -1177,7 +986,6 @@ async function loadSavedJiotv(){
         showToast('JioTV reconnected');saveMode();return true;
       }
     }
-    // Saved URL dead or missing — scan LAN silently
     showToast('JioTV: scanning LAN…');
     var found=await JioTVClient.discover(sv);
     if(found){
@@ -1209,13 +1017,11 @@ async function updateJioEpg(channelId){
 // ── Mode persistence ──────────────────────────────────────────────
 function saveMode(){
   if(jiotvMode)       lsSet('iptv:mode','jiotv');
-  else if(xtreamMode) lsSet('iptv:mode','xtream');
   else               {lsSet('iptv:mode','m3u');lsSet('iptv:lastM3uIndex',String(plIdx));}
 }
 async function loadMode(){
   var mode=lsGet('iptv:mode');
   if(mode==='jiotv'){var ok=await loadSavedJiotv();if(!ok){jiotvMode=false;fallbackM3u();}}
-  else if(mode==='xtream'){var ok2=await loadSavedXtream();if(!ok2){xtreamMode=false;fallbackM3u();}}
   else fallbackM3u();
 }
 function fallbackM3u(){
@@ -1241,7 +1047,6 @@ function fallbackM3u(){
   if(overlayBottom)overlayBottom.classList.remove('info-visible');
   overlaysVisible=false;
 
-  // Playlist modal
   if(addPlaylistBtn)    addPlaylistBtn.addEventListener('click',openAddPlaylistModal);
   if(savePlaylistBtn)   savePlaylistBtn.addEventListener('click',handleSavePlaylist);
   if(cancelPlaylistBtn) cancelPlaylistBtn.addEventListener('click',function(){playlistModal.style.display='none';});
@@ -1250,22 +1055,12 @@ function fallbackM3u(){
     if(el)el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)handleSavePlaylist();});
   });
 
-  // Xtream modal
-  if(xtreamLoginBtn)  xtreamLoginBtn.addEventListener('click',xtreamLogin);
-  if(xtreamCancelBtn) xtreamCancelBtn.addEventListener('click',function(){xtreamModal.style.display='none';setFocus('list');});
-  if(xtreamModal)     xtreamModal.addEventListener('click',function(e){if(e.target===xtreamModal){xtreamModal.style.display='none';setFocus('list');}});
-  [xtreamServerUrl,xtreamUsername,xtreamPassword].forEach(function(el){
-    if(el)el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)xtreamLogin();});
-  });
-
-  // JioTV modal
   if(jiotvLoginBtn)  jiotvLoginBtn.addEventListener('click',jiotvLoginAction);
   if(jiotvCancelBtn) jiotvCancelBtn.addEventListener('click',function(){jiotvModal.style.display='none';setFocus('list');});
   if(jiotvModal)     jiotvModal.addEventListener('click',function(e){if(e.target===jiotvModal){jiotvModal.style.display='none';setFocus('list');}});
   [jiotvServerUrl,jiotvUsername,jiotvPassword].forEach(function(el){
     if(el)el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)jiotvLoginAction();});
   });
-  // Scan LAN button
   var jiotvScanBtn=document.getElementById('jiotvScanBtn');
   if(jiotvScanBtn){
     jiotvScanBtn.addEventListener('click',function(){
@@ -1287,3 +1082,17 @@ function fallbackM3u(){
   video.addEventListener('pause',  stopEpgUpdater);
   video.addEventListener('ended',  stopEpgUpdater);
 })();
+
+// EPG updater (only JioTV remains)
+var epgInterval=null;
+function startEpgUpdater(){
+  if(epgInterval)clearInterval(epgInterval);
+  epgInterval=setInterval(function(){
+    if(video.paused)return;
+    if(jiotvMode){
+      var ch=filtered[selectedIndex];
+      if(ch&&ch.jioId)updateJioEpg(ch.jioId);
+    }
+  },30000);
+}
+function stopEpgUpdater(){if(epgInterval){clearInterval(epgInterval);epgInterval=null;}}
