@@ -68,14 +68,16 @@ var JioTVClient = (function () {
     });
   }
 
-  // ── Subnet list — 172.20.10 always first ─────────────────────
+  // ── Subnet list — 172.20.10 always FIRST, scan it completely before others ──
   function buildSubnets(detectedIp) {
+    // 172.20.10 is hardcoded first — user's confirmed subnet
     var list = ['172.20.10'];
     if (detectedIp) {
       var sub = detectedIp.split('.').slice(0, 3).join('.');
-      if (sub !== '172.20.10') list.unshift(sub);
+      // Add detected only if different
+      if (sub !== '172.20.10') list.push(sub);
     }
-    // Adjacent subnets + common fallbacks
+    // Common fallbacks — only reached if 172.20.10 scan finds nothing
     ['172.20.9','172.20.11','172.20.0','192.168.1','192.168.0','10.0.0']
       .forEach(function (s) { if (list.indexOf(s) === -1) list.push(s); });
     return list;
@@ -104,13 +106,13 @@ var JioTVClient = (function () {
     });
   }
 
-  // Full discovery: saved → WebRTC subnet → scan
+  // Full discovery: saved → WebRTC subnet → scan 1-200
   async function discoverServer(savedUrl) {
     if (savedUrl && await probe(savedUrl, 1500)) return savedUrl;
     var localIp = await getLocalIP();
     var subnets = buildSubnets(localIp);
     for (var s = 0; s < subnets.length; s++) {
-      var found = await scanSubnet(subnets[s], 50, 220, 30, 800);
+      var found = await scanSubnet(subnets[s], 1, 200, 30, 900);
       if (found) return found;
     }
     return null;

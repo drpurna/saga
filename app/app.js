@@ -1109,7 +1109,7 @@ function openJioLogin(){
 
   // Auto-discover if no saved URL or saved URL is blank
   if(!saved){
-    if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning LAN for JioTV Go…';jiotvLoginStatus.style.color='var(--gold)';}
+    if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning 172.20.10.1–200 for JioTV Go…';jiotvLoginStatus.style.color='var(--gold)';}
     JioTVClient.discover(null).then(function(found){
       if(found&&jiotvServerUrl&&!jiotvServerUrl.value){
         jiotvServerUrl.value=found;
@@ -1266,7 +1266,7 @@ function fallbackM3u(){
   var jiotvScanBtn=document.getElementById('jiotvScanBtn');
   if(jiotvScanBtn){
     jiotvScanBtn.addEventListener('click',function(){
-      if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning 172.20.10.x…';jiotvLoginStatus.style.color='var(--gold)';}
+      if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning 172.20.10.1–200…';jiotvLoginStatus.style.color='var(--gold)';}
       jiotvScanBtn.disabled=true;
       JioTVClient.discover(null).then(function(found){
         jiotvScanBtn.disabled=false;
