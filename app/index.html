@@ -47,7 +47,7 @@
       <div class="search-clear" id="searchClear">✕</div>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs (M3U + Favs + JioTV) -->
     <div class="tab-bar" id="tabBar"></div>
 
     <!-- List Header -->
@@ -178,38 +178,7 @@
   </div>
 </div>
 
-<!-- Xtream Codes -->
-<div id="xtreamLoginModal" class="modal">
-  <div class="modal-content">
-    <div class="modal-icon xtream-icon">
-      <svg viewBox="0 0 24 24" fill="none" width="26" height="26">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-        <path d="M2 12h5M17 12h5M12 2v5M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-    </div>
-    <h3>Xtream Codes</h3>
-    <div class="modal-field">
-      <label>Server URL</label>
-      <input type="url"      id="xtreamServerUrl" placeholder="http://server:port"   autocomplete="off"/>
-    </div>
-    <div class="modal-field">
-      <label>Username</label>
-      <input type="text"     id="xtreamUsername"  placeholder="Username"             autocomplete="off"/>
-    </div>
-    <div class="modal-field">
-      <label>Password</label>
-      <input type="password" id="xtreamPassword"  placeholder="Password"             autocomplete="off"/>
-    </div>
-    <div class="xtream-status"  id="xtreamLoginStatus"></div>
-    <div class="xtream-account" id="xtreamAccountInfo"></div>
-    <div class="modal-buttons">
-      <button id="xtreamLoginBtn"  class="btn-primary">Connect</button>
-      <button id="xtreamCancelBtn" class="btn-secondary">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- JioTV Go -->
+<!-- JioTV Go Modal -->
 <div id="jiotvLoginModal" class="modal">
   <div class="modal-content">
     <div class="modal-icon jiotv-icon">
@@ -241,7 +210,6 @@
 <div id="toast" class="toast"></div>
 
 <script src="shaka.js"></script>
-<script src="xtream.js"></script>
 <script src="jiotv.js"></script>
 <script src="app.js"></script>
 </body>
