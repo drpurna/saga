@@ -221,7 +221,10 @@
     <h3>JioTV Go</h3>
     <div class="modal-field">
       <label>JioTV Go Server URL</label>
-      <input type="url"      id="jiotvServerUrl" placeholder="http://192.168.1.x:5001" autocomplete="off"/>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="url" id="jiotvServerUrl" placeholder="http://172.20.10.x:5001" autocomplete="off" style="flex:1;"/>
+        <button id="jiotvScanBtn" class="btn-secondary" style="white-space:nowrap;padding:10px 14px;font-size:12px;">🔍 Scan</button>
+      </div>
     </div>
     <div class="modal-field">
       <label>Mobile Number <span class="lbl-opt">(optional if server logged in)</span></label>
@@ -232,8 +235,8 @@
       <input type="password" id="jiotvPassword"  placeholder="Jio password"             autocomplete="off"/>
     </div>
     <div class="jiotv-note">
-      Requires <strong>JioTV Go</strong> running on your LAN.<br/>
-      If the server is already signed in, just enter the URL and connect.
+      Requires <strong>JioTV Go v3.17+</strong> running on your LAN (port 5001).<br/>
+      If server is already signed in, just enter the URL and connect.
     </div>
     <div class="xtream-status"  id="jiotvLoginStatus"></div>
     <div class="xtream-account" id="jiotvAccountInfo"></div>

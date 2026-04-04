@@ -494,31 +494,64 @@ async function initShaka(){
   if(!shaka.Player.isBrowserSupported()){console.error('[SAGA] Shaka unsupported');return;}
   player=new shaka.Player(video);
   player.configure({
-    streaming:{bufferingGoal:12,rebufferingGoal:2,bufferBehind:20,stallEnabled:true,stallThreshold:1,stallSkip:0.1,autoCorrectDrift:true,gapDetectionThreshold:0.5,gapPadding:0.1,durationBackoff:1,retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:0.5,timeout:30000}},
+    streaming:{bufferingGoal:12,rebufferingGoal:2,bufferBehind:20,stallEnabled:true,stallThreshold:1,stallSkip:0.1,autoCorrectDrift:true,gapDetectionThreshold:0.5,gapPadding:0.1,durationBackoff:1,retryParameters:{maxAttempts:6,baseDelay:500,backoffFactor:2,fuzzFactor:0.5,timeout:30000}},
     abr:{enabled:true,defaultBandwidthEstimate:500000,switchInterval:8,bandwidthUpgradeTarget:0.85,bandwidthDowngradeTarget:0.95},
     manifest:{retryParameters:{maxAttempts:5,baseDelay:1000,backoffFactor:2}},
+    drm:{
+      retryParameters:{maxAttempts:4,baseDelay:500,backoffFactor:2,timeout:15000},
+      advanced:{'com.widevine.alpha':{videoRobustness:'HW_SECURE_ALL',audioRobustness:'HW_SECURE_CRYPTO'}},
+    },
   });
-  player.addEventListener('error',function(ev){var code=ev.detail&&ev.detail.code;setStatus(code>=7000&&code<=7999?'Network error':'Stream error','error');finishLoadBar();});
+  player.addEventListener('error',function(ev){
+    var err=ev.detail,code=err&&err.code;
+    var msg=code>=6000&&code<=6999?'DRM error':code>=7000&&code<=7999?'Network error':'Stream error';
+    console.error('[SAGA] Shaka error',code,err&&err.message);
+    setStatus(msg,'error');finishLoadBar();
+  });
   player.addEventListener('buffering',function(ev){if(ev.buffering){setStatus('Buffering...','loading');startLoadBar();}else{setStatus('Playing','playing');finishLoadBar();}});
   player.addEventListener('adaptation',updateChannelTech);
   player.addEventListener('variantchanged',updateChannelTech);
 }
 
-// ── Play ──────────────────────────────────────────────────────────
-async function doPlay(url){
+// ── DRM config builder ────────────────────────────────────────────
+function buildDrmConfig(info){
+  if(!info||!info.isDRM)return null;
+  var cfg={servers:{}};
+  if(info.drm_url){
+    cfg.servers['com.widevine.alpha']=info.drm_url;
+    cfg.advanced={'com.widevine.alpha':{videoRobustness:'HW_SECURE_ALL',audioRobustness:'HW_SECURE_CRYPTO'}};
+  }else if(info.key&&info.iv){
+    // ClearKey fallback
+    cfg.servers['org.w3.clearkey']='';
+    cfg.clearKeys={};
+    var kid=info.key_id||info.kid||info.key;
+    cfg.clearKeys[kid]=info.key;
+  }
+  return Object.keys(cfg.servers).length?cfg:null;
+}
+
+// ── Play — DRM-aware ──────────────────────────────────────────────
+var _currentStreamInfo=null;
+async function doPlay(url,streamInfo){
   if(!url)return;
-  currentPlayUrl=url;reconnectCount=0;
+  currentPlayUrl=url;reconnectCount=0;_currentStreamInfo=streamInfo||null;
   if(!player)await initShaka();if(!player)return;
+  var drmCfg=streamInfo?buildDrmConfig(streamInfo):null;
   try{
     await player.unload();video.removeAttribute('src');
+    if(drmCfg){player.configure({drm:drmCfg});console.log('[SAGA] DRM',Object.keys(drmCfg.servers));}
+    else{player.configure({drm:{servers:{}}});}
     await player.load(url);await video.play().catch(function(){});
     updateChannelTech();if(avSyncOffset!==0)setTimeout(applyAvSync,1500);startStallWatchdog();
   }catch(err){
+    console.warn('[SAGA] doPlay err:',err.message);
     if(url.endsWith('.ts')){
       try{var m3u=url.replace(/\.ts$/,'.m3u8');await player.unload();await player.load(m3u);await video.play().catch(function(){});currentPlayUrl=m3u;updateChannelTech();startStallWatchdog();return;}catch(e2){}
     }
-    try{await player.unload();video.src=url;video.load();await video.play().catch(function(){});startStallWatchdog();}
-    catch(e3){setStatus('Play error','error');finishLoadBar();stopStallWatchdog();}
+    if(!drmCfg){
+      try{await player.unload();video.src=url;video.load();await video.play().catch(function(){});startStallWatchdog();return;}catch(e3){}
+    }
+    setStatus('Play error','error');finishLoadBar();stopStallWatchdog();
   }
 }
 
@@ -554,9 +587,22 @@ async function startPreview(idx){
   }
   videoOverlay.classList.add('hidden');
   hasPlayed=true;setStatus('Buffering...','loading');startLoadBar();
-  await doPlay(ch.url);
-  if(xtreamMode)setTimeout(updateXtreamEpg,1200);
-  if(jiotvMode&&ch.jioId)setTimeout(function(){updateJioEpg(ch.jioId);},1200);
+
+  // JioTV: fetch DRM stream info first, then EPG simultaneously
+  if(jiotvMode&&ch.jioId&&jiotvClient){
+    try{
+      var info=await jiotvClient.getStreamInfo(ch.jioId);
+      var playUrl=info&&info.url?info.url:ch.url;
+      await doPlay(playUrl,info);
+      // EPG: fire and forget
+      setTimeout(function(){updateJioEpg(ch.jioId);},800);
+    }catch(e){
+      await doPlay(ch.url,null);
+    }
+  } else {
+    await doPlay(ch.url,null);
+    if(xtreamMode)setTimeout(updateXtreamEpg,1200);
+  }
 }
 function playSelected(){cancelPreview();startPreview(selectedIndex);}
 
@@ -695,15 +741,21 @@ window.addEventListener('keydown',function(e){
     if(k==='Escape'||k==='Back'||kc===KEY.BACK||kc===KEY.EXIT||kc===27){
       closeAllModals();e.preventDefault();return;
     }
-    // Let Enter activate the focused button inside the modal
+    // Enter on JioTV modal → always trigger login action
     if(k==='Enter'||kc===KEY.ENTER){
-      var focused=document.activeElement;
-      if(focused&&(focused.tagName==='BUTTON'||focused.tagName==='INPUT')){
-        // handled by the element's own event listener
-        return;
+      if(jiotvModal&&jiotvModal.style.display==='flex'){
+        jiotvLoginAction();e.preventDefault();return;
       }
+      if(xtreamModal&&xtreamModal.style.display==='flex'){
+        xtreamLogin();e.preventDefault();return;
+      }
+      if(playlistModal&&playlistModal.style.display==='flex'){
+        handleSavePlaylist();e.preventDefault();return;
+      }
+      var focused=document.activeElement;
+      if(focused&&focused.tagName==='BUTTON'){focused.click();e.preventDefault();return;}
     }
-    // Allow all other key presses to reach the text inputs
+    // Allow all other keys to reach text inputs
     return;
   }
 
@@ -1033,19 +1085,41 @@ async function updateXtreamEpg(){
 var epgInterval=null;
 function startEpgUpdater(){
   if(epgInterval)clearInterval(epgInterval);
-  epgInterval=setInterval(function(){if(!video.paused){if(xtreamMode)updateXtreamEpg();}},30000);
+  epgInterval=setInterval(function(){
+    if(video.paused)return;
+    if(xtreamMode)updateXtreamEpg();
+    else if(jiotvMode){
+      var ch=filtered[selectedIndex];
+      if(ch&&ch.jioId)updateJioEpg(ch.jioId);
+    }
+  },30000);
 }
 function stopEpgUpdater(){if(epgInterval){clearInterval(epgInterval);epgInterval=null;}}
 
 // ── JioTV ─────────────────────────────────────────────────────────
 function openJioLogin(){
-  if(jiotvServerUrl) jiotvServerUrl.value=lsGet('jiotv:server')||'';
+  var saved=lsGet('jiotv:server')||'';
+  if(jiotvServerUrl) jiotvServerUrl.value=saved;
   if(jiotvUsername)  jiotvUsername.value ='';
   if(jiotvPassword)  jiotvPassword.value ='';
-  if(jiotvLoginStatus) jiotvLoginStatus.textContent='';
+  if(jiotvLoginStatus){jiotvLoginStatus.textContent='';jiotvLoginStatus.style.color='';}
   if(jiotvAccountInfo) jiotvAccountInfo.textContent='';
   if(jiotvModal) jiotvModal.style.display='flex';
   setTimeout(function(){if(jiotvServerUrl)jiotvServerUrl.focus();},120);
+
+  // Auto-discover if no saved URL or saved URL is blank
+  if(!saved){
+    if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning LAN for JioTV Go…';jiotvLoginStatus.style.color='var(--gold)';}
+    JioTVClient.discover(null).then(function(found){
+      if(found&&jiotvServerUrl&&!jiotvServerUrl.value){
+        jiotvServerUrl.value=found;
+        if(jiotvLoginStatus){jiotvLoginStatus.textContent='✅ Found: '+found;jiotvLoginStatus.style.color='var(--green, #4caf50)';}
+      } else if(!found&&jiotvLoginStatus&&!jiotvServerUrl.value){
+        jiotvLoginStatus.textContent='⚠️ Not found. Enter URL manually.';
+        jiotvLoginStatus.style.color='var(--red)';
+      }
+    });
+  }
 }
 function storeJiotvCreds(s,u,p){lsSet('jiotv:server',s);lsSet('jiotv:username',u);lsSet('jiotv:password',p);}
 function clearJiotvCreds(){['jiotv:server','jiotv:username','jiotv:password'].forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});}
@@ -1088,16 +1162,32 @@ async function loadJioChannels(){
 }
 
 async function loadSavedJiotv(){
-  var sv=lsGet('jiotv:server');if(!sv)return false;
+  var sv=lsGet('jiotv:server');
+  // Try saved URL first; if dead, auto-discover on 172.20.10.x
   try{
-    var c=new JioTVClient({serverUrl:sv,timeout:10000});
-    var alive=await c.checkStatus();
-    if(alive){
-      jiotvClient=c;jiotvClient.logged_in=true;jiotvMode=true;
-      plIdx=TAB_JIOTV();rebuildTabs();await loadJioChannels();
-      showToast('JioTV reconnected');saveMode();return true;
+    if(sv){
+      var c=new JioTVClient({serverUrl:sv,timeout:5000});
+      var alive=await c.checkStatus();
+      if(alive){
+        jiotvClient=c;jiotvClient.logged_in=true;jiotvMode=true;
+        plIdx=TAB_JIOTV();rebuildTabs();await loadJioChannels();
+        showToast('JioTV reconnected');saveMode();return true;
+      }
     }
-  }catch(e){clearJiotvCreds();}
+    // Saved URL dead or missing — scan LAN silently
+    showToast('JioTV: scanning LAN…');
+    var found=await JioTVClient.discover(sv);
+    if(found){
+      lsSet('jiotv:server',found);
+      var c2=new JioTVClient({serverUrl:found,timeout:10000});
+      var alive2=await c2.checkStatus();
+      if(alive2){
+        jiotvClient=c2;jiotvClient.logged_in=true;jiotvMode=true;
+        plIdx=TAB_JIOTV();rebuildTabs();await loadJioChannels();
+        showToast('JioTV found: '+found);saveMode();return true;
+      }
+    }
+  }catch(e){console.warn('[JioTV] loadSaved error:',e.message);}
   return false;
 }
 
@@ -1172,6 +1262,23 @@ function fallbackM3u(){
   [jiotvServerUrl,jiotvUsername,jiotvPassword].forEach(function(el){
     if(el)el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)jiotvLoginAction();});
   });
+  // Scan LAN button
+  var jiotvScanBtn=document.getElementById('jiotvScanBtn');
+  if(jiotvScanBtn){
+    jiotvScanBtn.addEventListener('click',function(){
+      if(jiotvLoginStatus){jiotvLoginStatus.textContent='🔍 Scanning 172.20.10.x…';jiotvLoginStatus.style.color='var(--gold)';}
+      jiotvScanBtn.disabled=true;
+      JioTVClient.discover(null).then(function(found){
+        jiotvScanBtn.disabled=false;
+        if(found){
+          if(jiotvServerUrl)jiotvServerUrl.value=found;
+          if(jiotvLoginStatus){jiotvLoginStatus.textContent='✅ Found: '+found;jiotvLoginStatus.style.color='var(--green,#4caf50)';}
+        }else{
+          if(jiotvLoginStatus){jiotvLoginStatus.textContent='❌ Not found. Enter manually.';jiotvLoginStatus.style.color='var(--red)';}
+        }
+      });
+    });
+  }
 
   video.addEventListener('playing',startEpgUpdater);
   video.addEventListener('pause',  stopEpgUpdater);
