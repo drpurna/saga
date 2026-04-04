@@ -134,10 +134,14 @@ var JioTVClient = (function () {
   JioTVClient.probe    = probe;
 
   // ── Auth ─────────────────────────────────────────────────────
+  // v3.17: checkStatus is unreliable — use /channels as truth
   P.checkStatus = async function () {
     try {
-      var d = await fetchJSON(this.serverUrl + '/checkStatus', null, this.timeout);
-      this.logged_in = !!(d && (d.status === true || d.status === 'true'));
+      var d = await fetchJSON(this.serverUrl + '/channels', null, 8000);
+      // If we get a result array (even empty), server is up and logged in
+      var list = (d && Array.isArray(d.result)) ? d.result
+               : Array.isArray(d) ? d : null;
+      this.logged_in = list !== null;
     } catch (e) { this.logged_in = false; }
     return this.logged_in;
   };

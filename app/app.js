@@ -1126,8 +1126,6 @@ function clearJiotvCreds(){['jiotv:server','jiotv:username','jiotv:password'].fo
 
 async function jiotvLoginAction(){
   var sv=(jiotvServerUrl?jiotvServerUrl.value:'').trim();
-  var un=(jiotvUsername ?jiotvUsername.value :'').trim();
-  var pw=(jiotvPassword ?jiotvPassword.value :'').trim();
   if(!sv){if(jiotvLoginStatus){jiotvLoginStatus.textContent='Server URL required';jiotvLoginStatus.style.color='var(--red)';}return;}
   if(jiotvLoginBtn)jiotvLoginBtn.disabled=true;
   if(jiotvLoginStatus){jiotvLoginStatus.textContent='Connecting…';jiotvLoginStatus.style.color='var(--gold)';}
@@ -1135,11 +1133,16 @@ async function jiotvLoginAction(){
     var c=new JioTVClient({serverUrl:sv,timeout:12000});
     var alive=await c.checkStatus();
     if(!alive){
-      if(!un||!pw)throw new Error('Server not signed in — enter credentials');
-      await c.login(un,pw);
+      // Server reachable but not logged in — tell user to login on phone first
+      if(jiotvLoginStatus){
+        jiotvLoginStatus.textContent='⚠️ Server found but not logged in. Open http://'+sv.replace('http://','').replace('https://','').split(':')[0]+':5001 on your phone and login via OTP first.';
+        jiotvLoginStatus.style.color='var(--gold)';
+      }
+      if(jiotvLoginBtn)jiotvLoginBtn.disabled=false;
+      return;
     }
     jiotvClient=c;jiotvClient.logged_in=true;jiotvMode=true;
-    storeJiotvCreds(sv,un,pw);
+    lsSet('jiotv:server',sv);
     if(jiotvAccountInfo)jiotvAccountInfo.textContent='✅ Connected to '+sv;
     if(jiotvLoginStatus){jiotvLoginStatus.textContent='Loading channels…';jiotvLoginStatus.style.color='var(--gold)';}
     plIdx=TAB_JIOTV();rebuildTabs();
