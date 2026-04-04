@@ -1,7 +1,6 @@
 // ================================================================
-// SAGA IPTV — app.js v24.0  |  Samsung Tizen OS9  |  BN59-01199F
-// Tab order: M3U… | ★ Favs | JioTV
-// focusArea: 'tabs' | 'list' | 'ar' | 'search'
+// SAGA IPTV — app.js v25.0  |  Samsung Tizen OS9
+// No aspect ratio button, enlarged playlist button, modal focus fixed
 // ================================================================
 'use strict';
 
@@ -14,13 +13,6 @@ const PREVIEW_DELAY        = 550;
 const DEFAULT_PLAYLISTS = [
   { name: 'Telugu', url: 'https://iptv-org.github.io/iptv/languages/tel.m3u' },
   { name: 'India',  url: 'https://iptv-org.github.io/iptv/countries/in.m3u'  },
-];
-
-const AR_MODES = [
-  { cls: '',         label: 'Native' },
-  { cls: 'ar-fill',  label: 'Fill'   },
-  { cls: 'ar-cover', label: 'Crop'   },
-  { cls: 'ar-wide',  label: 'Wide'   },
 ];
 
 // ── Samsung BN59-01199F key codes ─────────────────────────────────
@@ -46,8 +38,8 @@ function TAB_TOTAL()  { return allPlaylists.length + 2; }
 // ── Playlists ─────────────────────────────────────────────────────
 let allPlaylists    = [];
 let customPlaylists = [];
-let plIdx           = 0;   // active tab index
-let lastM3uIndex    = 0;   // last M3U tab visited, for returning from JioTV
+let plIdx           = 0;
+let lastM3uIndex    = 0;
 
 // ── AV Sync ───────────────────────────────────────────────────────
 let avSyncOffset = 0, avSyncLabel = null;
@@ -78,7 +70,6 @@ const fsHint             = document.getElementById('fsHint');
 const loadBar            = document.getElementById('loadBar');
 const chDialer           = document.getElementById('chDialer');
 const chDialerNum        = document.getElementById('chDialerNum');
-const arBtn              = document.getElementById('arBtn');
 const addPlaylistBtn     = document.getElementById('addPlaylistBtn');
 const playlistModal      = document.getElementById('addPlaylistModal');
 const playlistNameEl     = document.getElementById('playlistName');
@@ -112,7 +103,7 @@ let selectedIndex = 0;
 let focusArea = 'list';
 let tabFocusIdx = 0;
 let isFullscreen = false, hasPlayed = false;
-let player = null, arIdx = 0, preFullscreenArMode = null;
+let player = null;
 let fsHintTimer = null, loadBarTimer = null, previewTimer = null;
 let dialBuffer = '', dialTimer = null;
 let favSet = new Set();
@@ -539,19 +530,6 @@ async function doPlay(url,streamInfo){
   }
 }
 
-// ── Aspect ratio ──────────────────────────────────────────────────
-var AR_ICON='<svg viewBox="0 0 24 24" fill="none" width="13" height="13"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/></svg> ';
-function resetAspectRatio(){video.classList.remove('ar-fill','ar-cover','ar-wide');video.style.objectFit='';arIdx=0;arBtn.innerHTML=AR_ICON+'Native';arBtn.className='ar-btn';}
-function cycleAR(){
-  video.classList.remove('ar-fill','ar-cover','ar-wide');video.style.objectFit='';
-  arIdx=(arIdx+1)%AR_MODES.length;var m=AR_MODES[arIdx];
-  if(m.cls)video.classList.add(m.cls);
-  arBtn.innerHTML=AR_ICON+m.label;arBtn.className='ar-btn'+(m.cls?' '+m.cls:'');
-  showToast('Aspect: '+m.label);
-}
-arBtn.addEventListener('click',cycleAR);
-function setARFocus(on){arBtn.classList.toggle('focused',on);}
-
 // ── Preview ───────────────────────────────────────────────────────
 function cancelPreview(){clearTimeout(previewTimer);previewTimer=null;}
 function schedulePreview(){cancelPreview();previewTimer=setTimeout(function(){previewTimer=null;startPreview(selectedIndex);},PREVIEW_DELAY);}
@@ -559,7 +537,6 @@ async function startPreview(idx){
   if(!filtered.length)return;
   var ch=filtered[idx];if(!ch)return;
   if(overlayTop&&overlayBottom&&overlaysVisible){overlayTop.classList.remove('info-visible');overlayBottom.classList.remove('info-visible');overlaysVisible=false;}
-  resetAspectRatio();
   nowPlayingEl.textContent=ch.name;
   if(overlayChannelName)overlayChannelName.textContent=ch.name;
   if(npChNumEl)npChNumEl.textContent='CH '+(idx+1);
@@ -572,7 +549,6 @@ async function startPreview(idx){
   videoOverlay.classList.add('hidden');
   hasPlayed=true;setStatus('Buffering...','loading');startLoadBar();
 
-  // JioTV: fetch DRM stream info first, then EPG simultaneously
   if(jiotvMode&&ch.jioId&&jiotvClient){
     try{
       var info=await jiotvClient.getStreamInfo(ch.jioId);
@@ -600,17 +576,11 @@ video.addEventListener('ended',  function(){setStatus('Ended','idle');stopStallW
 function showFsHint(){clearTimeout(fsHintTimer);fsHint.classList.add('visible');fsHintTimer=setTimeout(function(){fsHint.classList.remove('visible');},3000);}
 function applyExitFSState(){
   document.body.classList.remove('fullscreen');isFullscreen=false;fsHint.classList.remove('visible');
-  if(preFullscreenArMode!==null){
-    video.style.objectFit='';var rm=preFullscreenArMode;preFullscreenArMode=null;
-    var m=AR_MODES[rm];video.classList.remove('ar-fill','ar-cover','ar-wide');if(m.cls)video.classList.add(m.cls);
-    arIdx=rm;arBtn.innerHTML=AR_ICON+m.label;arBtn.className='ar-btn'+(m.cls?' '+m.cls:'');
-  }
 }
 function enterFS(){
   var fn=videoWrap.requestFullscreen||videoWrap.webkitRequestFullscreen||videoWrap.mozRequestFullScreen;
   if(fn)try{fn.call(videoWrap);}catch(e){}
-  document.body.classList.add('fullscreen');isFullscreen=true;preFullscreenArMode=arIdx;
-  video.style.objectFit='fill';arIdx=1;arBtn.innerHTML=AR_ICON+'Fill';arBtn.className='ar-btn ar-fill';
+  document.body.classList.add('fullscreen');isFullscreen=true;
   if(overlayTop)overlayTop.classList.remove('info-visible');
   if(overlayBottom)overlayBottom.classList.remove('info-visible');
   overlaysVisible=false;showFsHint();
@@ -652,7 +622,6 @@ function getDigit(e){
 // ── Focus management ──────────────────────────────────────────────
 function setFocus(a){
   focusArea=a;
-  setARFocus(a==='ar');
   tabBar.classList.toggle('tab-bar-focused',a==='tabs');
   if(a==='search'){searchWrap.classList.add('active');searchInput.focus();}
   else{searchWrap.classList.remove('active');if(document.activeElement===searchInput)searchInput.blur();}
@@ -739,7 +708,6 @@ window.addEventListener('keydown',function(e){
 
   if(k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27){
     if(isFullscreen)          {exitFS();e.preventDefault();return;}
-    if(focusArea==='ar')      {setFocus('list');e.preventDefault();return;}
     if(focusArea==='tabs')    {setFocus('list');e.preventDefault();return;}
     if(focusArea==='search')  {clearSearch();e.preventDefault();return;}
     try{if(window.tizen)tizen.application.getCurrentApplication().exit();}catch(e2){}
@@ -754,13 +722,6 @@ window.addEventListener('keydown',function(e){
     if(k==='Enter'||kc===KEY.ENTER)     {activateFocusedTab();e.preventDefault();return;}
     if(k==='ArrowDown'||kc===KEY.DOWN)  {setFocus('list');e.preventDefault();return;}
     if(k==='ArrowUp'||kc===KEY.UP)      {e.preventDefault();return;}
-    e.preventDefault();return;
-  }
-
-  if(focusArea==='ar'){
-    if(k==='Enter'||kc===KEY.ENTER){cycleAR();e.preventDefault();return;}
-    if(k==='ArrowLeft'||kc===KEY.LEFT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}
-    if(k==='ArrowRight'||kc===KEY.RIGHT||k==='ArrowUp'||kc===KEY.UP) {cycleAR();e.preventDefault();return;}
     e.preventDefault();return;
   }
 
@@ -780,9 +741,11 @@ window.addEventListener('keydown',function(e){
     e.preventDefault();return;
   }
 
+  // Right key now does nothing (no AR button)
   if(k==='ArrowRight'||kc===KEY.RIGHT){
     if(isFullscreen){showFsHint();e.preventDefault();return;}
-    setFocus('ar');e.preventDefault();return;
+    // Removed AR focus mode
+    e.preventDefault();return;
   }
 
   if(k==='Enter'||kc===KEY.ENTER){
@@ -851,11 +814,8 @@ function rebuildAllPlaylists(){
 }
 
 // ── Tab builder ───────────────────────────────────────────────────
-// Order: M3U playlists | ★ Favs | JioTV
 function rebuildTabs(){
   tabBar.innerHTML='';
-  var totalTabs=TAB_TOTAL();
-
   for(var i=0;i<allPlaylists.length;i++){
     var btn=document.createElement('button');
     btn.className='tab';
@@ -885,7 +845,6 @@ function rebuildTabs(){
   if(focusArea==='tabs') syncTabHighlight();
 }
 
-// ── switchTab ────────────────────────────────────────────────────
 function switchTab(idx){
   var tFav=TAB_FAV(), tJ=TAB_JIOTV();
 
@@ -932,8 +891,6 @@ function openJioLogin(){
     });
   }
 }
-function storeJiotvCreds(s,u,p){lsSet('jiotv:server',s);lsSet('jiotv:username',u);lsSet('jiotv:password',p);}
-function clearJiotvCreds(){['jiotv:server','jiotv:username','jiotv:password'].forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});}
 
 async function jiotvLoginAction(){
   var sv=(jiotvServerUrl?jiotvServerUrl.value:'').trim();
@@ -1014,7 +971,6 @@ async function updateJioEpg(channelId){
   }catch(e){}
 }
 
-// ── Mode persistence ──────────────────────────────────────────────
 function saveMode(){
   if(jiotvMode)       lsSet('iptv:mode','jiotv');
   else               {lsSet('iptv:mode','m3u');lsSet('iptv:lastM3uIndex',String(plIdx));}
@@ -1083,7 +1039,6 @@ function fallbackM3u(){
   video.addEventListener('ended',  stopEpgUpdater);
 })();
 
-// EPG updater (only JioTV remains)
 var epgInterval=null;
 function startEpgUpdater(){
   if(epgInterval)clearInterval(epgInterval);
