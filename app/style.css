@@ -311,3 +311,22 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 
 /* Toast */
 .toast { position:fixed; bottom:42px; left:50%; transform:translateX(-50%); background:rgba(8,8,22,0.97); border:1.5px solid rgba(255,255,255,0.16); color:#fff; font-family:var(--font-ui); font-size:17px; font-weight:800; padding:14px 32px; border-radius:36px; z-index:30000; pointer-events:none; opacity:0; transition:opacity 0.22s ease; white-space:nowrap; backdrop-filter:blur(14px); box-shadow:0 10px 40px rgba(0,0,0,0.65); }
+
+/* ── Premium smoothness additions ─────────────────────────────── */
+/* GPU-composited transitions on interactive elements */
+.tab, .jp-filter, .jp-tile, .icon-btn, .btn-primary, .btn-jiotv, .btn-secondary, .btn-scan, .av-btn, .jp-exit-btn, .jp-pl-back {
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  will-change: transform;
+}
+/* Smooth portal show/hide */
+.jiotv-portal { animation: portalIn 0.22s cubic-bezier(0.25,1,0.5,1) both; }
+@keyframes portalIn { from { opacity:0; transform:scale(0.985); } to { opacity:1; transform:scale(1); } }
+/* Smooth tile focus glow */
+.jp-tile { transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease, background 0.12s ease; }
+.jp-tile.focused { transition: border-color 0.10s ease, box-shadow 0.10s ease, transform 0.10s ease, background 0.10s ease; }
+/* Player overlay fade */
+.jp-player-overlay { transition: opacity 0.25s ease; }
+/* Stall watchdog visual indicator */
+@keyframes reconnecting { 0%,100%{border-color:var(--gold)} 50%{border-color:transparent} }
+.status-badge.loading { animation: pulse-badge 1s ease-in-out infinite, reconnecting 1.4s ease-in-out infinite; }
