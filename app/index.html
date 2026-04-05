@@ -294,9 +294,55 @@
   </div>
 </div>
 
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" width="30" height="30">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="2"/>
+      </svg>
+    </div>
+    <h3>Settings</h3>
+
+    <div class="modal-field">
+      <label>Sleep Timer</label>
+      <select id="settingsSleepSelect" class="settings-select">
+        <option value="0">Off</option>
+        <option value="15">15 minutes</option>
+        <option value="30">30 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="90">90 minutes</option>
+        <option value="120">2 hours</option>
+      </select>
+    </div>
+
+    <div class="modal-field">
+      <label>Audio Track</label>
+      <button id="settingsAudioTrack" class="btn-secondary" style="width:100%;">Cycle Audio Track</button>
+    </div>
+
+    <div class="modal-field">
+      <label>AV Sync</label>
+      <button id="settingsAVReset" class="btn-secondary" style="width:100%;">Reset AV Sync to 0</button>
+    </div>
+
+    <div class="modal-field">
+      <label>Cache</label>
+      <button id="settingsCacheBtn" class="btn-secondary" style="width:100%;">Clear All Cache</button>
+    </div>
+
+    <div class="modal-buttons">
+      <button id="settingsCloseBtn" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="cache.js"></script>
+<script src="player.js"></script>
 <script src="shaka.js"></script>
 <script src="jiotv.js"></script>
 <script src="app.js"></script>

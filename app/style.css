@@ -330,3 +330,14 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 /* Stall watchdog visual indicator */
 @keyframes reconnecting { 0%,100%{border-color:var(--gold)} 50%{border-color:transparent} }
 .status-badge.loading { animation: pulse-badge 1s ease-in-out infinite, reconnecting 1.4s ease-in-out infinite; }
+
+/* ── Settings modal select ───────────────────────────────────── */
+.settings-select {
+  width:100%; height:58px; padding:0 18px;
+  background:var(--panel2); border:1.5px solid var(--border2);
+  border-radius:14px; color:var(--text);
+  font-family:var(--font-ui); font-size:18px; font-weight:700;
+  cursor:pointer; -webkit-appearance:none; appearance:none;
+  transition:all 0.2s;
+}
+.settings-select:focus { border-color:var(--accent); background:var(--panel3); box-shadow:0 0 0 4px var(--accent-glow); outline:none; }
