@@ -3,18 +3,16 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-  <meta name="theme-color" content="#070709"/>
-  <title>SAGA IPTV · 2025 Edition</title>
+  <title>SAGA IPTV</title>
   <link rel="stylesheet" href="style.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@600;700;800;900&family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="preload" href="shaka.js" as="script">
-  <link rel="preload" href="player.js" as="script">
-  <link rel="preload" href="app.js" as="script">
 </head>
 <body>
 
-<!-- MAIN APP (M3U mode) -->
+<!-- ══ MAIN APP (M3U mode) ══════════════════════════════════════ -->
 <div class="app" id="appMain">
+
+  <!-- SIDEBAR -->
   <div class="sidebar">
     <div class="brand">
       <div class="brand-logo">
@@ -69,12 +67,12 @@
       <span class="hint-item"><span class="hint-btn yellow"></span>Search</span>
       <span class="hint-item"><span class="hint-btn blue"></span>Full</span>
       <span class="hint-item">0–9 Dial</span>
-      <span class="hint-item"><span class="hint-btn" style="background:#f5c842;"></span>AV Sync</span>
     </div>
   </div>
 
+  <!-- PLAYER AREA -->
   <div class="player-area">
-    <div class="player-header">
+    <div class="player-header" id="playerHeader">
       <div class="now-playing-wrap">
         <div class="now-playing-label">NOW PLAYING</div>
         <div class="now-playing" id="nowPlaying">Select a channel</div>
@@ -88,6 +86,7 @@
 
     <div class="video-wrap" id="videoWrap">
       <video id="video" playsinline autoplay></video>
+
       <div class="video-overlay" id="videoOverlay">
         <div class="overlay-icon">
           <svg viewBox="0 0 80 80" fill="none" width="80" height="80">
@@ -99,12 +98,14 @@
           Press <strong>OK</strong> to play · <span>▲▼ browse · 0–9 dial · ★ fav · INFO overlay</span>
         </div>
       </div>
+
       <div class="overlay-top" id="overlayTop">
         <div class="time-date">
           <span id="currentTime">--:--</span>
           <span id="currentDate"></span>
         </div>
       </div>
+
       <div class="overlay-bottom" id="overlayBottom">
         <div class="channel-details">
           <div class="channel-name" id="overlayChannelName"></div>
@@ -116,6 +117,7 @@
           <div class="next-program" id="nextProgramInfo"></div>
         </div>
       </div>
+
       <div class="fs-hint" id="fsHint">← Back / OK exits fullscreen</div>
     </div>
 
@@ -126,8 +128,10 @@
   </div>
 </div>
 
-<!-- JIOTV PORTAL -->
+<!-- ══ JIOTV PORTAL ═════════════════════════════════════════════ -->
 <div class="jiotv-portal" id="jiotvPortal" style="display:none">
+
+  <!-- Portal Header -->
   <div class="jp-header">
     <div class="jp-logo">
       <svg viewBox="0 0 24 24" fill="none" width="24" height="24">
@@ -136,8 +140,37 @@
       </svg>
       JioTV Go
     </div>
-    <div class="jp-filters" id="jpFilters"></div>
-    <div class="jp-filters jp-lang-filters" id="jpLangFilters"></div>
+
+    <!-- Filter row -->
+    <div class="jp-filters" id="jpFilters">
+      <button class="jp-filter active" data-filter="all" data-type="cat">All</button>
+      <button class="jp-filter" data-filter="Entertainment" data-type="cat">Entertainment</button>
+      <button class="jp-filter" data-filter="Movies" data-type="cat">Movies</button>
+      <button class="jp-filter" data-filter="Sports" data-type="cat">Sports</button>
+      <button class="jp-filter" data-filter="News" data-type="cat">News</button>
+      <button class="jp-filter" data-filter="Music" data-type="cat">Music</button>
+      <button class="jp-filter" data-filter="Kids" data-type="cat">Kids</button>
+      <button class="jp-filter" data-filter="Infotainment" data-type="cat">Info</button>
+      <button class="jp-filter" data-filter="Devotional" data-type="cat">Devotional</button>
+      <button class="jp-filter" data-filter="Business" data-type="cat">Business</button>
+      <button class="jp-filter" data-filter="Lifestyle" data-type="cat">Lifestyle</button>
+    </div>
+
+    <!-- Language filter row -->
+    <div class="jp-filters jp-lang-filters" id="jpLangFilters">
+      <button class="jp-filter jp-lang active" data-filter="all" data-type="lang">All Languages</button>
+      <button class="jp-filter jp-lang" data-filter="Hindi" data-type="lang">Hindi</button>
+      <button class="jp-filter jp-lang" data-filter="Telugu" data-type="lang">Telugu</button>
+      <button class="jp-filter jp-lang" data-filter="Tamil" data-type="lang">Tamil</button>
+      <button class="jp-filter jp-lang" data-filter="English" data-type="lang">English</button>
+      <button class="jp-filter jp-lang" data-filter="Malayalam" data-type="lang">Malayalam</button>
+      <button class="jp-filter jp-lang" data-filter="Kannada" data-type="lang">Kannada</button>
+      <button class="jp-filter jp-lang" data-filter="Bengali" data-type="lang">Bengali</button>
+      <button class="jp-filter jp-lang" data-filter="Marathi" data-type="lang">Marathi</button>
+      <button class="jp-filter jp-lang" data-filter="Gujarati" data-type="lang">Gujarati</button>
+      <button class="jp-filter jp-lang" data-filter="Punjabi" data-type="lang">Punjabi</button>
+    </div>
+
     <div class="jp-header-right">
       <div class="jp-search-wrap">
         <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
@@ -155,17 +188,25 @@
       </button>
     </div>
   </div>
+
+  <!-- Channel count -->
   <div class="jp-count" id="jpCount">Loading channels…</div>
+
+  <!-- Grid -->
   <div class="jp-grid" id="jpGrid"></div>
+
+  <!-- Now Playing bar (bottom) -->
   <div class="jp-now-bar" id="jpNowBar" style="display:none">
     <div class="jp-nb-thumb" id="jpNbThumb"></div>
     <div class="jp-nb-info">
       <div class="jp-nb-name" id="jpNbName"></div>
       <div class="jp-nb-epg" id="jpNbEpg"></div>
     </div>
-    <div class="jp-nb-status">● PLAYING</div>
+    <div class="jp-nb-status" id="jpNbStatus">● PLAYING</div>
     <div class="jp-nb-tech" id="jpNbTech"></div>
   </div>
+
+  <!-- Fullscreen video layer (JioTV) -->
   <div class="jp-player-layer" id="jpPlayerLayer" style="display:none">
     <video id="jpVideo" playsinline autoplay></video>
     <div class="jp-player-overlay" id="jpPlayerOverlay">
@@ -190,10 +231,13 @@
         <div class="jp-pl-tech" id="jpPlTech"></div>
       </div>
     </div>
+    <div class="jp-fs-hint" id="jpFsHint">Back to grid</div>
   </div>
 </div>
 
-<!-- MODALS -->
+<!-- ══ MODALS ════════════════════════════════════════════════════ -->
+
+<!-- Add Playlist -->
 <div id="addPlaylistModal" class="modal">
   <div class="modal-content">
     <div class="modal-icon">
@@ -220,6 +264,7 @@
   </div>
 </div>
 
+<!-- JioTV Connect Modal -->
 <div id="jiotvLoginModal" class="modal">
   <div class="modal-content">
     <div class="modal-icon jiotv-icon">
@@ -238,6 +283,7 @@
     </div>
     <div class="jiotv-note">
       Start <strong>JioTV Go v3.17+</strong> on your phone and <strong>log in via OTP</strong> first.
+      No credentials needed here — this app connects directly to your phone's session.
     </div>
     <div class="modal-status" id="jiotvLoginStatus"></div>
     <div class="modal-account" id="jiotvAccountInfo"></div>
@@ -248,12 +294,57 @@
   </div>
 </div>
 
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-icon">
+      <svg viewBox="0 0 24 24" fill="none" width="30" height="30">
+        <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" stroke="currentColor" stroke-width="2"/>
+      </svg>
+    </div>
+    <h3>Settings</h3>
+
+    <div class="modal-field">
+      <label>Sleep Timer</label>
+      <select id="settingsSleepSelect" class="settings-select">
+        <option value="0">Off</option>
+        <option value="15">15 minutes</option>
+        <option value="30">30 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="90">90 minutes</option>
+        <option value="120">2 hours</option>
+      </select>
+    </div>
+
+    <div class="modal-field">
+      <label>Audio Track</label>
+      <button id="settingsAudioTrack" class="btn-secondary" style="width:100%;">Cycle Audio Track</button>
+    </div>
+
+    <div class="modal-field">
+      <label>AV Sync</label>
+      <button id="settingsAVReset" class="btn-secondary" style="width:100%;">Reset AV Sync to 0</button>
+    </div>
+
+    <div class="modal-field">
+      <label>Cache</label>
+      <button id="settingsCacheBtn" class="btn-secondary" style="width:100%;">Clear All Cache</button>
+    </div>
+
+    <div class="modal-buttons">
+      <button id="settingsCloseBtn" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
-<script src="shaka.js"></script>
 <script src="cache.js"></script>
-<script src="jiotv.js"></script>
 <script src="player.js"></script>
+<script src="shaka.js"></script>
+<script src="jiotv.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
