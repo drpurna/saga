@@ -266,22 +266,22 @@
     </div>
     <h3>JioTV Go</h3>
     <div class="modal-field">
-      <label>Server URL</label>
-      <div class="modal-scan-row">
-        <input type="url" id="jiotvServerUrl" placeholder="http://172.20.10.2:5001" autocomplete="off" value="http://172.20.10.2:5001"/>
-        <button id="jiotvScanBtn" class="btn-scan">🔍 Scan</button>
-      </div>
+      <label>Server</label>
+      <input type="text" id="jiotvServerUrl" value="http://172.20.10.2:5001" disabled style="opacity:0.7;"/>
     </div>
     <div class="jiotv-note">
-      Start <strong>JioTV Go v3.17+</strong> on your phone and <strong>log in via OTP</strong> first.
-      No credentials needed here — this app connects directly to your phone's session.
+      Make sure <strong>JioTV Go v3.17+</strong> is running on your Android phone<br/>
+      connected to the <strong>same hotspot/IP 172.20.10.2:5001</strong>.<br/>
+      No login credentials needed — this app connects directly.
     </div>
     <div class="modal-status" id="jiotvLoginStatus"></div>
     <div class="modal-account" id="jiotvAccountInfo"></div>
     <div class="modal-buttons">
-      <button id="jiotvConnectBtn" class="btn-jiotv">Connect</button>
+      <button id="jiotvConnectBtn" class="btn-jiotv">Connect to JioTV</button>
       <button id="jiotvCancelBtn" class="btn-secondary">Cancel</button>
     </div>
+  </div>
+</div>
   </div>
 </div>
 
