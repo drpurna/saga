@@ -1,10 +1,12 @@
 // ================================================================
-// SAGA IPTV — jiotv.js v5.1  |  Tizen OS9
-// JioTV Go v3.17+ · Robust probing · EPG backoff · Privacy-safe
+// SAGA IPTV — jiotv.js v5.2  |  Tizen OS9
+// JioTV Go v3.17+ · Direct IP 172.20.10.2:5001 as fallback
 // ================================================================
 'use strict';
 
 var JioTVClient = (function () {
+
+  var DEFAULT_JIOTV_SERVER = 'http://172.20.10.2:5001';
 
   var CATEGORY_MAP = {
     1:'Entertainment', 2:'Movies',      3:'Kids',      4:'Sports',
@@ -13,7 +15,6 @@ var JioTVClient = (function () {
     16:'Regional',     17:'Shopping',   18:'Comedy',   19:'Drama',
   };
 
-  // ── XHR with abort ────────────────────────────────────────────
   function fetchJSON(url, opts, timeout) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
@@ -40,7 +41,6 @@ var JioTVClient = (function () {
     });
   }
 
-  // ── Probe ─────────────────────────────────────────────────────
   function probe(baseUrl, timeout) {
     return new Promise(function (resolve) {
       if (!baseUrl || typeof baseUrl !== 'string') { resolve(false); return; }
@@ -59,7 +59,6 @@ var JioTVClient = (function () {
     });
   }
 
-  // ── WebRTC IP sniff ───────────────────────────────────────────
   function getLocalIP() {
     return new Promise(function (resolve) {
       try {
@@ -78,7 +77,6 @@ var JioTVClient = (function () {
     });
   }
 
-  // ── Subnet list ───────────────────────────────────────────────
   function buildSubnets(ip) {
     var primary = '172.20.10';
     var list    = [primary];
@@ -115,6 +113,7 @@ var JioTVClient = (function () {
 
   async function discoverServer(savedUrl) {
     if (savedUrl && await probe(savedUrl, 2000)) return savedUrl;
+    if (await probe(DEFAULT_JIOTV_SERVER, 2000)) return DEFAULT_JIOTV_SERVER;
     var localIp = await getLocalIP();
     var subnets  = buildSubnets(localIp);
     for (var s = 0; s < subnets.length; s++) {
@@ -124,27 +123,25 @@ var JioTVClient = (function () {
     return null;
   }
 
-  // ── Constructor ───────────────────────────────────────────────
   function JioTVClient(opts) {
     if (!opts || !opts.serverUrl) throw new Error('serverUrl required');
     this.serverUrl = opts.serverUrl.replace(/\/+$/, '');
     this.timeout   = (opts.timeout > 0 ? opts.timeout : 12000);
     this.logged_in = false;
     this._cache    = null;
-    this._epgFailCount = 0;  // backoff counter
+    this._epgFailCount = 0;
   }
 
   var P = JioTVClient.prototype;
   JioTVClient.discover = discoverServer;
   JioTVClient.probe    = probe;
+  JioTVClient.DEFAULT_SERVER = DEFAULT_JIOTV_SERVER;
 
-  // ── Status check ─────────────────────────────────────────────
   P.checkStatus = async function () {
     var result = { status: false, channelCount: 0, reason: '' };
     try {
       var d    = await fetchJSON(this.serverUrl + '/channels', null, 8000);
-      var list = Array.isArray(d) ? d
-               : (d && Array.isArray(d.result)) ? d.result : null;
+      var list = Array.isArray(d) ? d : (d && Array.isArray(d.result)) ? d.result : null;
       if (list !== null) {
         this.logged_in = true; this._cache = list;
         result.status = true; result.channelCount = list.length;
@@ -158,7 +155,6 @@ var JioTVClient = (function () {
     return result;
   };
 
-  // ── Channels ──────────────────────────────────────────────────
   P.getChannels = async function (force) {
     if (this._cache && !force) return this._cache;
     var d    = await fetchJSON(this.serverUrl + '/channels', null, this.timeout);
@@ -185,10 +181,9 @@ var JioTVClient = (function () {
         lang:   lang,
         source: 'jiotv',
       };
-    }).filter(function (ch) { return ch.jioId && ch.url; }); // skip invalid entries
+    }).filter(function (ch) { return ch.jioId && ch.url; });
   };
 
-  // ── Stream info ───────────────────────────────────────────────
   P.getStreamInfo = async function (channelId) {
     if (!channelId) return { url: '', isDRM: false };
     try {
@@ -200,12 +195,10 @@ var JioTVClient = (function () {
     return { url: this.serverUrl + '/live/' + channelId + '.m3u8', isDRM: false };
   };
 
-  // ── EPG with exponential backoff on failure ───────────────────
   P.getNowPlaying = async function (channelId) {
     if (!channelId) return null;
-    // Backoff: if many failures, skip EPG for a while
     if (this._epgFailCount > 5) {
-      this._epgFailCount = Math.max(0, this._epgFailCount - 1);  // decay
+      this._epgFailCount = Math.max(0, this._epgFailCount - 1);
       return null;
     }
     try {
@@ -213,7 +206,7 @@ var JioTVClient = (function () {
         this.serverUrl + '/epg/now?channel_id=' + encodeURIComponent(channelId),
         null, 6000
       );
-      this._epgFailCount = 0;  // reset on success
+      this._epgFailCount = 0;
       return (d && d.result) ? d.result : null;
     } catch (e) {
       this._epgFailCount++;
@@ -221,13 +214,10 @@ var JioTVClient = (function () {
     }
   };
 
-  // ── URL validation helper (prevent SSRF) ──────────────────────
-  // Only allow non-private IPs for M3U URLs; JioTV server is always LAN (allowed)
   JioTVClient.isSafeM3UURL = function (url) {
     try {
       var u = new URL(url);
       if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-      // Block private IP ranges for M3U playlist sources
       var h = u.hostname;
       if (/^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(h)) return false;
       if (h === 'localhost') return false;
