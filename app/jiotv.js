@@ -1,12 +1,13 @@
 // ================================================================
-// SAGA IPTV — jiotv.js v6.0  |  Direct connect only
-// Fixed IP: 172.20.10.2:5001
+// SAGA IPTV — jiotv.js v6.0  |  Fixed IP · No scan · No modal
+// JioTV Go at http://172.20.10.2:5001 — direct, no discovery
 // ================================================================
 'use strict';
 
 var JioTVClient = (function () {
 
-  var DEFAULT_JIOTV_SERVER = 'http://172.20.10.2:5001';
+  // ── Fixed server — no discovery, no modal ─────────────────────
+  var FIXED_SERVER = 'http://172.20.10.2:5001';
 
   var CATEGORY_MAP = {
     1:'Entertainment', 2:'Movies',      3:'Kids',      4:'Sports',
@@ -15,65 +16,79 @@ var JioTVClient = (function () {
     16:'Regional',     17:'Shopping',   18:'Comedy',   19:'Drama',
   };
 
-  // ── XHR with abort ────────────────────────────────────────────
+  // ── XHR with abort + done-guard ───────────────────────────────
   function fetchJSON(url, opts, timeout) {
     return new Promise(function (resolve, reject) {
-      var xhr = new XMLHttpRequest();
-      var ms  = (timeout > 0 ? timeout : 12000);
-      var tid = setTimeout(function () { xhr.abort(); reject(new Error('Timeout')); }, ms);
+      var xhr  = new XMLHttpRequest();
+      var done = false;
+      var ms   = (timeout > 0 ? timeout : 12000);
+      var tid  = setTimeout(function () {
+        if (done) return; done = true; xhr.abort(); reject(new Error('Timeout'));
+      }, ms);
       xhr.open((opts && opts.method) || 'GET', url, true);
       xhr.setRequestHeader('Accept', 'application/json');
       if (opts && opts.body) xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.withCredentials = false;
       xhr.onreadystatechange = function () {
-        if (xhr.readyState !== 4) return;
-        clearTimeout(tid);
+        if (xhr.readyState !== 4 || done) return;
+        done = true; clearTimeout(tid);
         if (xhr.status >= 200 && xhr.status < 400) {
           try   { resolve(JSON.parse(xhr.responseText)); }
           catch (e) { reject(new Error('Invalid JSON')); }
         } else if (xhr.status === 0) {
-          reject(new Error('Server unreachable'));
+          reject(new Error('Server unreachable — is JioTV Go running?'));
         } else {
           reject(new Error('HTTP ' + xhr.status));
         }
       };
-      xhr.onerror = function () { clearTimeout(tid); reject(new Error('Network error')); };
+      xhr.onerror = function () {
+        if (done) return; done = true; clearTimeout(tid); reject(new Error('Network error'));
+      };
       xhr.send(opts && opts.body ? JSON.stringify(opts.body) : null);
     });
   }
 
-  // ── Direct connection (no probe, no discovery) ────────────────
-  JioTVClient.directConnect = async function (serverUrl) {
-    var client = new JioTVClient({ serverUrl: serverUrl || DEFAULT_JIOTV_SERVER, timeout: 12000 });
-    var res = await client.checkStatus();
-    if (res.status) return client;
-    throw new Error('Connection failed: ' + res.reason);
-  };
-
   // ── Constructor ───────────────────────────────────────────────
   function JioTVClient(opts) {
-    if (!opts || !opts.serverUrl) throw new Error('serverUrl required');
-    this.serverUrl = opts.serverUrl.replace(/\/+$/, '');
-    this.timeout   = (opts.timeout > 0 ? opts.timeout : 12000);
-    this.logged_in = false;
-    this._cache    = null;
-    this._epgFailCount = 0;
+    this.serverUrl      = ((opts && opts.serverUrl) || FIXED_SERVER).replace(/\/+$/, '');
+    this.timeout        = (opts && opts.timeout > 0) ? opts.timeout : 12000;
+    this.logged_in      = false;
+    this._cache         = null;
+    this._epgFailCount  = 0;
   }
 
   var P = JioTVClient.prototype;
-  JioTVClient.DEFAULT_SERVER = DEFAULT_JIOTV_SERVER;
 
-  // ── Status check ─────────────────────────────────────────────
+  // ── Static: fixed server URL ──────────────────────────────────
+  JioTVClient.FIXED_SERVER = FIXED_SERVER;
+
+  // ── Static: direct connect to fixed IP, no probing ───────────
+  // Returns a ready client or throws with a clear message.
+  JioTVClient.directConnect = async function (serverUrl) {
+    var url    = (serverUrl || FIXED_SERVER).replace(/\/+$/, '');
+    var client = new JioTVClient({ serverUrl: url, timeout: 12000 });
+    var res    = await client.checkStatus();
+    if (res.status) {
+      client.logged_in = true;
+      return client;
+    }
+    throw new Error(res.reason || 'JioTV Go not reachable at ' + url);
+  };
+
+  // ── Status: /channels endpoint as truth (v3.17+) ─────────────
   P.checkStatus = async function () {
     var result = { status: false, channelCount: 0, reason: '' };
     try {
       var d    = await fetchJSON(this.serverUrl + '/channels', null, 8000);
-      var list = Array.isArray(d) ? d : (d && Array.isArray(d.result)) ? d.result : null;
+      var list = Array.isArray(d) ? d
+               : (d && Array.isArray(d.result)) ? d.result : null;
       if (list !== null) {
-        this.logged_in = true; this._cache = list;
-        result.status = true; result.channelCount = list.length;
+        this.logged_in     = true;
+        this._cache        = list;
+        result.status      = true;
+        result.channelCount = list.length;
       } else {
-        result.reason = (d && d.error) ? String(d.error) : 'Unexpected response';
+        result.reason = (d && d.error) ? String(d.error) : 'Unexpected server response';
       }
     } catch (e) {
       result.reason = e.message;
@@ -82,12 +97,13 @@ var JioTVClient = (function () {
     return result;
   };
 
-  // ── Channels ──────────────────────────────────────────────────
+  // ── Channel list ──────────────────────────────────────────────
   P.getChannels = async function (force) {
     if (this._cache && !force) return this._cache;
     var d    = await fetchJSON(this.serverUrl + '/channels', null, this.timeout);
     var list = Array.isArray(d) ? d : (d && Array.isArray(d.result)) ? d.result : [];
-    this._cache = list; return list;
+    this._cache = list;
+    return list;
   };
 
   P.getChannelsFormatted = async function () {
@@ -100,10 +116,10 @@ var JioTVClient = (function () {
       var logo  = String(ch.logoUrl || ch.logo_url || ch.logo || '').trim();
       var lang  = String(ch.channelLanguage || ch.language || '').trim();
       return {
-        name:   name || 'Channel ' + id,
+        name:   name || ('Channel ' + id),
         group:  CATEGORY_MAP[catId] || 'Other',
         logo:   logo,
-        url:    id ? base + '/live/' + id + '.m3u8' : '',
+        url:    id ? (base + '/live/' + id + '.m3u8') : '',
         jioId:  id,
         isHD:   !!(ch.isHD || ch.is_hd),
         lang:   lang,
@@ -124,7 +140,7 @@ var JioTVClient = (function () {
     return { url: this.serverUrl + '/live/' + channelId + '.m3u8', isDRM: false };
   };
 
-  // ── EPG with exponential backoff ──────────────────────────────
+  // ── EPG with backoff ──────────────────────────────────────────
   P.getNowPlaying = async function (channelId) {
     if (!channelId) return null;
     if (this._epgFailCount > 5) {
@@ -136,7 +152,7 @@ var JioTVClient = (function () {
         this.serverUrl + '/epg/now?channel_id=' + encodeURIComponent(channelId),
         null, 6000
       );
-      this._epgFailCount = 0;
+      this._epgFailCount = 0;   // reset on success
       return (d && d.result) ? d.result : null;
     } catch (e) {
       this._epgFailCount++;
@@ -144,11 +160,25 @@ var JioTVClient = (function () {
     }
   };
 
-  P.invalidateCache = function () { this._cache = null; };
+  // ── Helpers ───────────────────────────────────────────────────
+  P.invalidateCache = function ()   { this._cache = null; };
   P.getStreamUrl    = function (id) { return this.serverUrl + '/live/' + id + '.m3u8'; };
   P.getPlaylistUrl  = function ()   { return this.serverUrl + '/playlist.m3u'; };
 
+  // ── SSRF guard for M3U URLs (keep for add-playlist modal) ─────
+  JioTVClient.isSafeM3UURL = function (url) {
+    try {
+      var u = new URL(url);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+      var h = u.hostname;
+      if (/^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(h)) return false;
+      if (h === 'localhost') return false;
+      return true;
+    } catch (e) { return false; }
+  };
+
   return JioTVClient;
+
 })();
 
 if (typeof window !== 'undefined') window.JioTVClient = JioTVClient;

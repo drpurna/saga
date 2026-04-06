@@ -1,5 +1,10 @@
 // ================================================================
-// SAGA IPTV — app.js v31.0  |  Final with direct JioTV connect
+// SAGA IPTV — app.js v32.0  |  Samsung Tizen OS9  |  2025 TV
+// JioTV: fixed IP 172.20.10.2:5001, auto-connect, no modal/scan
+// Critical fixes: stall watchdog on portal, fullscreen focus,
+//   promise mutex for jpPlayChannel, search debounce, PreCh,
+//   ResizeObserver on grid, preferred audio lang persist,
+//   beforeunload cleanup, sleep timer on keypress reset
 // ================================================================
 'use strict';
 
@@ -7,18 +12,19 @@
 var FAV_KEY              = 'iptv:favs';
 var CUSTOM_PLAYLISTS_KEY = 'iptv:customPlaylists';
 var AV_SYNC_KEY          = 'iptv:avSync';
-var JIOTV_SERVER_KEY     = 'jiotv:server';
+var PREF_AUDIO_KEY       = 'iptv:audioLang';
 var PREVIEW_DELAY        = 500;
-var VS_IH                = 108;
-var VS_GAP               = 8;
+var VS_IH                = 108;   // MUST match CSS --item-h
+var VS_GAP               = 8;     // MUST match CSS --item-gap
 var AV_SYNC_STEP         = 50;
 var AV_SYNC_MAX          = 500;
 var MAX_RECONNECT        = 5;
 var STALL_TIMEOUT        = 9000;
 var OVERLAY_AUTO_HIDE    = 4000;
 var SEARCH_DEBOUNCE_MS   = 300;
+var JIOTV_FIXED_SERVER   = 'http://172.20.10.2:5001';
 
-// ── Samsung key codes ─────────────────────────────────────────────
+// ── Samsung BN59-01199F key codes ─────────────────────────────────
 var KEY = {
   UP:38, DOWN:40, LEFT:37, RIGHT:39, ENTER:13,
   BACK:10009, EXIT:10182, INFO:457, GUIDE:458,
@@ -42,42 +48,45 @@ var DEFAULT_PLAYLISTS = [
 // ── Global state ──────────────────────────────────────────────────
 var allPlaylists = [], customPlaylists = [], plIdx = 0;
 var channels = [], allChannels = [], filtered = [];
-var selectedIndex = 0;
-var focusArea   = 'list';
-var tabFocusIdx = 0;
-var isFullscreen = false, hasPlayed = false;
-var currentPlayUrl = '';
-var previewTimer = null, fsHintTimer = null, loadBarTimer = null;
-var dialBuffer = '', dialTimer = null;
-var favSet     = new Set();
-var avSyncOffset = 0, avSyncLabel = null;
-var overlaysVisible = false;
-var networkQuality  = 'online', connectionMonitor = null;
-var stallWatchdog   = null, lastPlayTime = 0, reconnectCount = 0;
-var sleepTimer = null, sleepMinutes = 0;
-var toastTm    = null;
-var lastChannelStack = [];
+var selectedIndex    = 0;
+var focusArea        = 'list';
+var tabFocusIdx      = 0;
+var isFullscreen     = false, hasPlayed = false;
+var currentPlayUrl   = '';
+var previewTimer     = null, fsHintTimer = null, loadBarTimer = null;
+var dialBuffer       = '', dialTimer = null;
+var favSet           = new Set();
+var avSyncOffset     = 0, avSyncLabel = null;
+var overlaysVisible  = false;
+var networkQuality   = 'online', connectionMonitor = null;
+var stallWatchdog    = null, lastPlayTime = 0, reconnectCount = 0;
+var sleepTimer       = null, sleepMinutes = 0, sleepPaused = false;
+var sleepRemainingMs = 0, sleepLastTick = 0;
+var toastTm          = null;
+var lastChannelStack = [];  // for PreCh (previous channel)
 
-// JioTV
-var jiotvClient   = null, jiotvMode = false;
-var jiotvChannels = [];
-var jpActiveChannel = null, jpPlayer = null, _jpPlayerBusy = false;
+// JioTV state
+var jiotvClient    = null, jiotvMode = false;
+var jiotvChannels  = [];
+var jpActiveChannel = null, jpPlayer = null;
+var _jpPlayerBusy  = false;
 var _jpLoadPromise = Promise.resolve();
-var jpOverlayTimer  = null;
+var jpOverlayTimer = null;
 var jpFocusRow = 0, jpFocusCol = 0, jpGridCols = 8;
 var jpFiltered  = [];
 var jpActiveCat = 'all', jpActiveLang = 'all', jpSearchQ = '';
 var jpInPlayer  = false, jpEpgTimer = null;
+var _jpGridResizeObs = null;  // ResizeObserver for grid column recalc
 
-// Audio tracks UI + persistence
-var _audioTracks    = [];
-var _audioTrackIdx  = 0;
+// Audio
+var _audioTracks        = [];
+var _audioTrackIdx      = 0;
 var _preferredAudioLang = null;
 
 // ── DOM ref cache ─────────────────────────────────────────────────
 function $(id) { return document.getElementById(id); }
 
-var Dom = (function buildDom() {
+var Dom = (function () {
   var ids = [
     'searchInput','searchWrap','searchClear','tabBar','channelList',
     'countBadge','listLabel','nowPlaying','npChNum','statusBadge',
@@ -87,13 +96,16 @@ var Dom = (function buildDom() {
     'overlayTop','overlayBottom','overlayChannelName','overlayChannelTech',
     'overlayProgramTitle','overlayProgramDesc','nextProgramInfo','programInfoBox',
     'toast',
-    'jiotvLoginModal','jiotvServerUrl','jiotvConnectBtn','jiotvCancelBtn',
+    // JioTV portal (no login modal refs needed)
     'appMain','jiotvPortal','jpGrid','jpFilters','jpLangFilters','jpSearch',
     'jpCount','jpNowBar','jpNbThumb','jpNbName','jpNbEpg','jpNbTech',
     'jpPlayerLayer','jpPlayerOverlay','jpVideo','jpPlBack','jpPlTitle','jpPlTime',
     'jpPlSpinner','jpPlProg','jpPlDesc','jpPlTech','jpExitBtn','jpClock',
-    'settingsModal','settingsCacheBtn','settingsSleepSelect','settingsAVReset','settingsCloseBtn',
-    'settingsAudioTrack',
+    // Settings modal
+    'settingsModal','settingsCacheBtn','settingsSleepSelect',
+    'settingsAVReset','settingsCloseBtn','settingsAudioTrack',
+    // Add playlist modal
+    'addPlaylistModal','playlistName','playlistUrl','savePlaylistBtn','cancelPlaylistBtn',
   ];
   var d = {};
   ids.forEach(function (id) { d[id] = document.getElementById(id); });
@@ -102,11 +114,11 @@ var Dom = (function buildDom() {
 
 // ── Safe localStorage ─────────────────────────────────────────────
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } }
-function lsGet(k)    { try { return localStorage.getItem(k); }          catch(e) { return null; }  }
-function lsRemove(k) { try { localStorage.removeItem(k); }              catch(e) {} }
+function lsGet(k)    { try { return localStorage.getItem(k); }          catch(e) { return null;  } }
+function lsRemove(k) { try { localStorage.removeItem(k); }              catch(e) {}               }
 
 // ── Favourites ────────────────────────────────────────────────────
-(function() {
+(function () {
   try { var r = lsGet(FAV_KEY); if (r) favSet = new Set(JSON.parse(r)); } catch(e) {}
 })();
 function saveFavs() { lsSet(FAV_KEY, JSON.stringify([...favSet])); }
@@ -125,12 +137,12 @@ function showFavourites() {
   setStatus(filtered.length ? filtered.length + ' favourites' : 'No favourites yet', 'idle');
 }
 
-// ── Toast ─────────────────────────────────────────────────────────
+// ── Toast ──────────────────────────────────────────────────────────
 function showToast(msg, dur) {
   if (!Dom.toast) return;
   Dom.toast.textContent = msg; Dom.toast.style.opacity = '1';
   clearTimeout(toastTm);
-  toastTm = setTimeout(function() { Dom.toast.style.opacity = '0'; }, dur || 2800);
+  toastTm = setTimeout(function () { Dom.toast.style.opacity = '0'; }, dur || 2800);
 }
 
 // ── Status / load bar ─────────────────────────────────────────────
@@ -148,7 +160,7 @@ function startLoadBar() {
   if (!Dom.loadBar) return;
   Dom.loadBar.style.width = '0%'; Dom.loadBar.classList.add('active');
   var w = 0;
-  var tick = function() {
+  var tick = function () {
     w = Math.min(w + Math.random() * 9, 85);
     Dom.loadBar.style.width = w + '%';
     if (w < 85) loadBarTimer = setTimeout(tick, 200);
@@ -159,21 +171,21 @@ function finishLoadBar() {
   clearTimeout(loadBarTimer);
   if (!Dom.loadBar) return;
   Dom.loadBar.style.width = '100%';
-  setTimeout(function() { Dom.loadBar.classList.remove('active'); Dom.loadBar.style.width = '0%'; }, 440);
+  setTimeout(function () { Dom.loadBar.classList.remove('active'); Dom.loadBar.style.width = '0%'; }, 440);
 }
 function refreshLbl() {
-  if      (jiotvMode)              setLbl('JIOTV', channels.length);
-  else if (plIdx === TAB_FAV())    setLbl('FAVOURITES', filtered.length);
-  else                             setLbl('CHANNELS', channels.length);
+  if      (jiotvMode)           setLbl('JIOTV', channels.length);
+  else if (plIdx === TAB_FAV()) setLbl('FAVOURITES', filtered.length);
+  else                          setLbl('CHANNELS', channels.length);
 }
 
 // ── HTML escape ───────────────────────────────────────────────────
 var _escMap = { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' };
-function esc(s) { return String(s || '').replace(/[&<>"]/g, function(c) { return _escMap[c]; }); }
+function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return _escMap[c]; }); }
 
 // ── M3U parser ────────────────────────────────────────────────────
 var _reName = /\s*\([^)]*\)|\s*\[[^\]]*\]|\b(?:4K|UHD|FHD|HLS|HEVC|H264|H\.264|SD|HD|576[piP]?|720[piP]?|1080[piP]?|2160[piP]?)\b|[\|\-–—]+\s*$|\s{2,}/gi;
-function cleanName(raw) { return String(raw || '').replace(_reName, ' ').replace(/>/g,'').trim(); }
+function cleanName(raw) { return String(raw || '').replace(_reName, ' ').replace(/>/g, '').trim(); }
 function parseM3U(text) {
   var lines = String(text || '').split(/\r?\n/);
   var out   = [], meta = null;
@@ -184,7 +196,7 @@ function parseM3U(text) {
         var np = line.includes(',') ? line.split(',').slice(1).join(',').trim() : 'Unknown';
         var gm = line.match(/group-title="([^"]+)"/i);
         var lm = line.match(/tvg-logo="([^"]+)"/i);
-        meta   = { name: cleanName(np) || np, group: gm ? gm[1] : 'Other', logo: lm ? lm[1] : '' };
+        meta = { name: cleanName(np) || np, group: gm ? gm[1] : 'Other', logo: lm ? lm[1] : '' };
       }
     } else if (meta) {
       out.push({ name: meta.name, group: meta.group, logo: meta.logo, url: line });
@@ -195,17 +207,15 @@ function parseM3U(text) {
 }
 
 // ── SagaPlayer callbacks ──────────────────────────────────────────
-function _initPlayerCallbacks() {
-  SagaPlayer.init(Dom.video, {
-    onStatus: function(msg, cls) { setStatus(msg, cls); },
-    onBuffering: function(isBuffering) {
+async function _initPlayerCallbacks() {
+  await SagaPlayer.init(Dom.video, {
+    onStatus:     function (msg, cls) { setStatus(msg, cls); },
+    onBuffering:  function (isBuffering) {
       if (isBuffering) { setStatus('Buffering…', 'loading'); startLoadBar(); }
-      else             { setStatus('Playing',    'playing');  finishLoadBar(); _updateChTech(); }
+      else             { setStatus('Playing',    'playing'); finishLoadBar(); _updateChTech(); }
     },
     onTechUpdate: _updateChTech,
-    onError: function(msg) {
-      setStatus(msg, 'error'); finishLoadBar(); stopStallWatchdog();
-    },
+    onError:      function (msg) { setStatus(msg, 'error'); finishLoadBar(); stopStallWatchdog(); },
   });
 }
 function _updateChTech() {
@@ -221,7 +231,7 @@ function loadAvSync() {
 function saveAvSync() { lsSet(AV_SYNC_KEY, String(avSyncOffset)); }
 function applyAvSync() {
   if (!Dom.video || !hasPlayed || avSyncOffset === 0) return;
-  if (!SagaPlayer.isSeekable(Dom.video)) return;
+  if (!SagaPlayer.isSeekable(Dom.video)) return;  // skip on pure live
   try {
     if (Dom.video.readyState >= 2) {
       var t = Dom.video.currentTime - (avSyncOffset / 1000);
@@ -245,63 +255,83 @@ function _updateAvLabel() {
 function buildAvSyncBar() {
   var ctrl = document.querySelector('.player-controls'); if (!ctrl) return;
   var wrap = document.createElement('div'); wrap.id = 'avSyncWrap';
-  var bM = document.createElement('button'); bM.className = 'av-btn'; bM.id = 'avBtnLeft';  bM.textContent = '◁ Audio';
-  var bP = document.createElement('button'); bP.className = 'av-btn'; bP.id = 'avBtnRight'; bP.textContent = 'Audio ▷';
+  var bM = document.createElement('button'); bM.className='av-btn'; bM.id='avBtnLeft';  bM.textContent='◁ Audio';
+  var bP = document.createElement('button'); bP.className='av-btn'; bP.id='avBtnRight'; bP.textContent='Audio ▷';
   avSyncLabel = document.createElement('span'); avSyncLabel.className = 'av-label';
-  bM.addEventListener('click', function() { adjustAvSync(-1); });
-  bP.addEventListener('click', function() { adjustAvSync(+1); });
+  bM.addEventListener('click', function () { adjustAvSync(-1); });
+  bP.addEventListener('click', function () { adjustAvSync(+1); });
   avSyncLabel.addEventListener('click', resetAvSync);
   _updateAvLabel();
   wrap.appendChild(bM); wrap.appendChild(avSyncLabel); wrap.appendChild(bP);
   ctrl.insertBefore(wrap, ctrl.firstChild);
 }
 
-// ── Audio track cycling with persistence ─────────────────────────
+// ── Audio track persistence ───────────────────────────────────────
 function loadPreferredAudioLang() {
-  try { _preferredAudioLang = localStorage.getItem('iptv:prefAudioLang'); } catch(e) {}
+  _preferredAudioLang = lsGet(PREF_AUDIO_KEY) || null;
 }
-function savePreferredAudioLang(lang) {
-  _preferredAudioLang = lang;
-  try { localStorage.setItem('iptv:prefAudioLang', lang || ''); } catch(e) {}
+function _applyPreferredAudio() {
+  if (!_preferredAudioLang) return;
+  var tracks = SagaPlayer.getAudioTracks();
+  if (!tracks || !tracks.length) return;
+  var match = tracks.find(function (t) { return t.language === _preferredAudioLang; });
+  if (match) SagaPlayer.setAudioLanguage(match.language, match.role || '');
 }
 function cycleAudioTrack() {
   _audioTracks = SagaPlayer.getAudioTracks();
   if (!_audioTracks || _audioTracks.length < 2) { showToast('No alternate audio tracks'); return; }
   _audioTrackIdx = (_audioTrackIdx + 1) % _audioTracks.length;
   var t = _audioTracks[_audioTrackIdx];
-  SagaPlayer.setAudioLanguage(t.language, t.role);
-  savePreferredAudioLang(t.language);
+  SagaPlayer.setAudioLanguage(t.language, t.role || '');
+  _preferredAudioLang = t.language;
+  lsSet(PREF_AUDIO_KEY, t.language);
   showToast('Audio: ' + (t.label || t.language || 'Track ' + _audioTrackIdx));
-  if (Dom.settingsAudioTrack) Dom.settingsAudioTrack.textContent = 'Audio: ' + (t.label || t.language);
-}
-function applyPreferredAudioOnStream() {
-  if (_preferredAudioLang && _audioTracks && _audioTracks.length) {
-    var match = _audioTracks.find(t => t.language === _preferredAudioLang);
-    if (match) SagaPlayer.setAudioLanguage(match.language, match.role);
-  }
 }
 
-// ── Sleep timer with reset on user activity ──────────────────────
-function resetSleepTimer() {
-  if (sleepMinutes > 0) setSleepTimer(sleepMinutes);
-}
+// ── Sleep timer — pauses when video is paused ─────────────────────
 function setSleepTimer(m) {
-  clearSleepTimer(); sleepMinutes = m;
+  _clearSleepState();
+  sleepMinutes = m;
   if (!m) { showToast('Sleep timer: Off'); return; }
   showToast('Sleep timer: ' + m + ' min');
-  sleepTimer = setTimeout(function() {
-    SagaPlayer.stop();
-    stopStallWatchdog(); clearSleepTimer();
-    setStatus('Sleep — stopped', 'idle'); showToast('Goodnight!', 4000);
-    sleepTimer = null; sleepMinutes = 0;
-  }, m * 60000);
+  _startSleepCountdown(m * 60000);
 }
-function clearSleepTimer() { if (sleepTimer) { clearTimeout(sleepTimer); sleepTimer = null; } }
+function _startSleepCountdown(ms) {
+  sleepRemainingMs = ms;
+  sleepLastTick    = Date.now();
+  sleepPaused      = Dom.video ? Dom.video.paused : false;
+  sleepTimer = setInterval(function () {
+    var now    = Date.now();
+    var isPaused = Dom.video ? Dom.video.paused : true;
+    if (isPaused) { sleepPaused = true; sleepLastTick = now; return; }  // freeze countdown while paused
+    var elapsed = now - sleepLastTick;
+    sleepLastTick = now;
+    sleepRemainingMs -= elapsed;
+    if (sleepRemainingMs <= 0) {
+      _clearSleepState();
+      SagaPlayer.stop();
+      stopStallWatchdog();
+      setStatus('Sleep — stopped', 'idle');
+      showToast('Goodnight!', 4000);
+    }
+  }, 1000);
+}
+function resetSleepTimer() {
+  // Called on any key press — only reset if timer is active
+  if (!sleepMinutes || !sleepTimer) return;
+  clearInterval(sleepTimer); sleepTimer = null;
+  _startSleepCountdown(sleepMinutes * 60000);
+}
+function clearSleepTimer() { _clearSleepState(); sleepMinutes = 0; }
+function _clearSleepState() {
+  if (sleepTimer) { clearInterval(sleepTimer); sleepTimer = null; }
+  sleepRemainingMs = 0; sleepPaused = false;
+}
 
 // ── Stall watchdog ────────────────────────────────────────────────
 function startStallWatchdog() {
   stopStallWatchdog(); reconnectCount = 0; lastPlayTime = Date.now();
-  stallWatchdog = setInterval(function() {
+  stallWatchdog = setInterval(function () {
     if (!Dom.video || Dom.video.paused || !hasPlayed || !currentPlayUrl) return;
     if (Date.now() - lastPlayTime > STALL_TIMEOUT) {
       lastPlayTime = Date.now();
@@ -309,17 +339,27 @@ function startStallWatchdog() {
         reconnectCount++;
         setStatus('Reconnecting (' + reconnectCount + '/' + MAX_RECONNECT + ')…', 'loading');
         startLoadBar();
-        SagaPlayer.play(currentPlayUrl, null).catch(function() {});
+        SagaPlayer.play(currentPlayUrl, null).catch(function () {});
       } else {
         setStatus('Stream lost', 'error'); stopStallWatchdog();
       }
     }
   }, 4000);
 }
-function stopStallWatchdog() { if (stallWatchdog) { clearInterval(stallWatchdog); stallWatchdog = null; } }
-if (Dom.video) {
-  Dom.video.addEventListener('timeupdate', function() { if (!Dom.video.paused) lastPlayTime = Date.now(); });
+function stopStallWatchdog() {
+  if (stallWatchdog) { clearInterval(stallWatchdog); stallWatchdog = null; }
 }
+if (Dom.video) {
+  Dom.video.addEventListener('timeupdate', function () {
+    if (!Dom.video.paused) lastPlayTime = Date.now();
+  });
+}
+
+// ── beforeunload: clean up Shaka to avoid Tizen WebKit crash ──────
+window.addEventListener('beforeunload', function () {
+  try { SagaPlayer.stop(); } catch(e) {}
+  try { if (jpPlayer) jpPlayer.unload(); } catch(e) {}
+});
 
 // ══════════════════════════════════════════════════════════════════
 // VIRTUAL SCROLL
@@ -329,7 +369,7 @@ var VS = {
   c: null, inner: null, vh: 0, st: 0, total: 0,
   pool: [], nodes: {}, raf: null,
 
-  init: function(el) {
+  init: function (el) {
     this.c = el; el.innerHTML = '';
     this.inner = document.createElement('ul');
     this.inner.id = 'vsInner';
@@ -337,15 +377,15 @@ var VS = {
     el.appendChild(this.inner);
     this.vh = el.clientHeight || 900;
     var self = this;
-    el.addEventListener('scroll', function() {
+    el.addEventListener('scroll', function () {
       if (self.raf) return;
-      self.raf = requestAnimationFrame(function() { self.raf = null; self.st = self.c.scrollTop; self.paint(); });
+      self.raf = requestAnimationFrame(function () { self.raf = null; self.st = self.c.scrollTop; self.paint(); });
     }, { passive: true });
     if (window.ResizeObserver)
-      new ResizeObserver(function() { self.vh = self.c.clientHeight || 900; self.paint(); }).observe(el);
+      new ResizeObserver(function () { self.vh = self.c.clientHeight || 900; self.paint(); }).observe(el);
   },
 
-  setData: function(n) {
+  setData: function (n) {
     this.total = n;
     for (var k in this.nodes) { var nd = this.nodes[k]; nd.style.display='none'; nd._i=-1; this.pool.push(nd); }
     this.nodes = {};
@@ -353,28 +393,27 @@ var VS = {
     this.c.scrollTop = 0; this.st = 0; this.vh = this.c.clientHeight || 900; this.paint();
   },
 
-  scrollTo: function(idx) {
+  scrollTo: function (idx) {
     var top = idx*(this.IH+this.GAP), bot = top+this.IH, pad = 24;
-    if      (top < this.st+pad)            this.c.scrollTop = Math.max(0, top-pad);
-    else if (bot > this.st+this.vh-pad)    this.c.scrollTop = bot-this.vh+pad;
+    if      (top < this.st+pad)           this.c.scrollTop = Math.max(0, top-pad);
+    else if (bot > this.st+this.vh-pad)   this.c.scrollTop = bot-this.vh+pad;
     this.st = this.c.scrollTop; this.paint();
   },
 
-  centerOn: function(idx) {
+  centerOn: function (idx) {
     idx = Math.max(0, Math.min(this.total-1, idx));
     this.c.scrollTop = Math.max(0, idx*(this.IH+this.GAP)-(this.vh/2)+(this.IH/2));
     this.st = this.c.scrollTop; this.paint();
   },
 
-  paint: function() {
+  paint: function () {
     if (!this.total) return;
     var H = this.IH+this.GAP, os = this.OS;
     var s = Math.max(0, Math.floor(this.st/H)-os);
     var e = Math.min(this.total-1, Math.ceil((this.st+this.vh)/H)+os);
-    var oi, nd;
-    for (oi in this.nodes) {
+    for (var oi in this.nodes) {
       var ii = parseInt(oi, 10);
-      if (ii<s||ii>e) { nd=this.nodes[oi]; nd.style.display='none'; nd._i=-1; this.pool.push(nd); delete this.nodes[oi]; }
+      if (ii<s||ii>e) { var nd=this.nodes[oi]; nd.style.display='none'; nd._i=-1; this.pool.push(nd); delete this.nodes[oi]; }
     }
     for (var i = s; i <= e; i++) {
       if (this.nodes[i]) continue;
@@ -383,25 +422,31 @@ var VS = {
       li.style.display = ''; this.nodes[i] = li;
     }
     for (var j in this.nodes) {
-      nd = this.nodes[j]; var on = (parseInt(j,10)===selectedIndex);
-      if (on!==nd._on) { nd._on=on; nd.classList.toggle('active',on); }
+      var n = this.nodes[j], on = (parseInt(j,10)===selectedIndex);
+      if (on !== n._on) { n._on=on; n.classList.toggle('active',on); }
     }
   },
 
-  mkNode: function() {
+  mkNode: function () {
     var li = document.createElement('li'); li._i=-1; li._on=false;
     li.style.cssText = 'position:absolute;will-change:transform;transform:translateZ(0);backface-visibility:hidden;';
     this.inner.appendChild(li);
-    li.addEventListener('click', function() { if(li._i<0)return; selectedIndex=li._i; VS.refresh(); cancelPreview(); schedulePreview(); });
+    li.addEventListener('click', function () {
+      if (li._i < 0) return;
+      selectedIndex = li._i; VS.refresh(); cancelPreview(); schedulePreview();
+    });
     return li;
   },
 
-  build: function(li, i) {
+  build: function (li, i) {
     li._i=i; li._on=false;
     var top = i*(this.IH+this.GAP)+10;
-    li.style.cssText = ['position:absolute','left:12px','right:12px','top:'+top+'px','height:'+this.IH+'px',
-      'display:flex','align-items:center','gap:16px','padding:0 18px','border-radius:18px','overflow:hidden',
-      'will-change:transform','transform:translateZ(0)','backface-visibility:hidden'].join(';');
+    li.style.cssText = [
+      'position:absolute','left:12px','right:12px','top:'+top+'px','height:'+this.IH+'px',
+      'display:flex','align-items:center','gap:16px','padding:0 18px',
+      'border-radius:18px','overflow:hidden',
+      'will-change:transform','transform:translateZ(0)','backface-visibility:hidden',
+    ].join(';');
     var ch = filtered[i]; if (!ch) return;
     var PH = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 24 24' fill='none' stroke='%234a4a62' stroke-width='1.5'%3E%3Crect x='2' y='7' width='20' height='13' rx='2'/%3E%3Cpolyline points='16 20 12 16 8 20'/%3E%3C/svg%3E";
     li.innerHTML =
@@ -412,10 +457,10 @@ var VS = {
     if (i===selectedIndex) { li._on=true; li.classList.add('active'); } else li.classList.remove('active');
   },
 
-  refresh: function() {
-    for (var j in this.nodes) { var nd=this.nodes[j],on=(parseInt(j,10)===selectedIndex); if(on!==nd._on){nd._on=on;nd.classList.toggle('active',on);} }
+  refresh: function () {
+    for (var j in this.nodes) { var n=this.nodes[j],on=(parseInt(j,10)===selectedIndex); if(on!==n._on){n._on=on;n.classList.toggle('active',on);} }
   },
-  rebuildVisible: function() { for (var j in this.nodes) this.build(this.nodes[j], parseInt(j,10)); },
+  rebuildVisible: function () { for (var j in this.nodes) this.build(this.nodes[j], parseInt(j,10)); },
 };
 
 // ── Render list ───────────────────────────────────────────────────
@@ -423,16 +468,17 @@ function renderList() {
   if (Dom.countBadge) Dom.countBadge.textContent = String(filtered.length);
   VS.setData(filtered.length);
   if (filtered.length) VS.scrollTo(selectedIndex);
-  if (window.AppCache) AppCache.preloadImages(filtered.slice(0,40).map(function(c){return c.logo;}).filter(Boolean));
+  if (window.AppCache)
+    AppCache.preloadImages(filtered.slice(0,40).map(function (c) { return c.logo; }).filter(Boolean));
 }
 
-// ── Search with increased debounce ────────────────────────────────
+// ── Search ────────────────────────────────────────────────────────
 var _sdTm = null;
 function applySearch() {
   clearTimeout(_sdTm);
-  _sdTm = setTimeout(function() {
+  _sdTm = setTimeout(function () {
     var q = Dom.searchInput ? Dom.searchInput.value.trim().toLowerCase() : '';
-    filtered = !q ? channels.slice() : channels.filter(function(c) {
+    filtered = !q ? channels.slice() : channels.filter(function (c) {
       return c.name.toLowerCase().includes(q) || (c.group||'').toLowerCase().includes(q);
     });
     selectedIndex = 0; renderList();
@@ -440,9 +486,13 @@ function applySearch() {
   }, SEARCH_DEBOUNCE_MS);
 }
 function commitSearch() { setFocus('list'); if(filtered.length===1){selectedIndex=0;VS.refresh();schedulePreview();} }
-function clearSearch()  { if(Dom.searchInput)Dom.searchInput.value=''; if(Dom.searchWrap)Dom.searchWrap.classList.remove('active'); applySearch(); setFocus('list'); }
-if (Dom.searchInput) Dom.searchInput.addEventListener('input', function() {
-  if (Dom.searchWrap) Dom.searchWrap.classList.toggle('active', Dom.searchInput.value.length>0);
+function clearSearch()  {
+  if (Dom.searchInput) Dom.searchInput.value = '';
+  if (Dom.searchWrap)  Dom.searchWrap.classList.remove('active');
+  applySearch(); setFocus('list');
+}
+if (Dom.searchInput) Dom.searchInput.addEventListener('input', function () {
+  if (Dom.searchWrap) Dom.searchWrap.classList.toggle('active', Dom.searchInput.value.length > 0);
   applySearch();
 });
 if (Dom.searchClear) Dom.searchClear.addEventListener('click', clearSearch);
@@ -463,19 +513,30 @@ function mirrorUrl(url) {
   } catch(e){return null;}
 }
 
-// ── M3U playlist loading — with SSRF guard ─────────────────────────
+// ── SSRF guard for M3U URLs ───────────────────────────────────────
+function _isAllowedPlaylistURL(url) {
+  try {
+    var u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    var h = u.hostname;
+    if (/^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.)/.test(h)) return false;
+    if (h === 'localhost' || h === '::1') return false;
+    return true;
+  } catch(e) { return false; }
+}
+
+// ── M3U playlist load ─────────────────────────────────────────────
 function loadPlaylist(urlOv) {
   cancelPreview();
-  var rawUrl = urlOv || (plIdx<allPlaylists.length ? allPlaylists[plIdx].url : null);
+  var rawUrl = urlOv || (plIdx < allPlaylists.length ? allPlaylists[plIdx].url : null);
   if (!rawUrl) return;
-  if (!_isAllowedPlaylistURL(rawUrl)) {
-    showToast('Invalid playlist URL'); setStatus('Invalid URL', 'error'); return;
-  }
+  if (!_isAllowedPlaylistURL(rawUrl)) { showToast('Invalid playlist URL'); setStatus('Invalid URL','error'); return; }
+
   var cacheP = window.AppCache ? AppCache.getM3U(rawUrl) : Promise.resolve(null);
-  cacheP.then(function(cached) {
+  cacheP.then(function (cached) {
     if (cached && cached.length > 100) { _onM3ULoaded(cached, true); return; }
     setStatus('Loading…', 'loading'); startLoadBar();
-    xhrFetch(rawUrl, 30000, function(err, text) {
+    xhrFetch(rawUrl, 30000, function (err, text) {
       if (!err && text && text.length > 100) {
         finishLoadBar();
         if (window.AppCache) AppCache.setM3U(rawUrl, text);
@@ -484,12 +545,12 @@ function loadPlaylist(urlOv) {
       var mirror = mirrorUrl(rawUrl);
       if (mirror) {
         setStatus('Retrying mirror…', 'loading');
-        xhrFetch(mirror, 30000, function(e2, t2) {
+        xhrFetch(mirror, 30000, function (e2, t2) {
           finishLoadBar();
-          if (!e2 && t2 && t2.length > 100) { if(window.AppCache)AppCache.setM3U(rawUrl,t2); _onM3ULoaded(t2, false); }
-          else { setStatus('Failed — check network', 'error'); showToast('Playlist load failed'); }
+          if (!e2 && t2 && t2.length > 100) { if(window.AppCache)AppCache.setM3U(rawUrl,t2); _onM3ULoaded(t2,false); }
+          else { setStatus('Failed — check network','error'); showToast('Playlist load failed'); }
         });
-      } else { finishLoadBar(); setStatus('Failed', 'error'); }
+      } else { finishLoadBar(); setStatus('Failed','error'); }
     });
   });
 
@@ -502,18 +563,6 @@ function loadPlaylist(urlOv) {
   }
 }
 
-function _isAllowedPlaylistURL(url) {
-  try {
-    var u = new URL(url);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-    var h = u.hostname;
-    if (h === 'raw.githubusercontent.com' || h === 'cdn.jsdelivr.net') return true;
-    if (/^(127\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|169\.254\.|0\.)/.test(h)) return false;
-    if (h === 'localhost' || h === '::1') return false;
-    return true;
-  } catch(e) { return false; }
-}
-
 // ── Network monitor ───────────────────────────────────────────────
 function updateNetworkIndicator() {
   var el = $('networkIndicator'); if (!el) return;
@@ -521,9 +570,8 @@ function updateNetworkIndicator() {
   if (!navigator.onLine) {
     networkQuality = 'offline'; el.classList.add('offline');
   } else if (navigator.connection && typeof navigator.connection.downlink !== 'undefined') {
-    var sp = navigator.connection.downlink;
-    if (sp < 1) { networkQuality='slow'; el.classList.add('slow'); }
-    else         { networkQuality='online'; el.classList.add('online'); }
+    if (navigator.connection.downlink < 1) { networkQuality='slow';   el.classList.add('slow'); }
+    else                                   { networkQuality='online'; el.classList.add('online'); }
   } else { networkQuality='online'; el.classList.add('online'); }
   SagaPlayer.setNetworkQuality(networkQuality);
 }
@@ -535,7 +583,7 @@ function startNetworkMonitoring() {
   connectionMonitor = setInterval(updateNetworkIndicator, 10000);
 }
 
-// ── Clock ─────────────────────────────────────────────────────────
+// ── Clock ──────────────────────────────────────────────────────────
 function _updateAllClocks() {
   var now = new Date();
   var ts  = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
@@ -549,51 +597,71 @@ function _updateAllClocks() {
 setInterval(_updateAllClocks, 1000);
 _updateAllClocks();
 
-// ── Preview ───────────────────────────────────────────────────────
+// ── Preview ────────────────────────────────────────────────────────
 function cancelPreview()   { clearTimeout(previewTimer); previewTimer = null; }
-function schedulePreview() { cancelPreview(); previewTimer = setTimeout(function(){previewTimer=null;startPreview(selectedIndex);}, PREVIEW_DELAY); }
-
+function schedulePreview() {
+  cancelPreview();
+  previewTimer = setTimeout(function () { previewTimer = null; startPreview(selectedIndex); }, PREVIEW_DELAY);
+}
 async function startPreview(idx) {
   if (!filtered.length) return;
   var ch = filtered[idx]; if (!ch) return;
-  if (Dom.overlayTop&&Dom.overlayBottom&&overlaysVisible) { Dom.overlayTop.classList.remove('info-visible'); Dom.overlayBottom.classList.remove('info-visible'); overlaysVisible=false; }
+  if (Dom.overlayTop&&Dom.overlayBottom&&overlaysVisible) {
+    Dom.overlayTop.classList.remove('info-visible'); Dom.overlayBottom.classList.remove('info-visible'); overlaysVisible=false;
+  }
   if (Dom.nowPlaying)       Dom.nowPlaying.textContent       = ch.name;
   if (Dom.overlayChannelName) Dom.overlayChannelName.textContent = ch.name;
   if (Dom.npChNum)          Dom.npChNum.textContent          = 'CH '+(idx+1);
-  if (Dom.overlayProgramTitle)  Dom.overlayProgramTitle.textContent = '';
-  if (Dom.overlayProgramDesc)   Dom.overlayProgramDesc.textContent  = '';
-  if (Dom.nextProgramInfo)      Dom.nextProgramInfo.textContent     = '';
-  if (Dom.programInfoBox)       Dom.programInfoBox.style.display    = 'none';
+  if (Dom.overlayProgramTitle) Dom.overlayProgramTitle.textContent = '';
+  if (Dom.overlayProgramDesc)  Dom.overlayProgramDesc.textContent  = '';
+  if (Dom.nextProgramInfo)     Dom.nextProgramInfo.textContent     = '';
+  if (Dom.programInfoBox)      Dom.programInfoBox.style.display    = 'none';
   if (Dom.videoOverlay) Dom.videoOverlay.classList.add('hidden');
+
+  // Track last 2 channels for PreCh
+  if (currentPlayUrl && currentPlayUrl !== ch.url) {
+    lastChannelStack = [currentPlayUrl];
+  }
   hasPlayed = true; currentPlayUrl = ch.url;
   setStatus('Buffering…', 'loading'); startLoadBar();
   await SagaPlayer.play(ch.url, null);
   startStallWatchdog();
   _audioTrackIdx = 0;
-  applyPreferredAudioOnStream();
+  setTimeout(_applyPreferredAudio, 1800);
 }
 function playSelected() { cancelPreview(); startPreview(selectedIndex); }
 
-// ── Video events ─────────────────────────────────────────────────
+// ── Previous channel (PreCh) ──────────────────────────────────────
+function goPreCh() {
+  if (!lastChannelStack.length) return;
+  var prevUrl = lastChannelStack[0];
+  var idx = filtered.findIndex(function (c) { return c.url === prevUrl; });
+  if (idx >= 0) { selectedIndex = idx; VS.centerOn(idx); VS.refresh(); cancelPreview(); startPreview(idx); }
+}
+
+// ── Video events ──────────────────────────────────────────────────
 if (Dom.video) {
-  Dom.video.addEventListener('playing', function() { setStatus('Playing','playing'); finishLoadBar(); _updateChTech(); });
-  Dom.video.addEventListener('pause',   function() { setStatus('Paused', 'paused'); });
-  Dom.video.addEventListener('waiting', function() { setStatus('Buffering…','loading'); startLoadBar(); });
-  Dom.video.addEventListener('stalled', function() { setStatus('Buffering…','loading'); });
-  Dom.video.addEventListener('error',   function() { setStatus('Error','error'); finishLoadBar(); });
-  Dom.video.addEventListener('ended',   function() { setStatus('Ended','idle'); stopStallWatchdog(); });
+  Dom.video.addEventListener('playing', function () { setStatus('Playing','playing'); finishLoadBar(); _updateChTech(); });
+  Dom.video.addEventListener('pause',   function () { setStatus('Paused', 'paused'); });
+  Dom.video.addEventListener('waiting', function () { setStatus('Buffering…','loading'); startLoadBar(); });
+  Dom.video.addEventListener('stalled', function () { setStatus('Buffering…','loading'); });
+  Dom.video.addEventListener('error',   function () { setStatus('Error','error'); finishLoadBar(); });
+  Dom.video.addEventListener('ended',   function () { setStatus('Ended','idle'); stopStallWatchdog(); });
   Dom.video.addEventListener('dblclick', toggleFS);
 }
 
-// ── Fullscreen (M3U) with focus restore ──────────────────────────
-function showFsHint() { clearTimeout(fsHintTimer); if(Dom.fsHint)Dom.fsHint.classList.add('visible'); fsHintTimer=setTimeout(function(){if(Dom.fsHint)Dom.fsHint.classList.remove('visible');},3200); }
+// ── Fullscreen ────────────────────────────────────────────────────
+function showFsHint() {
+  clearTimeout(fsHintTimer);
+  if (Dom.fsHint) Dom.fsHint.classList.add('visible');
+  fsHintTimer = setTimeout(function () { if(Dom.fsHint) Dom.fsHint.classList.remove('visible'); }, 3200);
+}
 function applyExitFSState() {
   document.body.classList.remove('fullscreen');
   isFullscreen = false;
   if (Dom.fsHint) Dom.fsHint.classList.remove('visible');
-  window.dispatchEvent(new Event('resize'));
-  setFocus('list');
-  VS.refresh();
+  window.dispatchEvent(new Event('resize'));  // restore sidebar layout
+  setFocus('list'); VS.refresh();             // restore list focus highlight
 }
 function enterFS() {
   var fn = Dom.videoWrap && (Dom.videoWrap.requestFullscreen||Dom.videoWrap.webkitRequestFullscreen||Dom.videoWrap.mozRequestFullScreen);
@@ -608,8 +676,8 @@ function exitFS() {
   if(fn)try{fn.call(document);}catch(e){}
   applyExitFSState();
 }
-function toggleFS() { if(isFullscreen)exitFS();else enterFS(); }
-function onFsChange() { var f=!!(document.fullscreenElement||document.webkitFullscreenElement); if(!f&&isFullscreen)applyExitFSState(); }
+function toggleFS() { if(isFullscreen) exitFS(); else enterFS(); }
+function onFsChange() { if(!(document.fullscreenElement||document.webkitFullscreenElement)&&isFullscreen) applyExitFSState(); }
 document.addEventListener('fullscreenchange',       onFsChange);
 document.addEventListener('webkitfullscreenchange', onFsChange);
 
@@ -635,8 +703,9 @@ function handleDigit(d) {
 }
 function getDigit(e) {
   var c=e.keyCode;
-  if(c>=48&&c<=57)return String(c-48); if(c>=96&&c<=105)return String(c-96);
-  if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;
+  if(c>=48&&c<=57) return String(c-48);
+  if(c>=96&&c<=105) return String(c-96);
+  if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9') return e.key;
   return null;
 }
 
@@ -652,23 +721,21 @@ function setFocus(a) {
   if(Dom.addPlaylistBtn)Dom.addPlaylistBtn.classList.toggle('focused',a==='addBtn');
   if(a==='tabs')_syncTabHL();else _clearTabHL();
 }
-function _syncTabHL() { if(Dom.tabBar)Dom.tabBar.querySelectorAll('.tab').forEach(function(b,i){b.classList.toggle('kbd-focus',i===tabFocusIdx);}); }
+function _syncTabHL(){ if(Dom.tabBar)Dom.tabBar.querySelectorAll('.tab').forEach(function(b,i){b.classList.toggle('kbd-focus',i===tabFocusIdx);}); }
 function _clearTabHL(){ if(Dom.tabBar)Dom.tabBar.querySelectorAll('.tab').forEach(function(b){b.classList.remove('kbd-focus');}); }
 function moveSel(d) {
   if(!filtered.length)return;
   cancelPreview(); clearTimeout(dialTimer);dialTimer=null;dialBuffer='';if(Dom.chDialer)Dom.chDialer.classList.remove('visible');
   selectedIndex=Math.max(0,Math.min(filtered.length-1,selectedIndex+d));
   VS.scrollTo(selectedIndex);VS.refresh();schedulePreview();
-  resetSleepTimer();
 }
 function moveTabFocus(d) {
   var t=TAB_TOTAL(); tabFocusIdx=((tabFocusIdx+d)%t+t)%t; _syncTabHL();
   if(Dom.tabBar){var btns=Dom.tabBar.querySelectorAll('.tab');if(btns[tabFocusIdx])btns[tabFocusIdx].scrollIntoView({inline:'nearest',block:'nearest'});}
-  resetSleepTimer();
 }
-function activateFocusedTab(){ switchTab(tabFocusIdx); setFocus('list'); resetSleepTimer(); }
+function activateFocusedTab(){ switchTab(tabFocusIdx); setFocus('list'); }
 
-// ── Tizen key registration ───────────────────────────────────────
+// ── Tizen key registration ────────────────────────────────────────
 function registerKeys() {
   try {
     if (window.tizen && tizen.tvinputdevice) {
@@ -681,65 +748,86 @@ function registerKeys() {
   } catch(e){}
 }
 
-// ── PreCh (last channel) support ─────────────────────────────────
-function pushToLastChannelStack(chUrl) {
-  if (!chUrl) return;
-  lastChannelStack = lastChannelStack.filter(url => url !== chUrl);
-  lastChannelStack.unshift(chUrl);
-  if (lastChannelStack.length > 10) lastChannelStack.pop();
-}
-function switchToLastChannel() {
-  if (lastChannelStack.length < 2) { showToast('No previous channel'); return; }
-  var lastUrl = lastChannelStack[1];
-  var idx = filtered.findIndex(ch => ch.url === lastUrl);
-  if (idx === -1) { showToast('Previous channel not in current list'); return; }
-  cancelPreview(); selectedIndex = idx; VS.centerOn(idx); VS.refresh(); playSelected();
-}
+// ══════════════════════════════════════════════════════════════════
+// JIOTV PORTAL — auto-connects to 172.20.10.2:5001, no modal
+// ══════════════════════════════════════════════════════════════════
 
-// ══════════════════════════════════════════════════════════════════
-// JIOTV PORTAL with mutex + media keys + direct connect
-// ══════════════════════════════════════════════════════════════════
 function showJioPortal() {
-  if(Dom.appMain)Dom.appMain.style.display='none';
-  if(Dom.jiotvPortal)Dom.jiotvPortal.style.display='flex';
+  if(Dom.appMain)  Dom.appMain.style.display  = 'none';
+  if(Dom.jiotvPortal) Dom.jiotvPortal.style.display = 'flex';
+  stopStallWatchdog();  // FIX: stop M3U watchdog when entering portal
   jpApplyFilters();
-  jpFocusRow=0;jpFocusCol=0;
-  requestAnimationFrame(function(){jpFocusTile();});
-}
-function hideJioPortal() {
-  stopStallWatchdog();
-  if(Dom.jiotvPortal)Dom.jiotvPortal.style.display='none';
-  if(Dom.appMain)Dom.appMain.style.display='grid';
-  jiotvMode=false;
-  var si=parseInt(lsGet('iptv:lastM3uIndex')||'0',10);
-  plIdx=(!isNaN(si)&&si<allPlaylists.length)?si:0;
-  rebuildTabs();loadPlaylist();setFocus('list');saveMode();
+  jpFocusRow=0; jpFocusCol=0;
+  requestAnimationFrame(function () { jpFocusTile(); });
 }
 
-// Differential grid update
+function hideJioPortal() {
+  if(Dom.jiotvPortal) Dom.jiotvPortal.style.display = 'none';
+  if(Dom.appMain)  Dom.appMain.style.display  = 'grid';
+  jiotvMode = false;
+  var si = parseInt(lsGet('iptv:lastM3uIndex')||'0',10);
+  plIdx = (!isNaN(si) && si < allPlaylists.length) ? si : 0;
+  rebuildTabs(); loadPlaylist(); setFocus('list'); saveMode();
+}
+
+// ── Auto-connect to fixed JioTV IP ───────────────────────────────
+// No modal, no scan, no OTP. Just tries 172.20.10.2:5001 directly.
+async function _autoConnectJioTV() {
+  try {
+    var client = await JioTVClient.directConnect(JIOTV_FIXED_SERVER);
+    jiotvClient = client;
+    jiotvMode   = true;
+    return true;
+  } catch (e) {
+    console.warn('[JioTV] auto-connect failed:', e.message);
+    showToast('JioTV Go offline — start app on phone', 4000);
+    return false;
+  }
+}
+
+// Called when user taps JioTV tab
+async function openJioPortalDirect() {
+  jiotvMode = true; plIdx = TAB_JIOTV(); rebuildTabs();
+
+  if (!jiotvClient || !jiotvClient.logged_in) {
+    setStatus('Connecting to JioTV…', 'loading'); startLoadBar();
+    var ok = await _autoConnectJioTV();
+    if (!ok) { jiotvMode=false; plIdx=0; rebuildTabs(); _fallbackM3u(); finishLoadBar(); return; }
+  }
+
+  if (jiotvChannels.length === 0) {
+    await loadJioChannels();
+  } else {
+    jpFiltered = jiotvChannels.slice(); _jpCurrentSet = '';
+  }
+  saveMode(); showJioPortal();
+}
+
+// ── Grid filters ──────────────────────────────────────────────────
 var _jpCurrentSet = '';
+
 function jpApplyFilters() {
   var q = jpSearchQ.toLowerCase();
-  jpFiltered = jiotvChannels.filter(function(ch) {
+  jpFiltered = jiotvChannels.filter(function (ch) {
     if (jpActiveCat  !== 'all' && ch.group !== jpActiveCat)  return false;
     if (jpActiveLang !== 'all' && ch.lang  !== jpActiveLang) return false;
     if (q && !ch.name.toLowerCase().includes(q)) return false;
     return true;
   });
-  var fingerprint = jpActiveCat+'|'+jpActiveLang+'|'+q;
-  if (fingerprint === _jpCurrentSet && Dom.jpGrid && Dom.jpGrid.children.length === jpFiltered.length) {
+  var fp = jpActiveCat + '|' + jpActiveLang + '|' + q;
+  if (fp === _jpCurrentSet && Dom.jpGrid && Dom.jpGrid.children.length === jpFiltered.length) {
     _jpSyncPlayingState(); return;
   }
-  _jpCurrentSet = fingerprint;
-  jpBuildGrid();
+  _jpCurrentSet = fp;
+  _jpBuildGrid();
 }
 
 var PH_TILE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24' fill='none' stroke='%234a4a62' stroke-width='1.5'%3E%3Crect x='2' y='7' width='20' height='13' rx='2'/%3E%3Cpolyline points='16 20 12 16 8 20'/%3E%3C/svg%3E";
 
-function jpBuildGrid() {
+function _jpBuildGrid() {
   if (!Dom.jpGrid) return;
   var frag = document.createDocumentFragment();
-  jpFiltered.forEach(function(ch, i) {
+  jpFiltered.forEach(function (ch, i) {
     var tile = document.createElement('div');
     tile.className = 'jp-tile';
     if (jpActiveChannel && ch.jioId === jpActiveChannel.jioId) tile.classList.add('playing');
@@ -749,26 +837,42 @@ function jpBuildGrid() {
       '<div class="jp-tile-group">'+esc(ch.group||'')+'</div>'+
       (ch.isHD?'<div class="jp-tile-hd">HD</div>':'')+
       '<div class="jp-tile-live">LIVE</div>';
-    tile.addEventListener('click', function(){ jpPlayChannel(ch, i); });
+    tile.addEventListener('click', function () { jpPlayChannel(ch, i); });
     frag.appendChild(tile);
   });
   Dom.jpGrid.innerHTML = '';
   Dom.jpGrid.appendChild(frag);
   if (Dom.jpCount) Dom.jpCount.textContent = jpFiltered.length + ' channels';
-  requestAnimationFrame(function() {
+
+  // ResizeObserver recalculates column count when grid reflows
+  if (window.ResizeObserver && !_jpGridResizeObs) {
+    _jpGridResizeObs = new ResizeObserver(function () {
+      var tiles = Dom.jpGrid.querySelectorAll('.jp-tile');
+      if (tiles.length > 0) {
+        var r1 = tiles[0].getBoundingClientRect();
+        var gR = Dom.jpGrid.getBoundingClientRect();
+        if (r1.width > 0) jpGridCols = Math.max(1, Math.round(gR.width / (r1.width + 14)));
+      }
+    });
+    _jpGridResizeObs.observe(Dom.jpGrid);
+  }
+
+  requestAnimationFrame(function () {
     var tiles = Dom.jpGrid.querySelectorAll('.jp-tile');
     if (tiles.length > 0) {
-      var r1 = tiles[0].getBoundingClientRect(), gR = Dom.jpGrid.getBoundingClientRect();
-      jpGridCols = Math.max(1, Math.round(gR.width / (r1.width + 14)));
+      var r1 = tiles[0].getBoundingClientRect();
+      var gR = Dom.jpGrid.getBoundingClientRect();
+      if (r1.width > 0) jpGridCols = Math.max(1, Math.round(gR.width / (r1.width + 14)));
     }
     jpFocusTile();
-    if (window.AppCache) AppCache.preloadImages(jpFiltered.slice(0,60).map(function(c){return c.logo;}).filter(Boolean));
+    if (window.AppCache)
+      AppCache.preloadImages(jpFiltered.slice(0,60).map(function(c){return c.logo;}).filter(Boolean));
   });
 }
 
 function _jpSyncPlayingState() {
   if (!Dom.jpGrid) return;
-  Dom.jpGrid.querySelectorAll('.jp-tile').forEach(function(t, i) {
+  Dom.jpGrid.querySelectorAll('.jp-tile').forEach(function (t, i) {
     t.classList.toggle('playing', !!(jpActiveChannel && jpFiltered[i] && jpFiltered[i].jioId === jpActiveChannel.jioId));
   });
 }
@@ -776,7 +880,7 @@ function _jpSyncPlayingState() {
 function jpFocusTile() {
   if (!Dom.jpGrid) return;
   var tiles = Dom.jpGrid.querySelectorAll('.jp-tile');
-  tiles.forEach(function(t){t.classList.remove('focused');});
+  tiles.forEach(function (t) { t.classList.remove('focused'); });
   var idx = Math.max(0, Math.min(tiles.length-1, jpFocusRow*jpGridCols+jpFocusCol));
   if (tiles[idx]) {
     tiles[idx].classList.add('focused');
@@ -785,7 +889,7 @@ function jpFocusTile() {
     jpFocusCol = idx%Math.max(1,jpGridCols);
   }
 }
-function jpGetFocusIdx(){ return jpFocusRow*jpGridCols+jpFocusCol; }
+function jpGetFocusIdx() { return jpFocusRow*jpGridCols+jpFocusCol; }
 function jpMoveFocus(dr, dc) {
   if (!Dom.jpGrid) return;
   var tiles = Dom.jpGrid.querySelectorAll('.jp-tile');
@@ -794,31 +898,29 @@ function jpMoveFocus(dr, dc) {
   var newRow = Math.max(0, Math.min(rows-1, jpFocusRow+dr));
   var newCol = Math.max(0, Math.min(jpGridCols-1, jpFocusCol+dc));
   var newIdx = newRow*jpGridCols+newCol;
-  if (newIdx >= total) { newCol = (total-1) - newRow*jpGridCols; newIdx = newRow*jpGridCols+newCol; }
+  if (newIdx >= total) { newCol = (total-1)-newRow*jpGridCols; newIdx = newRow*jpGridCols+newCol; }
   if (newIdx < 0) newIdx = 0;
   jpFocusRow = newRow; jpFocusCol = Math.max(0, newCol);
   jpFocusTile();
-  resetSleepTimer();
 }
 function jpActivateFilter(f) {
   var type=f.dataset.type, val=f.dataset.filter;
   if (type==='cat')  { jpActiveCat=val;  if(Dom.jpFilters)Dom.jpFilters.querySelectorAll('.jp-filter').forEach(function(b){b.classList.toggle('active',b.dataset.filter===val&&b.dataset.type==='cat');}); }
   else               { jpActiveLang=val; if(Dom.jpLangFilters)Dom.jpLangFilters.querySelectorAll('.jp-filter').forEach(function(b){b.classList.toggle('active',b.dataset.filter===val&&b.dataset.type==='lang');}); }
-  jpFocusRow=0;jpFocusCol=0; jpApplyFilters();
-  resetSleepTimer();
+  jpFocusRow=0; jpFocusCol=0; jpApplyFilters();
 }
 
-// JioTV player with proper mutex and media keys
-async function jpPlayChannel(ch, gridIdx) {
-  if (_jpPlayerBusy) return;
-  _jpPlayerBusy = true;
-  _jpLoadPromise = _jpLoadPromise.then(async () => {
+// ── JioTV player — proper promise mutex ───────────────────────────
+function jpPlayChannel(ch, gridIdx) {
+  _jpLoadPromise = _jpLoadPromise.then(async function () {
+    if (_jpPlayerBusy) return;
+    _jpPlayerBusy = true;
     try {
       jpActiveChannel = ch; jpInPlayer = true;
-      if (Dom.jpPlayerLayer) Dom.jpPlayerLayer.style.display = 'block';
+      if (Dom.jpPlayerLayer)   Dom.jpPlayerLayer.style.display = 'block';
       if (Dom.jpPlayerOverlay) Dom.jpPlayerOverlay.classList.add('visible');
-      if (Dom.jpPlTitle) Dom.jpPlTitle.textContent = ch.name;
-      if (Dom.jpPlSpinner) Dom.jpPlSpinner.classList.add('active');
+      if (Dom.jpPlTitle)       Dom.jpPlTitle.textContent = ch.name;
+      if (Dom.jpPlSpinner)     Dom.jpPlSpinner.classList.add('active');
       _jpSyncPlayingState();
       _jpUpdateNowBar(ch);
 
@@ -826,16 +928,16 @@ async function jpPlayChannel(ch, gridIdx) {
         shaka.polyfill.installAll();
         jpPlayer = new shaka.Player(Dom.jpVideo);
         jpPlayer.configure({
-          streaming:{bufferingGoal:12,rebufferingGoal:2,stallEnabled:true,stallThreshold:1,stallSkip:0.1,retryParameters:{maxAttempts:6,baseDelay:500,backoffFactor:2,fuzzFactor:0.5,timeout:30000}},
+          streaming:{lowLatencyMode:true,inaccurateManifestTolerance:0,bufferingGoal:10,rebufferingGoal:1.5,stallEnabled:true,stallThreshold:1,stallSkip:0.1,retryParameters:{maxAttempts:6,baseDelay:300,backoffFactor:1.5,fuzzFactor:0.3,timeout:20000}},
           drm:{retryParameters:{maxAttempts:4,baseDelay:500,backoffFactor:2,timeout:15000},advanced:{'com.widevine.alpha':{videoRobustness:'HW_SECURE_ALL',audioRobustness:'HW_SECURE_CRYPTO'}}},
         });
-        jpPlayer.addEventListener('error', function(){ if(Dom.jpPlSpinner)Dom.jpPlSpinner.classList.remove('active'); _jpPlayerBusy=false; });
-        jpPlayer.addEventListener('buffering', function(ev){ if(Dom.jpPlSpinner)Dom.jpPlSpinner.classList.toggle('active',ev.buffering); if(!ev.buffering)_jpUpdateTech(); });
+        jpPlayer.addEventListener('error',      function(){ if(Dom.jpPlSpinner)Dom.jpPlSpinner.classList.remove('active'); });
+        jpPlayer.addEventListener('buffering',  function(ev){ if(Dom.jpPlSpinner)Dom.jpPlSpinner.classList.toggle('active',ev.buffering); if(!ev.buffering)_jpUpdateTech(); });
         jpPlayer.addEventListener('variantchanged', _jpUpdateTech);
         jpPlayer.addEventListener('adaptation',     _jpUpdateTech);
       }
 
-      var info = await jiotvClient.getStreamInfo(ch.jioId);
+      var info    = await jiotvClient.getStreamInfo(ch.jioId);
       var playUrl = (info && info.url) ? info.url : ch.url;
 
       await jpPlayer.unload(); Dom.jpVideo.removeAttribute('src');
@@ -848,38 +950,35 @@ async function jpPlayChannel(ch, gridIdx) {
       await Dom.jpVideo.play().catch(function(){});
 
       jpShowOverlay();
-      setTimeout(function(){ if(jpInPlayer)jpHideOverlay(); }, OVERLAY_AUTO_HIDE);
+      setTimeout(function(){ if(jpInPlayer) jpHideOverlay(); }, OVERLAY_AUTO_HIDE);
 
       clearTimeout(jpEpgTimer);
       (function schedEpg() {
-        jpEpgTimer = setTimeout(function() {
+        jpEpgTimer = setTimeout(function () {
           if (!jpInPlayer) return;
-          jpFetchEpg(ch.jioId).then(function(){ schedEpg(); });
+          jpFetchEpg(ch.jioId).then(function () { schedEpg(); });
         }, 800);
       })();
+
     } catch(err) {
       console.error('[JioTV] play:', err.message);
       if (Dom.jpPlSpinner) Dom.jpPlSpinner.classList.remove('active');
+      showToast('Stream error: ' + err.message);
+      // Native video fallback
       try { Dom.jpVideo.src=ch.url; Dom.jpVideo.load(); await Dom.jpVideo.play().catch(function(){}); }
-      catch(e2) { showToast('Stream error — try another channel'); jpExitPlayer(); }
+      catch(e2) { showToast('Stream unavailable — try another channel'); jpExitPlayer(); }
     } finally {
       _jpPlayerBusy = false;
     }
   });
-  await _jpLoadPromise;
 }
 
 function _buildJpDrm(info) {
-  if (!info || !info.isDRM) return null;
-  var cfg = {servers:{}};
-  if (info.drm_url) {
-    cfg.servers['com.widevine.alpha'] = info.drm_url;
-    cfg.advanced = {'com.widevine.alpha':{videoRobustness:'HW_SECURE_ALL',audioRobustness:'HW_SECURE_CRYPTO'}};
-  } else if (info.key && info.iv) {
-    cfg.servers['org.w3.clearkey'] = ''; cfg.clearKeys = {};
-    cfg.clearKeys[info.key_id||info.kid||info.key] = info.key;
-  }
-  return Object.keys(cfg.servers).length ? cfg : null;
+  if (!info||!info.isDRM) return null;
+  var cfg={servers:{}};
+  if(info.drm_url){cfg.servers['com.widevine.alpha']=info.drm_url;cfg.advanced={'com.widevine.alpha':{videoRobustness:'HW_SECURE_ALL',audioRobustness:'HW_SECURE_CRYPTO'}};}
+  else if(info.key){cfg.servers['org.w3.clearkey']='';cfg.clearKeys={};cfg.clearKeys[info.key_id||info.kid||info.key]=info.key;}
+  return Object.keys(cfg.servers).length?cfg:null;
 }
 
 function jpShowOverlay() { if(Dom.jpPlayerOverlay)Dom.jpPlayerOverlay.classList.add('visible'); clearTimeout(jpOverlayTimer); jpOverlayTimer=setTimeout(jpHideOverlay,OVERLAY_AUTO_HIDE); }
@@ -888,154 +987,193 @@ function jpHideOverlay() { if(Dom.jpPlayerOverlay)Dom.jpPlayerOverlay.classList.
 function jpExitPlayer() {
   jpInPlayer=false; _jpPlayerBusy=false;
   clearTimeout(jpEpgTimer); clearTimeout(jpOverlayTimer);
-  if (jpPlayer) jpPlayer.unload().catch(function(){});
-  if (Dom.jpVideo) Dom.jpVideo.removeAttribute('src');
-  if (Dom.jpPlayerLayer) Dom.jpPlayerLayer.style.display='none';
-  if (Dom.jpPlayerOverlay) Dom.jpPlayerOverlay.classList.remove('visible');
-  if (Dom.jpPlSpinner) Dom.jpPlSpinner.classList.remove('active');
-  requestAnimationFrame(function(){jpFocusTile();});
+  if(jpPlayer) jpPlayer.unload().catch(function(){});
+  if(Dom.jpVideo) Dom.jpVideo.removeAttribute('src');
+  if(Dom.jpPlayerLayer)   Dom.jpPlayerLayer.style.display='none';
+  if(Dom.jpPlayerOverlay) Dom.jpPlayerOverlay.classList.remove('visible');
+  if(Dom.jpPlSpinner)     Dom.jpPlSpinner.classList.remove('active');
+  requestAnimationFrame(function(){ jpFocusTile(); });
 }
 
 function _jpUpdateNowBar(ch) {
-  if (!Dom.jpNowBar) return;
-  Dom.jpNowBar.style.display='flex';
+  if(!Dom.jpNowBar) return; Dom.jpNowBar.style.display='flex';
   if(Dom.jpNbThumb)Dom.jpNbThumb.innerHTML='<img src="'+esc(ch.logo||PH_TILE)+'" onerror="this.src=\''+PH_TILE+'\'" style="width:100%;height:100%;object-fit:contain">';
   if(Dom.jpNbName)Dom.jpNbName.textContent=ch.name;
-  if(Dom.jpNbEpg)Dom.jpNbEpg.textContent='';
+  if(Dom.jpNbEpg) Dom.jpNbEpg.textContent='';
 }
 function _jpUpdateTech() {
-  if (!jpPlayer) return;
-  try {
-    var tr=jpPlayer.getVariantTracks?jpPlayer.getVariantTracks():[], vt=tr.find(function(t){return t.active;}), s=jpPlayer.getStats?jpPlayer.getStats():null;
+  if(!jpPlayer)return;
+  try{
+    var tr=jpPlayer.getVariantTracks?jpPlayer.getVariantTracks():[],vt=tr.find(function(t){return t.active;}),s=jpPlayer.getStats?jpPlayer.getStats():null;
     var parts=[];
     if(vt&&vt.width&&vt.height)parts.push(vt.width+'×'+vt.height);
     if(s&&s.streamBandwidth)parts.push((s.streamBandwidth/1e6).toFixed(1)+' Mbps');
     var info=parts.join(' · ');
     if(Dom.jpPlTech)Dom.jpPlTech.textContent=info;
     if(Dom.jpNbTech)Dom.jpNbTech.textContent=info;
-  } catch(e){}
+  }catch(e){}
 }
 async function jpFetchEpg(channelId) {
-  if (!jiotvClient||!channelId||!jpInPlayer) return;
-  var ep = await jiotvClient.getNowPlaying(channelId);
-  if (ep) {
+  if(!jiotvClient||!channelId||!jpInPlayer)return;
+  var ep=await jiotvClient.getNowPlaying(channelId);
+  if(ep){
     if(Dom.jpPlProg)Dom.jpPlProg.textContent=ep.title||ep.showname||'';
     if(Dom.jpPlDesc)Dom.jpPlDesc.textContent=ep.description||'';
-    if(Dom.jpNbEpg)Dom.jpNbEpg.textContent=ep.title||ep.showname||'';
+    if(Dom.jpNbEpg) Dom.jpNbEpg.textContent=ep.title||ep.showname||'';
   }
 }
 
-if(Dom.jpFilters)    Dom.jpFilters.addEventListener('click',    function(e){var f=e.target.closest('.jp-filter');if(f)jpActivateFilter(f);});
-if(Dom.jpLangFilters)Dom.jpLangFilters.addEventListener('click',function(e){var f=e.target.closest('.jp-filter');if(f)jpActivateFilter(f);});
-if(Dom.jpSearch)     Dom.jpSearch.addEventListener('input',     function(){jpSearchQ=Dom.jpSearch.value;jpFocusRow=0;jpFocusCol=0;jpApplyFilters();});
-if(Dom.jpExitBtn)    Dom.jpExitBtn.addEventListener('click',    hideJioPortal);
-if(Dom.jpPlBack)     Dom.jpPlBack.addEventListener('click',     jpExitPlayer);
+// Portal event delegation
+if(Dom.jpFilters)    Dom.jpFilters.addEventListener('click',     function(e){var f=e.target.closest('.jp-filter');if(f)jpActivateFilter(f);});
+if(Dom.jpLangFilters)Dom.jpLangFilters.addEventListener('click', function(e){var f=e.target.closest('.jp-filter');if(f)jpActivateFilter(f);});
+if(Dom.jpSearch)     Dom.jpSearch.addEventListener('input',      function(){jpSearchQ=Dom.jpSearch.value;jpFocusRow=0;jpFocusCol=0;jpApplyFilters();});
+if(Dom.jpExitBtn)    Dom.jpExitBtn.addEventListener('click',     hideJioPortal);
+if(Dom.jpPlBack)     Dom.jpPlBack.addEventListener('click',      jpExitPlayer);
+
+// ── Load JioTV channels ───────────────────────────────────────────
+async function loadJioChannels() {
+  if(!jiotvClient) return;
+  if(window.AppCache){
+    var cached=await AppCache.getJioChannels();
+    if(cached&&cached.length>0){
+      _applyJioChannels(cached);
+      jiotvClient.invalidateCache();
+      setTimeout(_refreshJioBackground, 500);
+      return;
+    }
+  }
+  setStatus('Loading JioTV…','loading'); startLoadBar();
+  try{
+    var list=await jiotvClient.getChannelsFormatted();
+    _applyJioChannels(list);
+    if(window.AppCache)AppCache.setJioChannels(list);
+    finishLoadBar();
+  }catch(err){ setStatus('JioTV load failed','error'); finishLoadBar(); console.error('[JioTV]',err); }
+}
+function _applyJioChannels(list){
+  jiotvChannels=list; jpFiltered=list.slice(); _jpCurrentSet='';
+  channels=list; allChannels=list.slice(); filtered=list.slice();
+  selectedIndex=0; renderList(); setLbl('JIOTV',list.length);
+  setStatus('JioTV · '+list.length+' ch','playing');
+}
+async function _refreshJioBackground(){
+  try{
+    var list=await jiotvClient.getChannelsFormatted();
+    _applyJioChannels(list);
+    if(window.AppCache)AppCache.setJioChannels(list);
+    if(Dom.jiotvPortal&&Dom.jiotvPortal.style.display!=='none')jpApplyFilters();
+  }catch(e){}
+}
+
+// ── Mode save/restore ─────────────────────────────────────────────
+function saveMode(){ if(jiotvMode)lsSet('iptv:mode','jiotv');else{lsSet('iptv:mode','m3u');lsSet('iptv:lastM3uIndex',String(plIdx));} }
+async function loadMode(){
+  var mode=lsGet('iptv:mode');
+  if(mode==='jiotv'){
+    // Auto-reconnect to fixed IP on app start
+    var ok=await _autoConnectJioTV();
+    if(ok){ jiotvMode=true; plIdx=TAB_JIOTV(); rebuildTabs(); await loadJioChannels(); saveMode(); return; }
+    jiotvMode=false; _fallbackM3u();
+  } else {
+    _fallbackM3u();
+  }
+}
+function _fallbackM3u(){ var si=parseInt(lsGet('iptv:lastM3uIndex')||'0',10); plIdx=(!isNaN(si)&&si<allPlaylists.length)?si:0; rebuildTabs(); loadPlaylist(); }
 
 // ══════════════════════════════════════════════════════════════════
 // SETTINGS MODAL
 // ══════════════════════════════════════════════════════════════════
 function openSettings() {
-  if (!Dom.settingsModal) return;
-  if (Dom.settingsSleepSelect) Dom.settingsSleepSelect.value = String(sleepMinutes);
-  Dom.settingsModal.style.display = 'flex';
+  if(!Dom.settingsModal)return;
+  if(Dom.settingsSleepSelect)Dom.settingsSleepSelect.value=String(sleepMinutes);
+  Dom.settingsModal.style.display='flex';
 }
-function closeSettings() { if(Dom.settingsModal)Dom.settingsModal.style.display='none'; setFocus('list'); }
+function closeSettings(){ if(Dom.settingsModal)Dom.settingsModal.style.display='none'; setFocus('list'); }
 
-if (Dom.settingsCloseBtn) Dom.settingsCloseBtn.addEventListener('click', closeSettings);
-if (Dom.settingsCacheBtn) Dom.settingsCacheBtn.addEventListener('click', function() {
-  if (window.AppCache) { AppCache.clearAllM3U(); AppCache.clearJioChannels(); }
+if(Dom.settingsCloseBtn)   Dom.settingsCloseBtn.addEventListener('click', closeSettings);
+if(Dom.settingsCacheBtn)   Dom.settingsCacheBtn.addEventListener('click', function(){
+  if(window.AppCache){AppCache.clearAllM3U();AppCache.clearJioChannels();}
   showToast('Cache cleared'); closeSettings();
 });
-if (Dom.settingsSleepSelect) Dom.settingsSleepSelect.addEventListener('change', function() {
-  setSleepTimer(parseInt(Dom.settingsSleepSelect.value, 10) || 0);
+if(Dom.settingsSleepSelect)Dom.settingsSleepSelect.addEventListener('change', function(){
+  setSleepTimer(parseInt(Dom.settingsSleepSelect.value,10)||0);
 });
-if (Dom.settingsAVReset) Dom.settingsAVReset.addEventListener('click', function() {
-  resetAvSync(); showToast('AV Sync reset to 0');
-});
-if (Dom.settingsAudioTrack) Dom.settingsAudioTrack.addEventListener('click', cycleAudioTrack);
+if(Dom.settingsAVReset)    Dom.settingsAVReset.addEventListener('click', function(){ resetAvSync(); });
+if(Dom.settingsAudioTrack) Dom.settingsAudioTrack.addEventListener('click', cycleAudioTrack);
 
 // ══════════════════════════════════════════════════════════════════
 // MASTER KEY HANDLER
 // ══════════════════════════════════════════════════════════════════
 window.addEventListener('keydown', function(e) {
-  var k = e.key, kc = e.keyCode;
-  resetSleepTimer();
+  var k=e.key, kc=e.keyCode;
+  resetSleepTimer();  // any keypress resets sleep countdown
 
   // ── JioTV Portal ─────────────────────────────────────────────
-  if (Dom.jiotvPortal && Dom.jiotvPortal.style.display !== 'none') {
-    if (jpInPlayer) {
-      // Media keys for JioTV player
-      if (kc === KEY.PLAY_PAUSE || kc === KEY.PLAY || kc === KEY.PAUSE) {
-        if (Dom.jpVideo.paused) Dom.jpVideo.play().catch(function(){}); else Dom.jpVideo.pause();
-        e.preventDefault(); return;
+  if(Dom.jiotvPortal&&Dom.jiotvPortal.style.display!=='none'){
+    if(jpInPlayer){
+      // Media play/pause keys work in JioTV player
+      if(kc===KEY.PLAY_PAUSE||kc===KEY.PLAY||kc===KEY.PAUSE){
+        if(Dom.jpVideo){if(Dom.jpVideo.paused)Dom.jpVideo.play().catch(function(){});else Dom.jpVideo.pause();}
+        e.preventDefault();return;
       }
-      if (kc === KEY.STOP) { jpExitPlayer(); e.preventDefault(); return; }
-      var isNav = (kc===KEY.UP||kc===KEY.DOWN||kc===KEY.LEFT||kc===KEY.RIGHT||
-                   k==='ArrowUp'||k==='ArrowDown'||k==='ArrowLeft'||k==='ArrowRight'||
-                   kc===KEY.ENTER||k==='Enter');
-      if (isNav) { jpShowOverlay(); e.preventDefault(); return; }
-      if (k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27) { jpExitPlayer(); e.preventDefault(); return; }
-      if (k==='Info'||kc===KEY.INFO) { if(Dom.jpPlayerOverlay&&Dom.jpPlayerOverlay.classList.contains('visible'))jpHideOverlay();else jpShowOverlay(); e.preventDefault(); return; }
-      if (k==='ColorF3Blue'||kc===KEY.BLUE) { hideJioPortal(); e.preventDefault(); return; }
-      e.preventDefault(); return;
+      if(kc===KEY.STOP){jpExitPlayer();e.preventDefault();return;}
+      var isNav=(kc===KEY.UP||kc===KEY.DOWN||kc===KEY.LEFT||kc===KEY.RIGHT||k==='ArrowUp'||k==='ArrowDown'||k==='ArrowLeft'||k==='ArrowRight'||kc===KEY.ENTER||k==='Enter');
+      if(isNav){jpShowOverlay();e.preventDefault();return;}
+      if(k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27){jpExitPlayer();e.preventDefault();return;}
+      if(k==='Info'||kc===KEY.INFO){if(Dom.jpPlayerOverlay&&Dom.jpPlayerOverlay.classList.contains('visible'))jpHideOverlay();else jpShowOverlay();e.preventDefault();return;}
+      if(k==='ColorF3Blue'||kc===KEY.BLUE){hideJioPortal();e.preventDefault();return;}
+      if(kc===KEY.VOL_UP){if(Dom.jpVideo)Dom.jpVideo.volume=Math.min(1,Dom.jpVideo.volume+0.05);e.preventDefault();return;}
+      if(kc===KEY.VOL_DOWN){if(Dom.jpVideo)Dom.jpVideo.volume=Math.max(0,Dom.jpVideo.volume-0.05);e.preventDefault();return;}
+      if(kc===KEY.MUTE){if(Dom.jpVideo)Dom.jpVideo.muted=!Dom.jpVideo.muted;e.preventDefault();return;}
+      e.preventDefault();return;
     }
-    if (k==='ArrowUp'   ||kc===KEY.UP)    { jpMoveFocus(-1,0); e.preventDefault(); return; }
-    if (k==='ArrowDown' ||kc===KEY.DOWN)  { jpMoveFocus(+1,0); e.preventDefault(); return; }
-    if (k==='ArrowLeft' ||kc===KEY.LEFT)  { jpMoveFocus(0,-1); e.preventDefault(); return; }
-    if (k==='ArrowRight'||kc===KEY.RIGHT) { jpMoveFocus(0,+1); e.preventDefault(); return; }
-    if (k==='Enter'||kc===KEY.ENTER) { var idx=jpGetFocusIdx(); if(jpFiltered[idx])jpPlayChannel(jpFiltered[idx],idx); e.preventDefault(); return; }
-    if (k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27) { hideJioPortal(); e.preventDefault(); return; }
-    if (k==='ColorF3Blue'  ||kc===KEY.BLUE)   { hideJioPortal(); e.preventDefault(); return; }
-    if (k==='ColorF2Yellow'||kc===KEY.YELLOW)  { if(Dom.jpSearch)Dom.jpSearch.focus(); e.preventDefault(); return; }
-    if (k==='ColorF0Red'   ||kc===KEY.RED)     { openSettings(); e.preventDefault(); return; }
-    if (k==='MediaStop'    ||kc===KEY.STOP)    { hideJioPortal(); e.preventDefault(); return; }
-    e.preventDefault(); return;
+    if(k==='ArrowUp'   ||kc===KEY.UP)   {jpMoveFocus(-1,0);e.preventDefault();return;}
+    if(k==='ArrowDown' ||kc===KEY.DOWN) {jpMoveFocus(+1,0);e.preventDefault();return;}
+    if(k==='ArrowLeft' ||kc===KEY.LEFT) {jpMoveFocus(0,-1);e.preventDefault();return;}
+    if(k==='ArrowRight'||kc===KEY.RIGHT){jpMoveFocus(0,+1);e.preventDefault();return;}
+    if(k==='Enter'||kc===KEY.ENTER){var idx=jpGetFocusIdx();if(jpFiltered[idx])jpPlayChannel(jpFiltered[idx],idx);e.preventDefault();return;}
+    if(k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27){hideJioPortal();e.preventDefault();return;}
+    if(k==='ColorF3Blue'  ||kc===KEY.BLUE)   {hideJioPortal();e.preventDefault();return;}
+    if(k==='ColorF2Yellow'||kc===KEY.YELLOW)  {if(Dom.jpSearch)Dom.jpSearch.focus();e.preventDefault();return;}
+    if(k==='ColorF0Red'   ||kc===KEY.RED)     {openSettings();e.preventDefault();return;}
+    if(k==='MediaStop'    ||kc===KEY.STOP)    {hideJioPortal();e.preventDefault();return;}
+    e.preventDefault();return;
   }
 
   // ── Modals ───────────────────────────────────────────────────
-  var anyModal = (Dom.addPlaylistModal&&Dom.addPlaylistModal.style.display==='flex') ||
-                 (Dom.jiotvLoginModal&&Dom.jiotvLoginModal.style.display==='flex') ||
-                 (Dom.settingsModal&&Dom.settingsModal.style.display==='flex');
-  if (anyModal) {
-    if (k==='Escape'||k==='Back'||kc===KEY.BACK||kc===KEY.EXIT||kc===27) { closeAllModals(); e.preventDefault(); return; }
-    if (k==='Enter'||kc===KEY.ENTER) {
-      if(Dom.jiotvLoginModal&&Dom.jiotvLoginModal.style.display==='flex'){jiotvConnectAction();e.preventDefault();return;}
+  var anyModal=(Dom.addPlaylistModal&&Dom.addPlaylistModal.style.display==='flex')||(Dom.settingsModal&&Dom.settingsModal.style.display==='flex');
+  if(anyModal){
+    if(k==='Escape'||k==='Back'||kc===KEY.BACK||kc===KEY.EXIT||kc===27){closeAllModals();e.preventDefault();return;}
+    if(k==='Enter'||kc===KEY.ENTER){
       if(Dom.addPlaylistModal&&Dom.addPlaylistModal.style.display==='flex'){handleSavePlaylist();e.preventDefault();return;}
-      var foc=document.activeElement; if(foc&&foc.tagName==='BUTTON'){foc.click();e.preventDefault();return;}
+      var foc=document.activeElement;if(foc&&foc.tagName==='BUTTON'){foc.click();e.preventDefault();return;}
     }
-    if (k==='Tab') return;
-    return;
+    if(k==='Tab')return; return;
   }
 
   // ── Digit dialer ─────────────────────────────────────────────
   var dig=getDigit(e);
-  if (dig!==null&&focusArea!=='search'&&focusArea!=='tabs') { handleDigit(dig); e.preventDefault(); return; }
-  if (Dom.chDialer&&Dom.chDialer.classList.contains('visible')) {
+  if(dig!==null&&focusArea!=='search'&&focusArea!=='tabs'){handleDigit(dig);e.preventDefault();return;}
+  if(Dom.chDialer&&Dom.chDialer.classList.contains('visible')){
     if(kc===KEY.ENTER||k==='Enter'){clearTimeout(dialTimer);dialTimer=null;commitChannelNumber();e.preventDefault();return;}
     if(k==='Back'||k==='Escape'||kc===KEY.BACK||kc===27){clearTimeout(dialTimer);dialTimer=null;dialBuffer='';Dom.chDialer.classList.remove('visible');e.preventDefault();return;}
   }
 
   // ── Back / Escape ─────────────────────────────────────────────
-  if (k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27) {
+  if(k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27){
     if(isFullscreen){exitFS();e.preventDefault();return;}
     if(focusArea==='tabs'){setFocus('list');e.preventDefault();return;}
     if(focusArea==='search'){clearSearch();e.preventDefault();return;}
-    if(focusArea==='avLeft'||focusArea==='avRight'){setFocus('list');e.preventDefault();return;}
-    if(focusArea==='addBtn'){setFocus('list');e.preventDefault();return;}
+    if(focusArea==='avLeft'||focusArea==='avRight'||focusArea==='addBtn'){setFocus('list');e.preventDefault();return;}
+    // Don't preventDefault on exit — let tizenhwkey handle it
     try{if(window.tizen)tizen.application.getCurrentApplication().exit();}catch(ex){}
     e.preventDefault();return;
   }
 
-  if (k==='Info'||kc===KEY.INFO||k==='Guide'||kc===KEY.GUIDE){toggleOverlays();e.preventDefault();return;}
-
-  // ── PreCh (Previous Channel) ─────────────────────────────────
-  if (kc === 10190 || k === 'PreCh') {
-    switchToLastChannel();
-    e.preventDefault(); return;
-  }
+  if(k==='Info'||kc===KEY.INFO||k==='Guide'||kc===KEY.GUIDE){toggleOverlays();e.preventDefault();return;}
 
   // ── Tabs ─────────────────────────────────────────────────────
-  if (focusArea==='tabs') {
+  if(focusArea==='tabs'){
     if(k==='ArrowLeft' ||kc===KEY.LEFT) {moveTabFocus(-1);e.preventDefault();return;}
     if(k==='ArrowRight'||kc===KEY.RIGHT){moveTabFocus(+1);e.preventDefault();return;}
     if(k==='Enter'     ||kc===KEY.ENTER){activateFocusedTab();e.preventDefault();return;}
@@ -1045,75 +1183,75 @@ window.addEventListener('keydown', function(e) {
   }
 
   // ── Search ────────────────────────────────────────────────────
-  if (focusArea==='search') {
+  if(focusArea==='search'){
     if(k==='Enter'||kc===KEY.ENTER){commitSearch();e.preventDefault();return;}
     if(k==='ArrowDown'||k==='ArrowUp'||kc===KEY.DOWN||kc===KEY.UP){commitSearch();e.preventDefault();return;}
     return;
   }
 
-  // ── AV Sync ───────────────────────────────────────────────────
-  if(focusArea==='avLeft') { if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(-1);e.preventDefault();return;} if(k==='ArrowRight'||kc===KEY.RIGHT){setFocus('avRight');e.preventDefault();return;} if(k==='ArrowLeft'||kc===KEY.LEFT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;} e.preventDefault();return; }
-  if(focusArea==='avRight'){ if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(+1);e.preventDefault();return;} if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('avLeft');e.preventDefault();return;} if(k==='ArrowRight'||kc===KEY.RIGHT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;} e.preventDefault();return; }
-  if(focusArea==='addBtn') { if(k==='Enter'||kc===KEY.ENTER){openAddPlaylistModal();e.preventDefault();return;} if(k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;} if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('tabs');e.preventDefault();return;} e.preventDefault();return; }
+  // ── AV Sync / addBtn ─────────────────────────────────────────
+  if(focusArea==='avLeft'){if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(-1);e.preventDefault();return;}if(k==='ArrowRight'||kc===KEY.RIGHT){setFocus('avRight');e.preventDefault();return;}if(k==='ArrowLeft'||kc===KEY.LEFT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}e.preventDefault();return;}
+  if(focusArea==='avRight'){if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(+1);e.preventDefault();return;}if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('avLeft');e.preventDefault();return;}if(k==='ArrowRight'||kc===KEY.RIGHT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}e.preventDefault();return;}
+  if(focusArea==='addBtn'){if(k==='Enter'||kc===KEY.ENTER){openAddPlaylistModal();e.preventDefault();return;}if(k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('tabs');e.preventDefault();return;}e.preventDefault();return;}
 
   // ── List (default) ────────────────────────────────────────────
   if(k==='ArrowUp'   ||kc===KEY.UP)  {if(isFullscreen)showFsHint();else moveSel(-1);e.preventDefault();return;}
   if(k==='ArrowDown' ||kc===KEY.DOWN){if(isFullscreen)showFsHint();else moveSel(+1);e.preventDefault();return;}
-  if(k==='ArrowLeft' ||kc===KEY.LEFT){if(isFullscreen){exitFS();e.preventDefault();return;} tabFocusIdx=plIdx;setFocus('tabs');e.preventDefault();return;}
-  if(k==='ArrowRight'||kc===KEY.RIGHT){if(isFullscreen){showFsHint();e.preventDefault();return;} if($('avBtnLeft')){setFocus('avLeft');e.preventDefault();return;} e.preventDefault();return;}
-  if(k==='Enter'||kc===KEY.ENTER){
-    if(isFullscreen){exitFS();e.preventDefault();return;}
-    if(focusArea==='list'){ playSelected(); pushToLastChannelStack(currentPlayUrl); setTimeout(function(){if(hasPlayed)enterFS();},700); }
-    e.preventDefault();return;
-  }
+  if(k==='ArrowLeft' ||kc===KEY.LEFT){if(isFullscreen){exitFS();e.preventDefault();return;}tabFocusIdx=plIdx;setFocus('tabs');e.preventDefault();return;}
+  if(k==='ArrowRight'||kc===KEY.RIGHT){if(isFullscreen){showFsHint();e.preventDefault();return;}if($('avBtnLeft')){setFocus('avLeft');e.preventDefault();return;}e.preventDefault();return;}
+  if(k==='Enter'||kc===KEY.ENTER){if(isFullscreen){exitFS();e.preventDefault();return;}if(focusArea==='list'){playSelected();setTimeout(function(){if(hasPlayed)enterFS();},700);}e.preventDefault();return;}
   if(k==='PageUp'  ||kc===KEY.PAGE_UP)  {moveSel(-10);e.preventDefault();return;}
   if(k==='PageDown'||kc===KEY.PAGE_DOWN){moveSel(+10);e.preventDefault();return;}
+
   if(k==='MediaPlayPause'||kc===KEY.PLAY_PAUSE){if(Dom.video){if(Dom.video.paused)Dom.video.play().catch(function(){});else Dom.video.pause();}e.preventDefault();return;}
   if(k==='MediaPlay' ||kc===KEY.PLAY) {if(Dom.video)Dom.video.play().catch(function(){});e.preventDefault();return;}
   if(k==='MediaPause'||kc===KEY.PAUSE){if(Dom.video)Dom.video.pause();e.preventDefault();return;}
   if(k==='MediaStop' ||kc===KEY.STOP) {cancelPreview();SagaPlayer.stop();stopStallWatchdog();clearSleepTimer();setStatus('Stopped','idle');finishLoadBar();e.preventDefault();return;}
   if(k==='MediaFastForward'||kc===KEY.FF||k==='ChannelUp'  ||kc===KEY.CH_UP)  {moveSel(+1);e.preventDefault();return;}
   if(k==='MediaRewind'     ||kc===KEY.RW||k==='ChannelDown'||kc===KEY.CH_DOWN){moveSel(-1);e.preventDefault();return;}
+
   if(k==='ColorF0Red'   ||kc===KEY.RED)   {switchTab((plIdx+1)%TAB_TOTAL());e.preventDefault();return;}
   if(k==='ColorF1Green' ||kc===KEY.GREEN) {if(filtered.length&&focusArea==='list')toggleFav(filtered[selectedIndex]);e.preventDefault();return;}
   if(k==='ColorF2Yellow'||kc===KEY.YELLOW){setFocus('search');e.preventDefault();return;}
   if(k==='ColorF3Blue'  ||kc===KEY.BLUE)  {if(hasPlayed)toggleFS();e.preventDefault();return;}
+
   if(k==='VolumeUp'  ||kc===KEY.VOL_UP)  {if(Dom.video)Dom.video.volume=Math.min(1,Dom.video.volume+0.05);e.preventDefault();return;}
   if(k==='VolumeDown'||kc===KEY.VOL_DOWN){if(Dom.video)Dom.video.volume=Math.max(0,Dom.video.volume-0.05);e.preventDefault();return;}
   if(k==='Mute'      ||kc===KEY.MUTE)    {if(Dom.video)Dom.video.muted=!Dom.video.muted;e.preventDefault();return;}
+
+  // PreCh — previous channel
+  if(k==='PreCh'||kc===10232){goPreCh();e.preventDefault();return;}
 });
 
-// tizenhwkey handling
-document.addEventListener('tizenhwkey', function(e) {
-  var name = (e.keyName || '').toLowerCase();
-  if (name === 'back') {
-    if (Dom.jiotvPortal && Dom.jiotvPortal.style.display !== 'none') { if(jpInPlayer)jpExitPlayer();else hideJioPortal(); return; }
-    if (isFullscreen) { exitFS(); return; }
-    var anyModal = (Dom.addPlaylistModal&&Dom.addPlaylistModal.style.display==='flex') ||
-                   (Dom.jiotvLoginModal&&Dom.jiotvLoginModal.style.display==='flex') ||
-                   (Dom.settingsModal&&Dom.settingsModal.style.display==='flex');
-    if (anyModal) { closeAllModals(); return; }
-    try { if(window.tizen)tizen.application.getCurrentApplication().exit(); } catch(ex) {}
+// tizenhwkey — lowercase to handle all firmware variants
+document.addEventListener('tizenhwkey', function(e){
+  var name=(e.keyName||'').toLowerCase();
+  if(name==='back'){
+    if(Dom.jiotvPortal&&Dom.jiotvPortal.style.display!=='none'){if(jpInPlayer)jpExitPlayer();else hideJioPortal();return;}
+    if(isFullscreen){exitFS();return;}
+    var anyModal=(Dom.addPlaylistModal&&Dom.addPlaylistModal.style.display==='flex')||(Dom.settingsModal&&Dom.settingsModal.style.display==='flex');
+    if(anyModal){closeAllModals();return;}
+    try{if(window.tizen)tizen.application.getCurrentApplication().exit();}catch(ex){}
   }
 });
 
 // ── Modals ────────────────────────────────────────────────────────
-function closeAllModals() {
+function closeAllModals(){
   if(Dom.addPlaylistModal)Dom.addPlaylistModal.style.display='none';
-  if(Dom.jiotvLoginModal)Dom.jiotvLoginModal.style.display='none';
-  if(Dom.settingsModal)Dom.settingsModal.style.display='none';
+  if(Dom.settingsModal)   Dom.settingsModal.style.display='none';
   setFocus('list');
 }
-function openAddPlaylistModal() {
-  if(Dom.playlistName)Dom.playlistName.value=''; if(Dom.playlistUrl)Dom.playlistUrl.value='';
+function openAddPlaylistModal(){
+  if(Dom.playlistName)Dom.playlistName.value='';
+  if(Dom.playlistUrl) Dom.playlistUrl.value='';
   if(Dom.addPlaylistModal)Dom.addPlaylistModal.style.display='flex';
   setTimeout(function(){if(Dom.playlistName)Dom.playlistName.focus();},120);
 }
-function handleSavePlaylist() {
-  var name=(Dom.playlistName?Dom.playlistName.value.trim():'');
-  var url =(Dom.playlistUrl ?Dom.playlistUrl.value.trim() :'');
-  if(!name||!url){showToast('Please enter both name and URL');return;}
-  if(!_isAllowedPlaylistURL(url)){showToast('Invalid URL — only public HTTP(S) URLs allowed');return;}
+function handleSavePlaylist(){
+  var name=Dom.playlistName?Dom.playlistName.value.trim():'';
+  var url =Dom.playlistUrl ?Dom.playlistUrl.value.trim() :'';
+  if(!name||!url){showToast('Enter both name and URL');return;}
+  if(!_isAllowedPlaylistURL(url)){showToast('Invalid URL — public HTTP(S) only');return;}
   if(addCustomPlaylist(name,url)){showToast('"'+name+'" added');Dom.addPlaylistModal.style.display='none';}
   else showToast('Already exists');
 }
@@ -1126,14 +1264,10 @@ function addCustomPlaylist(name,url){
   if(customPlaylists.some(function(p){return p.url.toLowerCase()===url.toLowerCase();}))return false;
   customPlaylists.push({name:name,url:url});saveCustomPlaylists();rebuildAllPlaylists();return true;
 }
-function rebuildAllPlaylists(){
-  allPlaylists=DEFAULT_PLAYLISTS.concat(customPlaylists);
-  if(plIdx>=TAB_FAV())plIdx=0;
-  rebuildTabs();loadPlaylist();
-}
+function rebuildAllPlaylists(){ allPlaylists=DEFAULT_PLAYLISTS.concat(customPlaylists); if(plIdx>=TAB_FAV())plIdx=0; rebuildTabs();loadPlaylist(); }
 
 // ── Tab builder ───────────────────────────────────────────────────
-function rebuildTabs() {
+function rebuildTabs(){
   if(!Dom.tabBar)return;
   Dom.tabBar.innerHTML='';
   allPlaylists.forEach(function(pl,i){
@@ -1151,143 +1285,38 @@ function rebuildTabs() {
   jBtn.addEventListener('click',function(){switchTab(TAB_JIOTV());});Dom.tabBar.appendChild(jBtn);
   if(focusArea==='tabs')_syncTabHL();
 }
-function switchTab(idx) {
+function switchTab(idx){
   var tFav=TAB_FAV(),tJ=TAB_JIOTV();
   if(idx<tFav){jiotvMode=false;plIdx=idx;rebuildTabs();loadPlaylist();saveMode();}
   else if(idx===tFav){jiotvMode=false;plIdx=tFav;rebuildTabs();showFavourites();saveMode();}
-  else if(idx===tJ){if(jiotvClient&&jiotvClient.logged_in)openJioPortalDirect();else openJioLogin();}
+  else if(idx===tJ){ openJioPortalDirect(); }
   setFocus('list');
 }
-function openJioPortalDirect() {
-  jiotvMode=true;plIdx=TAB_JIOTV();rebuildTabs();
-  if(jiotvChannels.length===0){loadJioChannels().then(function(){showJioPortal();});}
-  else{jpFiltered=jiotvChannels.slice();_jpCurrentSet='';showJioPortal();}
-  saveMode();
-}
-
-// ── JioTV connect (direct IP 172.20.10.2:5001) ─────────────────────────────────
-function _setJioStatus(msg,color){if(!Dom.jiotvLoginStatus)return;Dom.jiotvLoginStatus.textContent=msg;Dom.jiotvLoginStatus.style.color=color||'var(--text-sec)';}
-function openJioLogin() {
-  var saved = lsGet(JIOTV_SERVER_KEY) || '';
-  if (!saved) saved = 'http://172.20.10.2:5001';
-  if (Dom.jiotvServerUrl) Dom.jiotvServerUrl.value = saved;
-  _setJioStatus('', ''); if(Dom.jiotvAccountInfo) Dom.jiotvAccountInfo.textContent = '';
-  if(Dom.jiotvLoginModal) Dom.jiotvLoginModal.style.display = 'flex';
-  setTimeout(function(){ if(Dom.jiotvServerUrl) Dom.jiotvServerUrl.focus(); }, 120);
-}
-async function jiotvConnectAction() {
-  var fieldVal = Dom.jiotvServerUrl ? Dom.jiotvServerUrl.value.trim() : '';
-  var sv = fieldVal;
-  if (!sv.startsWith('http')) sv = 'http://' + sv;
-  if (!sv || sv === 'http://') sv = 'http://172.20.10.2:5001';
-  lsSet(JIOTV_SERVER_KEY, sv);
-  
-  if (Dom.jiotvConnectBtn) Dom.jiotvConnectBtn.disabled = true;
-  _setJioStatus('Connecting to ' + sv + '...', 'var(--gold)');
-  
-  try {
-    var client = await JioTVClient.directConnect(sv);
-    jiotvClient = client;
-    jiotvClient.logged_in = true;
-    jiotvMode = true;
-    if (Dom.jiotvAccountInfo) Dom.jiotvAccountInfo.textContent = '✅ Connected';
-    _setJioStatus('Loading channels...', 'var(--gold)');
-    plIdx = TAB_JIOTV();
-    rebuildTabs();
-    await loadJioChannels();
-    Dom.jiotvLoginModal.style.display = 'none';
-    showToast('JioTV connected!');
-    saveMode();
-    showJioPortal();
-  } catch (err) {
-    console.error('[JioTV] Connect error:', err);
-    _setJioStatus('Failed: ' + err.message, 'var(--red)');
-    if (Dom.jiotvAccountInfo) Dom.jiotvAccountInfo.textContent = '';
-  } finally {
-    if (Dom.jiotvConnectBtn) Dom.jiotvConnectBtn.disabled = false;
-  }
-}
-async function loadJioChannels() {
-  if(!jiotvClient) return;
-  if(window.AppCache){
-    var cached = await AppCache.getJioChannels();
-    if(cached && cached.length > 0){
-      _applyJioChannels(cached);
-      jiotvClient.invalidateCache();
-      setTimeout(_refreshJioBackground, 500);
-      return;
-    }
-  }
-  setStatus('Loading JioTV…', 'loading'); startLoadBar();
-  try{
-    var list = await jiotvClient.getChannelsFormatted();
-    _applyJioChannels(list);
-    if(window.AppCache) AppCache.setJioChannels(list);
-    finishLoadBar();
-  } catch(err){ setStatus('JioTV load failed', 'error'); finishLoadBar(); console.error('[JioTV]', err); }
-}
-function _applyJioChannels(list){
-  jiotvChannels = list; jpFiltered = list.slice(); _jpCurrentSet = '';
-  channels = list; allChannels = list.slice(); filtered = list.slice();
-  selectedIndex = 0; renderList(); setLbl('JIOTV', list.length);
-  setStatus('JioTV · '+list.length+' ch', 'playing');
-}
-async function _refreshJioBackground(){
-  try{ var list = await jiotvClient.getChannelsFormatted(); _applyJioChannels(list); if(window.AppCache) AppCache.setJioChannels(list); if(Dom.jiotvPortal && Dom.jiotvPortal.style.display !== 'none'){ jpApplyFilters(); } } catch(e){}
-}
-async function loadSavedJiotv(){
-  var sv = lsGet(JIOTV_SERVER_KEY) || '';
-  if(!sv) sv = 'http://172.20.10.2:5001';
-  try{
-    var client = await JioTVClient.directConnect(sv);
-    jiotvClient = client;
-    jiotvClient.logged_in = true;
-    jiotvMode = true;
-    plIdx = TAB_JIOTV();
-    rebuildTabs();
-    await loadJioChannels();
-    showToast('JioTV reconnected');
-    saveMode();
-    return true;
-  } catch(e){ console.warn('[JioTV] loadSaved:', e.message); return false; }
-}
-function saveMode(){ if(jiotvMode) lsSet('iptv:mode', 'jiotv'); else { lsSet('iptv:mode', 'm3u'); lsSet('iptv:lastM3uIndex', String(plIdx)); } }
-async function loadMode(){
-  var mode = lsGet('iptv:mode');
-  if(mode === 'jiotv'){ var ok = await loadSavedJiotv(); if(!ok){ jiotvMode = false; _fallbackM3u(); } }
-  else _fallbackM3u();
-}
-function _fallbackM3u(){ var si = parseInt(lsGet('iptv:lastM3uIndex')||'0',10); plIdx = (!isNaN(si) && si<allPlaylists.length) ? si : 0; rebuildTabs(); loadPlaylist(); }
 
 // ── Boot ──────────────────────────────────────────────────────────
-(async function init() {
+(async function init(){
   registerKeys();
   loadAvSync();
   loadCustomPlaylists();
   loadPreferredAudioLang();
-  allPlaylists = DEFAULT_PLAYLISTS.concat(customPlaylists);
+  allPlaylists=DEFAULT_PLAYLISTS.concat(customPlaylists);
   VS.init(Dom.channelList);
   await _initPlayerCallbacks();
   buildAvSyncBar();
   startNetworkMonitoring();
   await loadMode();
+
   if(Dom.overlayTop)   Dom.overlayTop.classList.remove('info-visible');
   if(Dom.overlayBottom)Dom.overlayBottom.classList.remove('info-visible');
   overlaysVisible=false;
 
-  if(Dom.addPlaylistBtn)   Dom.addPlaylistBtn.addEventListener('click', openAddPlaylistModal);
-  if(Dom.savePlaylistBtn)  Dom.savePlaylistBtn.addEventListener('click', handleSavePlaylist);
-  if(Dom.cancelPlaylistBtn)Dom.cancelPlaylistBtn.addEventListener('click', function(){ Dom.addPlaylistModal.style.display='none'; setFocus('list'); });
-  if(Dom.addPlaylistModal) Dom.addPlaylistModal.addEventListener('click', function(e){ if(e.target===Dom.addPlaylistModal){ Dom.addPlaylistModal.style.display='none'; setFocus('list'); } });
-  [Dom.playlistName, Dom.playlistUrl].forEach(function(inp){ if(inp) inp.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.keyCode===13) handleSavePlaylist(); }); });
+  // Playlist modal
+  if(Dom.addPlaylistBtn)   Dom.addPlaylistBtn.addEventListener('click',openAddPlaylistModal);
+  if(Dom.savePlaylistBtn)  Dom.savePlaylistBtn.addEventListener('click',handleSavePlaylist);
+  if(Dom.cancelPlaylistBtn)Dom.cancelPlaylistBtn.addEventListener('click',function(){Dom.addPlaylistModal.style.display='none';setFocus('list');});
+  if(Dom.addPlaylistModal) Dom.addPlaylistModal.addEventListener('click',function(e){if(e.target===Dom.addPlaylistModal){Dom.addPlaylistModal.style.display='none';setFocus('list');}});
+  [Dom.playlistName,Dom.playlistUrl].forEach(function(inp){if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)handleSavePlaylist();});});
 
-  if(Dom.jiotvConnectBtn) Dom.jiotvConnectBtn.addEventListener('click', jiotvConnectAction);
-  if(Dom.jiotvCancelBtn) Dom.jiotvCancelBtn.addEventListener('click', closeAllModals);
-  if(Dom.jiotvLoginModal) Dom.jiotvLoginModal.addEventListener('click', function(e){ if(e.target===Dom.jiotvLoginModal) closeAllModals(); });
-  if(Dom.jiotvServerUrl) {
-    Dom.jiotvServerUrl.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.keyCode===13) jiotvConnectAction(); });
-    Dom.jiotvServerUrl.addEventListener('focus', function(){ if(Dom.jiotvServerUrl.value.startsWith('•')) Dom.jiotvServerUrl.value=''; });
-  }
-
-  if(jiotvMode && jiotvChannels.length>0) setTimeout(function(){ showJioPortal(); }, 300);
+  // Show JioTV portal if last mode was JioTV and channels loaded
+  if(jiotvMode&&jiotvChannels.length>0) setTimeout(function(){showJioPortal();},300);
 })();
