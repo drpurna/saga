@@ -1,8 +1,5 @@
 // ================================================================
-// SAGA IPTV — app.js v30.1  |  All critical fixes applied
-// Fixes: JioTV mutex, media keys, stall watchdog cleanup,
-//        sleep timer reset, audio track persistence, PreCh key,
-//        direct JioTV IP 172.20.10.2:5001
+// SAGA IPTV — app.js v31.0  |  Final with direct JioTV connect
 // ================================================================
 'use strict';
 
@@ -91,7 +88,6 @@ var Dom = (function buildDom() {
     'overlayProgramTitle','overlayProgramDesc','nextProgramInfo','programInfoBox',
     'toast',
     'jiotvLoginModal','jiotvServerUrl','jiotvConnectBtn','jiotvCancelBtn',
-    'jiotvScanBtn','jiotvLoginStatus','jiotvAccountInfo',
     'appMain','jiotvPortal','jpGrid','jpFilters','jpLangFilters','jpSearch',
     'jpCount','jpNowBar','jpNbThumb','jpNbName','jpNbEpg','jpNbTech',
     'jpPlayerLayer','jpPlayerOverlay','jpVideo','jpPlBack','jpPlTitle','jpPlTime',
@@ -701,7 +697,7 @@ function switchToLastChannel() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// JIOTV PORTAL with mutex + media keys + direct IP
+// JIOTV PORTAL with mutex + media keys + direct connect
 // ══════════════════════════════════════════════════════════════════
 function showJioPortal() {
   if(Dom.appMain)Dom.appMain.style.display='none';
@@ -1175,92 +1171,93 @@ function openJioLogin() {
   var saved = lsGet(JIOTV_SERVER_KEY) || '';
   if (!saved) saved = 'http://172.20.10.2:5001';
   if (Dom.jiotvServerUrl) Dom.jiotvServerUrl.value = saved;
-  _setJioStatus('','');if(Dom.jiotvAccountInfo)Dom.jiotvAccountInfo.textContent='';
-  if(Dom.jiotvLoginModal)Dom.jiotvLoginModal.style.display='flex';
-  setTimeout(function(){if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.focus();},120);
-  // Optionally auto-test the default IP silently
-  JioTVClient.probe('http://172.20.10.2:5001', 1500).then(function(ok){
-    if(ok && Dom.jiotvLoginModal && Dom.jiotvLoginModal.style.display==='flex'){
-      _setJioStatus('✅ Server reachable at 172.20.10.2:5001','var(--green)');
-    } else {
-      _setJioStatus('🔍 Press Connect or Scan','var(--gold)');
-    }
-  });
+  _setJioStatus('', ''); if(Dom.jiotvAccountInfo) Dom.jiotvAccountInfo.textContent = '';
+  if(Dom.jiotvLoginModal) Dom.jiotvLoginModal.style.display = 'flex';
+  setTimeout(function(){ if(Dom.jiotvServerUrl) Dom.jiotvServerUrl.focus(); }, 120);
 }
 async function jiotvConnectAction() {
   var fieldVal = Dom.jiotvServerUrl ? Dom.jiotvServerUrl.value.trim() : '';
   var sv = fieldVal;
   if (!sv.startsWith('http')) sv = 'http://' + sv;
-  if (!sv || sv === 'http://' || sv === 'http://172.20.10.2:5001' || sv === '172.20.10.2:5001') {
-    sv = 'http://172.20.10.2:5001';
-  }
+  if (!sv || sv === 'http://') sv = 'http://172.20.10.2:5001';
   lsSet(JIOTV_SERVER_KEY, sv);
-  if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.value='••• (connecting…)';
-  if(Dom.jiotvConnectBtn)Dom.jiotvConnectBtn.disabled=true;
-  _setJioStatus('Connecting…','var(--gold)');
-  try{
-    var alive=await JioTVClient.probe(sv,4000);
-    if(!alive){_setJioStatus('❌ Cannot reach server.','var(--red)');if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.value='';return;}
-    var c=new JioTVClient({serverUrl:sv,timeout:12000});
-    _setJioStatus('Checking status…','var(--gold)');
-    var res=await c.checkStatus();
-    if(!res.status){_setJioStatus('⚠️ Not logged in. Open JioTV Go on your phone and complete OTP login first.','var(--gold)');if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.value='';return;}
-    jiotvClient=c;jiotvClient.logged_in=true;jiotvMode=true;
-    if(Dom.jiotvAccountInfo)Dom.jiotvAccountInfo.textContent='✅ Connected · '+res.channelCount+' channels';
-    _setJioStatus('Loading channels…','var(--gold)');
-    plIdx=TAB_JIOTV();rebuildTabs();
+  
+  if (Dom.jiotvConnectBtn) Dom.jiotvConnectBtn.disabled = true;
+  _setJioStatus('Connecting to ' + sv + '...', 'var(--gold)');
+  
+  try {
+    var client = await JioTVClient.directConnect(sv);
+    jiotvClient = client;
+    jiotvClient.logged_in = true;
+    jiotvMode = true;
+    if (Dom.jiotvAccountInfo) Dom.jiotvAccountInfo.textContent = '✅ Connected';
+    _setJioStatus('Loading channels...', 'var(--gold)');
+    plIdx = TAB_JIOTV();
+    rebuildTabs();
     await loadJioChannels();
-    if(Dom.jiotvLoginModal)Dom.jiotvLoginModal.style.display='none';
-    showToast('JioTV connected! '+res.channelCount+' ch');saveMode();showJioPortal();
-  }catch(err){_setJioStatus('Failed: '+err.message,'var(--red)');if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.value='';}
-  finally{if(Dom.jiotvConnectBtn)Dom.jiotvConnectBtn.disabled=false;}
+    Dom.jiotvLoginModal.style.display = 'none';
+    showToast('JioTV connected!');
+    saveMode();
+    showJioPortal();
+  } catch (err) {
+    console.error('[JioTV] Connect error:', err);
+    _setJioStatus('Failed: ' + err.message, 'var(--red)');
+    if (Dom.jiotvAccountInfo) Dom.jiotvAccountInfo.textContent = '';
+  } finally {
+    if (Dom.jiotvConnectBtn) Dom.jiotvConnectBtn.disabled = false;
+  }
 }
 async function loadJioChannels() {
-  if(!jiotvClient)return;
+  if(!jiotvClient) return;
   if(window.AppCache){
-    var cached=await AppCache.getJioChannels();
-    if(cached&&cached.length>0){
+    var cached = await AppCache.getJioChannels();
+    if(cached && cached.length > 0){
       _applyJioChannels(cached);
       jiotvClient.invalidateCache();
-      setTimeout(_refreshJioBackground,500);return;
+      setTimeout(_refreshJioBackground, 500);
+      return;
     }
   }
-  setStatus('Loading JioTV…','loading');startLoadBar();
+  setStatus('Loading JioTV…', 'loading'); startLoadBar();
   try{
-    var list=await jiotvClient.getChannelsFormatted();
+    var list = await jiotvClient.getChannelsFormatted();
     _applyJioChannels(list);
-    if(window.AppCache)AppCache.setJioChannels(list);
+    if(window.AppCache) AppCache.setJioChannels(list);
     finishLoadBar();
-  }catch(err){setStatus('JioTV load failed','error');finishLoadBar();console.error('[JioTV]',err);}
+  } catch(err){ setStatus('JioTV load failed', 'error'); finishLoadBar(); console.error('[JioTV]', err); }
 }
 function _applyJioChannels(list){
-  jiotvChannels=list;jpFiltered=list.slice();_jpCurrentSet='';
-  channels=list;allChannels=list.slice();filtered=list.slice();
-  selectedIndex=0;renderList();setLbl('JIOTV',list.length);
-  setStatus('JioTV · '+list.length+' ch','playing');
+  jiotvChannels = list; jpFiltered = list.slice(); _jpCurrentSet = '';
+  channels = list; allChannels = list.slice(); filtered = list.slice();
+  selectedIndex = 0; renderList(); setLbl('JIOTV', list.length);
+  setStatus('JioTV · '+list.length+' ch', 'playing');
 }
 async function _refreshJioBackground(){
-  try{var list=await jiotvClient.getChannelsFormatted();_applyJioChannels(list);if(window.AppCache)AppCache.setJioChannels(list);if(Dom.jiotvPortal&&Dom.jiotvPortal.style.display!=='none'){jpApplyFilters();}}catch(e){}
+  try{ var list = await jiotvClient.getChannelsFormatted(); _applyJioChannels(list); if(window.AppCache) AppCache.setJioChannels(list); if(Dom.jiotvPortal && Dom.jiotvPortal.style.display !== 'none'){ jpApplyFilters(); } } catch(e){}
 }
 async function loadSavedJiotv(){
-  var sv=lsGet(JIOTV_SERVER_KEY)||'';
-  if(!sv) sv='http://172.20.10.2:5001';
+  var sv = lsGet(JIOTV_SERVER_KEY) || '';
+  if(!sv) sv = 'http://172.20.10.2:5001';
   try{
-    var alive=await JioTVClient.probe(sv,3000);
-    if(!alive){showToast('JioTV: scanning LAN…');var found=await JioTVClient.discover(sv);if(found){lsSet(JIOTV_SERVER_KEY,found);sv=found;}else return false;}
-    var c=new JioTVClient({serverUrl:sv,timeout:10000});
-    var res=await c.checkStatus();
-    if(res.status){jiotvClient=c;jiotvClient.logged_in=true;jiotvMode=true;plIdx=TAB_JIOTV();rebuildTabs();await loadJioChannels();showToast('JioTV reconnected');saveMode();return true;}
-  }catch(e){console.warn('[JioTV] loadSaved:',e.message);}
-  return false;
+    var client = await JioTVClient.directConnect(sv);
+    jiotvClient = client;
+    jiotvClient.logged_in = true;
+    jiotvMode = true;
+    plIdx = TAB_JIOTV();
+    rebuildTabs();
+    await loadJioChannels();
+    showToast('JioTV reconnected');
+    saveMode();
+    return true;
+  } catch(e){ console.warn('[JioTV] loadSaved:', e.message); return false; }
 }
-function saveMode(){if(jiotvMode)lsSet('iptv:mode','jiotv');else{lsSet('iptv:mode','m3u');lsSet('iptv:lastM3uIndex',String(plIdx));}}
+function saveMode(){ if(jiotvMode) lsSet('iptv:mode', 'jiotv'); else { lsSet('iptv:mode', 'm3u'); lsSet('iptv:lastM3uIndex', String(plIdx)); } }
 async function loadMode(){
-  var mode=lsGet('iptv:mode');
-  if(mode==='jiotv'){var ok=await loadSavedJiotv();if(!ok){jiotvMode=false;_fallbackM3u();}}
+  var mode = lsGet('iptv:mode');
+  if(mode === 'jiotv'){ var ok = await loadSavedJiotv(); if(!ok){ jiotvMode = false; _fallbackM3u(); } }
   else _fallbackM3u();
 }
-function _fallbackM3u(){var si=parseInt(lsGet('iptv:lastM3uIndex')||'0',10);plIdx=(!isNaN(si)&&si<allPlaylists.length)?si:0;rebuildTabs();loadPlaylist();}
+function _fallbackM3u(){ var si = parseInt(lsGet('iptv:lastM3uIndex')||'0',10); plIdx = (!isNaN(si) && si<allPlaylists.length) ? si : 0; rebuildTabs(); loadPlaylist(); }
 
 // ── Boot ──────────────────────────────────────────────────────────
 (async function init() {
@@ -1278,33 +1275,19 @@ function _fallbackM3u(){var si=parseInt(lsGet('iptv:lastM3uIndex')||'0',10);plId
   if(Dom.overlayBottom)Dom.overlayBottom.classList.remove('info-visible');
   overlaysVisible=false;
 
-  if(Dom.addPlaylistBtn)   Dom.addPlaylistBtn.addEventListener('click',openAddPlaylistModal);
-  if(Dom.savePlaylistBtn)  Dom.savePlaylistBtn.addEventListener('click',handleSavePlaylist);
-  if(Dom.cancelPlaylistBtn)Dom.cancelPlaylistBtn.addEventListener('click',function(){Dom.addPlaylistModal.style.display='none';setFocus('list');});
-  if(Dom.addPlaylistModal) Dom.addPlaylistModal.addEventListener('click',function(e){if(e.target===Dom.addPlaylistModal){Dom.addPlaylistModal.style.display='none';setFocus('list');}});
-  [Dom.playlistName,Dom.playlistUrl].forEach(function(inp){if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)handleSavePlaylist();});});
+  if(Dom.addPlaylistBtn)   Dom.addPlaylistBtn.addEventListener('click', openAddPlaylistModal);
+  if(Dom.savePlaylistBtn)  Dom.savePlaylistBtn.addEventListener('click', handleSavePlaylist);
+  if(Dom.cancelPlaylistBtn)Dom.cancelPlaylistBtn.addEventListener('click', function(){ Dom.addPlaylistModal.style.display='none'; setFocus('list'); });
+  if(Dom.addPlaylistModal) Dom.addPlaylistModal.addEventListener('click', function(e){ if(e.target===Dom.addPlaylistModal){ Dom.addPlaylistModal.style.display='none'; setFocus('list'); } });
+  [Dom.playlistName, Dom.playlistUrl].forEach(function(inp){ if(inp) inp.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.keyCode===13) handleSavePlaylist(); }); });
 
-  if(Dom.jiotvConnectBtn)Dom.jiotvConnectBtn.addEventListener('click',jiotvConnectAction);
-  if(Dom.jiotvCancelBtn) Dom.jiotvCancelBtn.addEventListener('click',closeAllModals);
-  if(Dom.jiotvLoginModal)Dom.jiotvLoginModal.addEventListener('click',function(e){if(e.target===Dom.jiotvLoginModal)closeAllModals();});
+  if(Dom.jiotvConnectBtn) Dom.jiotvConnectBtn.addEventListener('click', jiotvConnectAction);
+  if(Dom.jiotvCancelBtn) Dom.jiotvCancelBtn.addEventListener('click', closeAllModals);
+  if(Dom.jiotvLoginModal) Dom.jiotvLoginModal.addEventListener('click', function(e){ if(e.target===Dom.jiotvLoginModal) closeAllModals(); });
   if(Dom.jiotvServerUrl) {
-    Dom.jiotvServerUrl.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)jiotvConnectAction();});
-    Dom.jiotvServerUrl.addEventListener('focus',function(){if(Dom.jiotvServerUrl.value.startsWith('•'))Dom.jiotvServerUrl.value='';});
-  }
-  if(Dom.jiotvScanBtn){
-    Dom.jiotvScanBtn.addEventListener('click',function(){
-      _setJioStatus('🔍 Testing 172.20.10.2:5001...','var(--gold)');Dom.jiotvScanBtn.disabled=true;
-      JioTVClient.probe('http://172.20.10.2:5001',2000).then(function(found){
-        if(found){lsSet(JIOTV_SERVER_KEY,'http://172.20.10.2:5001');if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.value='http://172.20.10.2:5001';_setJioStatus('✅ Found at 172.20.10.2:5001','var(--green)');Dom.jiotvScanBtn.disabled=false;return;}
-        _setJioStatus('🔍 Scanning LAN...','var(--gold)');
-        JioTVClient.discover(null).then(function(found){
-          Dom.jiotvScanBtn.disabled=false;
-          if(found){lsSet(JIOTV_SERVER_KEY,found);if(Dom.jiotvServerUrl)Dom.jiotvServerUrl.value=found;_setJioStatus('✅ Found at '+found,'var(--green)');}
-          else _setJioStatus('❌ Not found. Enter manually.','var(--red)');
-        });
-      });
-    });
+    Dom.jiotvServerUrl.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.keyCode===13) jiotvConnectAction(); });
+    Dom.jiotvServerUrl.addEventListener('focus', function(){ if(Dom.jiotvServerUrl.value.startsWith('•')) Dom.jiotvServerUrl.value=''; });
   }
 
-  if(jiotvMode&&jiotvChannels.length>0) setTimeout(function(){showJioPortal();},300);
+  if(jiotvMode && jiotvChannels.length>0) setTimeout(function(){ showJioPortal(); }, 300);
 })();
