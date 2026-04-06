@@ -1,29 +1,23 @@
 // ================================================================
-// SAGA IPTV — cache.js v2.0  |  Two-tier smart cache
-// IndexedDB (large) + localStorage (small) + image preloader
-// Fixes: IDB error retry, tighter quota threshold, graceful fallback
+// SAGA IPTV — cache.js v2.1  |  Two-tier smart cache + IDB recovery
 // ================================================================
 'use strict';
 
 var AppCache = (function () {
 
-  // ── Config ───────────────────────────────────────────────────
-  var M3U_TTL        = 30 * 60 * 1000;   // 30 min (was 10 — too aggressive)
-  var JIOTV_TTL      =  5 * 60 * 1000;   // 5 min
-  var LS_QUOTA_WARN  = 3.5 * 1024 * 1024; // 3.5 MB warn (Tizen can be 5–10 MB)
+  var M3U_TTL        = 30 * 60 * 1000;
+  var JIOTV_TTL      =  5 * 60 * 1000;
+  var LS_QUOTA_WARN  = 3.5 * 1024 * 1024;
   var IDB_NAME       = 'saga-cache';
   var IDB_VER        = 1;
   var IDB_STORE      = 'payloads';
   var IDB_RETRY_MAX  = 2;
   var IMG_CONCUR     = 4;
 
-  // ── In-memory fallback (used when both LS and IDB fail) ──────
   var _memCache = {};
-
-  // ── IndexedDB ─────────────────────────────────────────────────
   var _db     = null;
-  var _dbFail = false;     // permanently failed — skip IDB calls
-  var _dbInit = null;      // singleton init promise
+  var _dbFail = false;
+  var _dbInit = null;
 
   function openDB() {
     if (_dbFail) return Promise.resolve(null);
@@ -79,7 +73,6 @@ var AppCache = (function () {
   }
 
   function idbGet(key) {
-    // Check memory fallback first
     if (_memCache[key]) return Promise.resolve(_memCache[key]);
     return openDB().then(function (db) {
       if (!db) return null;
@@ -105,7 +98,6 @@ var AppCache = (function () {
     });
   }
 
-  // ── localStorage with quota guard ─────────────────────────────
   function lsSet(k, v) {
     try { localStorage.setItem(k, v); return true; }
     catch (e) {
@@ -135,7 +127,6 @@ var AppCache = (function () {
     } catch (e) {}
   }
 
-  // ── M3U cache — LS first, IDB fallback ───────────────────────
   function getM3U(url) {
     var ck  = 'plCache:' + url;
     var ctk = 'plCacheTime:' + url;
@@ -144,7 +135,6 @@ var AppCache = (function () {
       var data = lsGet(ck);
       if (data && data.length > 100) return Promise.resolve(data);
     }
-    // Try IDB
     return idbGet(ck).then(function (rec) {
       if (rec && rec.value && (Date.now() - rec.ts) <= M3U_TTL) return rec.value;
       return null;
@@ -178,14 +168,12 @@ var AppCache = (function () {
       }
       keys.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) {}
-    // Also clear IDB store
     return openDB().then(function (db) {
       if (!db) return;
       try { db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).clear(); } catch (e) {}
     });
   }
 
-  // ── JioTV channel cache (IDB — potentially 500KB+) ───────────
   var JIOTV_KEY = 'jiotv:channels';
 
   function getJioChannels() {
@@ -198,7 +186,6 @@ var AppCache = (function () {
   function setJioChannels(list)  { return idbSet(JIOTV_KEY, list); }
   function clearJioChannels()    { return idbDelete(JIOTV_KEY); }
 
-  // ── Image preload queue ───────────────────────────────────────
   var _imgQueue  = [];
   var _imgActive = 0;
   var _imgSeen   = new Set();
@@ -221,7 +208,6 @@ var AppCache = (function () {
     }
   }
 
-  // ── Storage usage estimate ────────────────────────────────────
   function lsUsageBytes() {
     var total = 0;
     try {
@@ -234,8 +220,20 @@ var AppCache = (function () {
   }
   function lsNearQuota() { return lsUsageBytes() > LS_QUOTA_WARN; }
 
-  // ── Warm IDB connection eagerly ───────────────────────────────
   openDB();
+
+  // IDB recovery: try to reopen once per minute if failed
+  (function periodicIDBRecovery() {
+    if (!_dbFail) return;
+    setTimeout(function() {
+      _dbFail = false;
+      _dbInit = null;
+      openDB().then(function(db) {
+        if (db) console.log('[Cache] IDB recovered');
+        else _dbFail = true;
+      });
+    }, 60000);
+  })();
 
   return {
     getM3U:          getM3U,
