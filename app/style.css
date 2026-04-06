@@ -6,7 +6,6 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@600;700;800;900&family=Nunito+Sans:wght@400;600;700;800&display=swap');
 
-/* ── Design tokens ───────────────────────────────────────────── */
 :root {
   --bg:          #07070a;
   --panel:       #0d0d14;
@@ -28,25 +27,22 @@
   --jiotv-glow:  rgba(10,132,255,0.26);
 
   --sidebar-w:   580px;
-  --item-h:      108px;   /* VS_IH must match */
-  --item-gap:    8px;     /* VS_GAP must match */
+  --item-h:      108px;
+  --item-gap:    8px;
   --radius:      18px;
   --radius-sm:   12px;
 
   --font-brand:  'Bebas Neue','Arial Black',sans-serif;
   --font-ui:     'Nunito','SamsungOne',Arial,sans-serif;
 
-  /* Easing curves — hardware-accelerated on V8 compositor */
   --ease-out:    cubic-bezier(0.25,1,0.5,1);
   --ease-snap:   cubic-bezier(0.20,1,0.4,1);
   --ease-bounce: cubic-bezier(0.34,1.56,0.64,1);
 }
 
-/* ── Reset ───────────────────────────────────────────────────── */
 *,*::before,*::after {
   box-sizing:border-box; margin:0; padding:0;
   user-select:none; -webkit-tap-highlight-color:transparent; outline:none;
-  /* Force GPU layer creation on interactive elements */
   -webkit-backface-visibility:hidden; backface-visibility:hidden;
 }
 html,body {
@@ -56,10 +52,8 @@ html,body {
   -webkit-font-smoothing:antialiased;
 }
 
-/* ── Layout ──────────────────────────────────────────────────── */
 .app { display:grid; grid-template-columns:var(--sidebar-w) 1fr; height:100vh; width:100vw; overflow:hidden; }
 
-/* ── Sidebar ─────────────────────────────────────────────────── */
 .sidebar {
   position:relative; display:flex; flex-direction:column;
   height:100vh; overflow:hidden;
@@ -71,7 +65,6 @@ html,body {
   pointer-events:none; z-index:1;
 }
 
-/* Brand */
 .brand { display:flex; align-items:center; gap:14px; padding:18px 20px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
 .brand-logo { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,var(--accent),#1a3ecc); display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0; box-shadow:0 4px 18px var(--accent-glow); }
 .brand-logo svg { width:28px; height:28px; }
@@ -84,7 +77,6 @@ html,body {
 .network-indicator.slow    { color:var(--gold);  border-color:rgba(245,200,66,0.40); }
 .network-indicator.offline { color:var(--red);   border-color:rgba(255,68,85,0.40);  }
 
-/* Search */
 .search-wrap { position:relative; padding:14px 18px; flex-shrink:0; }
 .search-icon { position:absolute; left:32px; top:50%; transform:translateY(-50%); width:22px; height:22px; color:var(--text-muted); pointer-events:none; }
 #searchInput {
@@ -100,7 +92,6 @@ html,body {
 .search-clear { position:absolute; right:32px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:18px; cursor:pointer; opacity:0; transition:opacity 0.18s; padding:6px; font-weight:800; }
 .search-wrap.active .search-clear { opacity:1; }
 
-/* Tabs */
 .tab-bar { display:flex; gap:8px; padding:0 18px 12px; overflow-x:auto; scrollbar-width:none; flex-shrink:0; transition:background 0.18s; }
 .tab-bar-focused { background:rgba(74,143,255,0.05); border-radius:10px; }
 .tab-bar::-webkit-scrollbar { display:none; }
@@ -123,7 +114,6 @@ html,body {
 .tab.jiotv-tab.active { background:linear-gradient(135deg,var(--jiotv),var(--jiotv-dark)); color:#fff; border-color:var(--jiotv); box-shadow:0 2px 14px var(--jiotv-glow); }
 .tab.jiotv-tab.kbd-focus { border-color:var(--jiotv); box-shadow:0 0 0 4px var(--jiotv-glow); }
 
-/* List header */
 .list-head { display:flex; align-items:center; justify-content:space-between; padding:0 18px 10px; flex-shrink:0; }
 .lbl { font-size:14px; font-weight:800; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-sec); }
 .list-head-actions { display:flex; align-items:center; gap:10px; }
@@ -137,7 +127,6 @@ html,body {
 .icon-btn:hover,.icon-btn.focused { background:var(--accent); border-color:var(--accent); color:#fff; transform:rotate(90deg) scale(1.1) translateZ(0); box-shadow:0 0 0 4px var(--accent-glow); }
 .count-badge { font-size:14px; font-weight:800; color:var(--text-sec); background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:24px; padding:4px 14px; }
 
-/* Channel list */
 #channelList { flex:1; overflow-y:auto; overflow-x:hidden; position:relative; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.09) transparent; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; transform:translateZ(0); }
 #channelList::-webkit-scrollbar { width:4px; }
 #channelList::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.09); border-radius:2px; }
@@ -163,7 +152,6 @@ html,body {
 .ch-num { font-size:17px; font-weight:800; color:var(--text-muted); background:rgba(255,255,255,0.05); border:1px solid var(--border); padding:6px 14px; border-radius:22px; min-width:58px; text-align:center; flex-shrink:0; }
 #channelList li.active .ch-num { background:rgba(0,0,0,0.08); border-color:rgba(0,0,0,0.12); color:rgba(0,0,0,0.42); }
 
-/* Hint bar */
 .hint-bar { display:flex; align-items:center; justify-content:space-around; padding:10px 18px; border-top:1px solid var(--border); flex-shrink:0; }
 .hint-item { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:var(--text-muted); }
 .hint-btn { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
@@ -172,7 +160,6 @@ html,body {
 .hint-btn.yellow { background:var(--gold); }
 .hint-btn.blue   { background:var(--accent); }
 
-/* ── Player area ─────────────────────────────────────────────── */
 .player-area { display:flex; flex-direction:column; background:var(--bg); padding:16px 18px 16px 16px; gap:14px; overflow:hidden; }
 .player-header { display:flex; align-items:center; gap:18px; flex-shrink:0; min-height:64px; }
 .now-playing-wrap { flex:1; min-width:0; }
@@ -181,7 +168,6 @@ html,body {
 .now-playing-ch { font-size:12px; font-weight:700; color:var(--text-muted); letter-spacing:1px; margin-top:2px; }
 .player-controls { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 
-/* AV Sync */
 #avSyncWrap { display:flex; align-items:center; gap:6px; }
 #avSyncWrap .av-btn {
   height:48px; padding:0 18px; border-radius:14px;
@@ -207,11 +193,9 @@ html,body {
 .status-badge.error   { color:var(--red); border-color:rgba(255,68,85,0.30); background:rgba(255,68,85,0.07); }
 @keyframes pulse-badge { 0%,100%{opacity:1} 50%{opacity:0.52} }
 
-/* Video */
 .video-wrap { flex:1; position:relative; background:#000; border-radius:var(--radius); overflow:hidden; border:1.5px solid var(--border); min-height:0; }
 video { width:100%; height:100%; display:block; background:#000; object-fit:contain; }
 
-/* Idle overlay */
 .video-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; pointer-events:none; background:radial-gradient(ellipse at center,rgba(8,8,22,0.88) 0%,rgba(4,4,14,0.97) 100%); z-index:10; opacity:1; transition:opacity 0.28s var(--ease-out),visibility 0.28s; }
 .video-overlay.hidden { opacity:0; visibility:hidden; }
 .overlay-icon { opacity:0.42; }
@@ -219,7 +203,6 @@ video { width:100%; height:100%; display:block; background:#000; object-fit:cont
 .overlay-hint strong { color:rgba(255,255,255,0.80); font-weight:900; }
 .overlay-hint span   { font-size:14px; color:rgba(255,255,255,0.26); display:block; margin-top:6px; }
 
-/* Info overlays */
 .overlay-top,.overlay-bottom { position:absolute; left:0; right:0; pointer-events:none; z-index:20; padding:24px 28px; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,0.7); opacity:0; visibility:hidden; transition:opacity 0.26s var(--ease-out),visibility 0.26s; }
 .overlay-top    { top:0; background:linear-gradient(to bottom,rgba(0,0,0,0.80) 0%,transparent 100%); display:flex; justify-content:space-between; align-items:flex-start; }
 .overlay-bottom { bottom:0; background:linear-gradient(to top,rgba(0,0,0,0.90) 0%,transparent 100%); }
@@ -234,22 +217,18 @@ video { width:100%; height:100%; display:block; background:#000; object-fit:cont
 .program-desc  { font-size:14px; opacity:0.62; max-height:2.6em; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .next-program  { font-size:13px; opacity:0.40; margin-top:6px; white-space:nowrap; font-weight:600; }
 
-/* LL-HLS live badge in overlay */
 .ll-badge { display:inline-flex; align-items:center; gap:5px; background:var(--red); color:#fff; font-size:10px; font-weight:900; padding:3px 9px; border-radius:8px; letter-spacing:0.8px; vertical-align:middle; margin-left:10px; animation:live-pulse 2s ease-in-out infinite; }
 @keyframes live-pulse { 0%,100%{opacity:1} 50%{opacity:0.65} }
 
-/* FS hint */
 .fs-hint { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.90); border:1px solid rgba(255,255,255,0.14); color:rgba(255,255,255,0.58); font-size:15px; font-weight:700; padding:10px 28px; border-radius:26px; pointer-events:none; opacity:0; transition:opacity 0.28s; white-space:nowrap; z-index:100; }
 .fs-hint.visible { opacity:1; }
 
-/* Channel dialer */
 .ch-dialer { position:fixed; bottom:50%; right:5%; transform:translateY(50%); background:rgba(4,4,20,0.97); border:2.5px solid var(--accent); border-radius:26px; padding:24px 44px; display:none; z-index:500; flex-direction:column; align-items:center; gap:6px; box-shadow:0 0 0 8px var(--accent-glow),0 28px 72px rgba(0,0,0,0.88); }
 .ch-dialer.visible { display:flex; animation:dialIn 0.16s var(--ease-bounce); }
 @keyframes dialIn { from{transform:translateY(50%) scale(0.80);opacity:0} to{transform:translateY(50%) scale(1);opacity:1} }
 .dialer-label { font-size:12px; font-weight:900; letter-spacing:3px; color:var(--accent); text-transform:uppercase; }
 .dialer-number { font-family:var(--font-brand); font-size:88px; font-weight:900; color:#fff; letter-spacing:10px; line-height:1; min-width:140px; text-align:center; }
 
-/* Fullscreen */
 body.fullscreen .sidebar        { display:none; }
 body.fullscreen .app            { grid-template-columns:1fr; }
 body.fullscreen .player-area    { padding:0; gap:0; }
@@ -261,7 +240,7 @@ body.fullscreen .overlay-top,
 body.fullscreen .overlay-bottom { z-index:10002; }
 body.fullscreen .ch-dialer      { z-index:10003; }
 
-/* ══ JIOTV PORTAL ═══════════════════════════════════════════════ */
+/* JIOTV PORTAL */
 .jiotv-portal {
   position:fixed; inset:0; background:#080812; z-index:8000;
   display:flex; flex-direction:column; overflow:hidden;
@@ -301,12 +280,10 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 
 .jp-count { font-size:13px; font-weight:700; color:var(--text-muted); padding:10px 20px 6px; letter-spacing:0.5px; flex-shrink:0; }
 
-/* Grid */
 .jp-grid { flex:1; overflow-y:auto; overflow-x:hidden; padding:8px 20px 120px; display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; align-content:start; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.09) transparent; }
 .jp-grid::-webkit-scrollbar { width:5px; }
 .jp-grid::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.09); border-radius:3px; }
 
-/* Channel tile */
 .jp-tile {
   position:relative; display:flex; flex-direction:column; align-items:center;
   background:var(--panel2); border:1.5px solid var(--border); border-radius:18px;
@@ -330,7 +307,6 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 .jp-tile-hd { position:absolute; top:10px; right:10px; background:linear-gradient(135deg,var(--accent),#1a3acc); color:#fff; font-size:9px; font-weight:900; padding:2px 7px; border-radius:6px; letter-spacing:0.5px; }
 .jp-tile-live { position:absolute; top:10px; left:10px; background:var(--red); color:#fff; font-size:9px; font-weight:900; padding:2px 7px; border-radius:6px; letter-spacing:0.5px; animation:live-pulse 2s ease-in-out infinite; }
 
-/* Now-playing bar */
 .jp-now-bar { position:fixed; bottom:0; left:0; right:0; z-index:8500; background:rgba(4,4,18,0.96); border-top:1px solid rgba(48,192,112,0.26); backdrop-filter:blur(16px); padding:12px 24px; display:flex; align-items:center; gap:16px; }
 .jp-nb-thumb { width:56px; height:56px; border-radius:12px; background:rgba(255,255,255,0.05); border:1px solid var(--border); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; }
 .jp-nb-thumb img { width:100%; height:100%; object-fit:contain; }
@@ -340,7 +316,6 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 .jp-nb-status { font-size:12px; font-weight:800; letter-spacing:1px; color:var(--green); background:rgba(48,192,112,0.09); border:1px solid rgba(48,192,112,0.26); padding:5px 14px; border-radius:20px; flex-shrink:0; white-space:nowrap; }
 .jp-nb-tech { font-size:12px; color:var(--text-muted); font-weight:600; flex-shrink:0; max-width:160px; text-align:right; }
 
-/* JioTV Player layer */
 .jp-player-layer { position:fixed; inset:0; z-index:9000; background:#000; }
 .jp-player-layer video { width:100%; height:100%; object-fit:contain; display:block; }
 .jp-player-overlay { position:absolute; inset:0; z-index:9100; opacity:0; transition:opacity 0.24s ease; pointer-events:none; }
@@ -360,7 +335,6 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 .jp-pl-desc { font-size:14px; color:rgba(255,255,255,0.62); overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
 .jp-pl-tech { font-size:12px; color:rgba(255,255,255,0.42); font-weight:600; text-align:right; }
 
-/* ══ MODALS ══════════════════════════════════════════════════════ */
 .modal { display:none; position:fixed; z-index:20000; inset:0; background:rgba(0,0,0,0.90); justify-content:center; align-items:center; backdrop-filter:blur(6px); }
 .modal-content { background:linear-gradient(160deg,#12121e 0%,#0c0c1a 100%); border:1.5px solid rgba(255,255,255,0.13); border-radius:26px; padding:36px 32px 30px; width:90%; max-width:500px; text-align:center; box-shadow:0 36px 100px rgba(0,0,0,0.88); animation:modalIn 0.24s var(--ease-bounce); }
 @keyframes modalIn { from{transform:scale(0.87) translateY(20px);opacity:0} to{transform:scale(1);opacity:1} }
@@ -389,7 +363,6 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 .modal-account { font-size:14px; font-weight:600; color:var(--green); min-height:20px; margin-bottom:10px; text-align:center; }
 .modal-buttons { display:flex; gap:12px; justify-content:center; margin-top:18px; }
 
-/* Buttons */
 .btn-primary {
   flex:1; height:58px; border:none; border-radius:16px;
   background:linear-gradient(135deg,var(--accent),#1a3acc); color:#fff;
@@ -426,5 +399,4 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 .btn-scan:hover,.btn-scan:focus { background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
 .btn-scan:disabled { opacity:0.40; cursor:not-allowed; }
 
-/* Toast */
 .toast { position:fixed; bottom:42px; left:50%; transform:translateX(-50%); background:rgba(8,8,24,0.97); border:1.5px solid rgba(255,255,255,0.14); color:#fff; font-family:var(--font-ui); font-size:17px; font-weight:800; padding:14px 32px; border-radius:36px; z-index:30000; pointer-events:none; opacity:0; transition:opacity 0.20s ease; white-space:nowrap; box-shadow:0 10px 40px rgba(0,0,0,0.62); }
