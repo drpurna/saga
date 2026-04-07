@@ -1,10 +1,5 @@
 // ================================================================
-// SAGA IPTV — app.js v32.0  |  Samsung Tizen OS9  |  2025 TV
-// JioTV: fixed IP 172.20.10.2:5001, auto-connect, no modal/scan
-// Critical fixes: stall watchdog on portal, fullscreen focus,
-//   promise mutex for jpPlayChannel, search debounce, PreCh,
-//   ResizeObserver on grid, preferred audio lang persist,
-//   beforeunload cleanup, sleep timer on keypress reset
+// SAGA IPTV — app.js v33.0 (FULLY FIXED)  |  Samsung Tizen OS9
 // ================================================================
 'use strict';
 
@@ -14,15 +9,16 @@ var CUSTOM_PLAYLISTS_KEY = 'iptv:customPlaylists';
 var AV_SYNC_KEY          = 'iptv:avSync';
 var PREF_AUDIO_KEY       = 'iptv:audioLang';
 var PREVIEW_DELAY        = 500;
-var VS_IH                = 108;   // MUST match CSS --item-h
-var VS_GAP               = 8;     // MUST match CSS --item-gap
+var VS_IH                = 108;
+var VS_GAP               = 8;
 var AV_SYNC_STEP         = 50;
 var AV_SYNC_MAX          = 500;
 var MAX_RECONNECT        = 5;
-var STALL_TIMEOUT        = 9000;
+var STALL_TIMEOUT        = 12000;          // FIXED: increased for live streams
 var OVERLAY_AUTO_HIDE    = 4000;
 var SEARCH_DEBOUNCE_MS   = 300;
 var JIOTV_FIXED_SERVER   = 'http://172.20.10.2:5001';
+var JP_PLAY_TIMEOUT_MS   = 15000;          // FIXED: prevent infinite spinner
 
 // ── Samsung BN59-01199F key codes ─────────────────────────────────
 var KEY = {
@@ -63,7 +59,7 @@ var stallWatchdog    = null, lastPlayTime = 0, reconnectCount = 0;
 var sleepTimer       = null, sleepMinutes = 0, sleepPaused = false;
 var sleepRemainingMs = 0, sleepLastTick = 0;
 var toastTm          = null;
-var lastChannelStack = [];  // for PreCh (previous channel)
+var lastChannelStack = [];
 
 // JioTV state
 var jiotvClient    = null, jiotvMode = false;
@@ -76,7 +72,7 @@ var jpFocusRow = 0, jpFocusCol = 0, jpGridCols = 8;
 var jpFiltered  = [];
 var jpActiveCat = 'all', jpActiveLang = 'all', jpSearchQ = '';
 var jpInPlayer  = false, jpEpgTimer = null;
-var _jpGridResizeObs = null;  // ResizeObserver for grid column recalc
+var _jpGridResizeObs = null;
 
 // Audio
 var _audioTracks        = [];
@@ -95,17 +91,12 @@ var Dom = (function () {
     'addPlaylistModal','playlistName','playlistUrl','savePlaylistBtn','cancelPlaylistBtn',
     'overlayTop','overlayBottom','overlayChannelName','overlayChannelTech',
     'overlayProgramTitle','overlayProgramDesc','nextProgramInfo','programInfoBox',
-    'toast',
-    // JioTV portal (no login modal refs needed)
-    'appMain','jiotvPortal','jpGrid','jpFilters','jpLangFilters','jpSearch',
+    'toast','appMain','jiotvPortal','jpGrid','jpFilters','jpLangFilters','jpSearch',
     'jpCount','jpNowBar','jpNbThumb','jpNbName','jpNbEpg','jpNbTech',
     'jpPlayerLayer','jpPlayerOverlay','jpVideo','jpPlBack','jpPlTitle','jpPlTime',
     'jpPlSpinner','jpPlProg','jpPlDesc','jpPlTech','jpExitBtn','jpClock',
-    // Settings modal
     'settingsModal','settingsCacheBtn','settingsSleepSelect',
     'settingsAVReset','settingsCloseBtn','settingsAudioTrack',
-    // Add playlist modal
-    'addPlaylistModal','playlistName','playlistUrl','savePlaylistBtn','cancelPlaylistBtn',
   ];
   var d = {};
   ids.forEach(function (id) { d[id] = document.getElementById(id); });
@@ -113,9 +104,15 @@ var Dom = (function () {
 })();
 
 // ── Safe localStorage ─────────────────────────────────────────────
-function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } }
-function lsGet(k)    { try { return localStorage.getItem(k); }          catch(e) { return null;  } }
-function lsRemove(k) { try { localStorage.removeItem(k); }              catch(e) {}               }
+function lsSet(k, v) {
+  try { localStorage.setItem(k, v); return true; }
+  catch(e) {
+    if (window.AppCache && AppCache.lsNearQuota()) showToast('Storage full, clearing old cache', 3000);
+    return false;
+  }
+}
+function lsGet(k)    { try { return localStorage.getItem(k); } catch(e) { return null; } }
+function lsRemove(k) { try { localStorage.removeItem(k); } catch(e) {} }
 
 // ── Favourites ────────────────────────────────────────────────────
 (function () {
@@ -174,31 +171,35 @@ function finishLoadBar() {
   setTimeout(function () { Dom.loadBar.classList.remove('active'); Dom.loadBar.style.width = '0%'; }, 440);
 }
 function refreshLbl() {
-  if      (jiotvMode)           setLbl('JIOTV', channels.length);
+  if (jiotvMode) setLbl('JIOTV', channels.length);
   else if (plIdx === TAB_FAV()) setLbl('FAVOURITES', filtered.length);
-  else                          setLbl('CHANNELS', channels.length);
+  else setLbl('CHANNELS', channels.length);
 }
 
 // ── HTML escape ───────────────────────────────────────────────────
 var _escMap = { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' };
 function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return _escMap[c]; }); }
 
-// ── M3U parser ────────────────────────────────────────────────────
-var _reName = /\s*\([^)]*\)|\s*\[[^\]]*\]|\b(?:4K|UHD|FHD|HLS|HEVC|H264|H\.264|SD|HD|576[piP]?|720[piP]?|1080[piP]?|2160[piP]?)\b|[\|\-–—]+\s*$|\s{2,}/gi;
-function cleanName(raw) { return String(raw || '').replace(_reName, ' ').replace(/>/g, '').trim(); }
+// ── M3U parser (FIXED: handles quoted attributes) ─────────────────
 function parseM3U(text) {
   var lines = String(text || '').split(/\r?\n/);
-  var out   = [], meta = null;
+  var out = [], meta = null;
   for (var i = 0; i < lines.length; i++) {
-    var line = lines[i].trim(); if (!line) continue;
-    if (line.charAt(0) === '#') {
-      if (line.startsWith('#EXTINF')) {
-        var np = line.includes(',') ? line.split(',').slice(1).join(',').trim() : 'Unknown';
-        var gm = line.match(/group-title="([^"]+)"/i);
-        var lm = line.match(/tvg-logo="([^"]+)"/i);
-        meta = { name: cleanName(np) || np, group: gm ? gm[1] : 'Other', logo: lm ? lm[1] : '' };
-      }
-    } else if (meta) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    if (line.startsWith('#EXTINF')) {
+      var name = '';
+      var commaIdx = line.lastIndexOf(',');
+      if (commaIdx !== -1) name = line.substring(commaIdx + 1).trim();
+      else name = 'Unknown';
+      var group = 'Other';
+      var logo = '';
+      var groupMatch = line.match(/group-title="([^"]+)"/i);
+      if (groupMatch) group = groupMatch[1];
+      var logoMatch = line.match(/tvg-logo="([^"]+)"/i);
+      if (logoMatch) logo = logoMatch[1];
+      meta = { name: name, group: group, logo: logo };
+    } else if (meta && !line.startsWith('#')) {
       out.push({ name: meta.name, group: meta.group, logo: meta.logo, url: line });
       meta = null;
     }
@@ -209,13 +210,13 @@ function parseM3U(text) {
 // ── SagaPlayer callbacks ──────────────────────────────────────────
 async function _initPlayerCallbacks() {
   await SagaPlayer.init(Dom.video, {
-    onStatus:     function (msg, cls) { setStatus(msg, cls); },
-    onBuffering:  function (isBuffering) {
+    onStatus: function (msg, cls) { setStatus(msg, cls); },
+    onBuffering: function (isBuffering) {
       if (isBuffering) { setStatus('Buffering…', 'loading'); startLoadBar(); }
-      else             { setStatus('Playing',    'playing'); finishLoadBar(); _updateChTech(); }
+      else { setStatus('Playing', 'playing'); finishLoadBar(); _updateChTech(); }
     },
     onTechUpdate: _updateChTech,
-    onError:      function (msg) { setStatus(msg, 'error'); finishLoadBar(); stopStallWatchdog(); },
+    onError: function (msg) { setStatus(msg, 'error'); finishLoadBar(); stopStallWatchdog(); },
   });
 }
 function _updateChTech() {
@@ -231,7 +232,7 @@ function loadAvSync() {
 function saveAvSync() { lsSet(AV_SYNC_KEY, String(avSyncOffset)); }
 function applyAvSync() {
   if (!Dom.video || !hasPlayed || avSyncOffset === 0) return;
-  if (!SagaPlayer.isSeekable(Dom.video)) return;  // skip on pure live
+  if (!SagaPlayer.isSeekable(Dom.video)) return;
   try {
     if (Dom.video.readyState >= 2) {
       var t = Dom.video.currentTime - (avSyncOffset / 1000);
@@ -266,16 +267,23 @@ function buildAvSyncBar() {
   ctrl.insertBefore(wrap, ctrl.firstChild);
 }
 
-// ── Audio track persistence ───────────────────────────────────────
+// ── Audio track persistence (FIXED: event based) ──────────────────
 function loadPreferredAudioLang() {
   _preferredAudioLang = lsGet(PREF_AUDIO_KEY) || null;
 }
 function _applyPreferredAudio() {
   if (!_preferredAudioLang) return;
-  var tracks = SagaPlayer.getAudioTracks();
-  if (!tracks || !tracks.length) return;
-  var match = tracks.find(function (t) { return t.language === _preferredAudioLang; });
-  if (match) SagaPlayer.setAudioLanguage(match.language, match.role || '');
+  var apply = function() {
+    var tracks = SagaPlayer.getAudioTracks();
+    if (!tracks || !tracks.length) return;
+    var match = tracks.find(function (t) { return t.language === _preferredAudioLang; });
+    if (match) SagaPlayer.setAudioLanguage(match.language, match.role || '');
+  };
+  if (Dom.video) {
+    Dom.video.removeEventListener('loadedmetadata', apply);
+    Dom.video.addEventListener('loadedmetadata', apply, { once: true });
+    if (Dom.video.readyState >= 1) apply();
+  }
 }
 function cycleAudioTrack() {
   _audioTracks = SagaPlayer.getAudioTracks();
@@ -288,7 +296,17 @@ function cycleAudioTrack() {
   showToast('Audio: ' + (t.label || t.language || 'Track ' + _audioTrackIdx));
 }
 
-// ── Sleep timer — pauses when video is paused ─────────────────────
+// ── Sleep timer — reset only on navigation/playback keys ──────────
+function resetSleepTimerOnAction(keyCode) {
+  var navKeys = [KEY.UP, KEY.DOWN, KEY.LEFT, KEY.RIGHT, KEY.ENTER, KEY.CH_UP, KEY.CH_DOWN, KEY.PLAY, KEY.PAUSE, KEY.PLAY_PAUSE];
+  var digits = [48,49,50,51,52,53,54,55,56,57,96,97,98,99,100,101,102,103,104,105];
+  if (navKeys.includes(keyCode) || digits.includes(keyCode)) {
+    if (sleepTimer && sleepMinutes) {
+      clearInterval(sleepTimer);
+      _startSleepCountdown(sleepMinutes * 60000);
+    }
+  }
+}
 function setSleepTimer(m) {
   _clearSleepState();
   sleepMinutes = m;
@@ -303,7 +321,7 @@ function _startSleepCountdown(ms) {
   sleepTimer = setInterval(function () {
     var now    = Date.now();
     var isPaused = Dom.video ? Dom.video.paused : true;
-    if (isPaused) { sleepPaused = true; sleepLastTick = now; return; }  // freeze countdown while paused
+    if (isPaused) { sleepPaused = true; sleepLastTick = now; return; }
     var elapsed = now - sleepLastTick;
     sleepLastTick = now;
     sleepRemainingMs -= elapsed;
@@ -317,7 +335,6 @@ function _startSleepCountdown(ms) {
   }, 1000);
 }
 function resetSleepTimer() {
-  // Called on any key press — only reset if timer is active
   if (!sleepMinutes || !sleepTimer) return;
   clearInterval(sleepTimer); sleepTimer = null;
   _startSleepCountdown(sleepMinutes * 60000);
@@ -328,7 +345,7 @@ function _clearSleepState() {
   sleepRemainingMs = 0; sleepPaused = false;
 }
 
-// ── Stall watchdog ────────────────────────────────────────────────
+// ── Stall watchdog (FIXED: also resets on progress) ───────────────
 function startStallWatchdog() {
   stopStallWatchdog(); reconnectCount = 0; lastPlayTime = Date.now();
   stallWatchdog = setInterval(function () {
@@ -350,9 +367,9 @@ function stopStallWatchdog() {
   if (stallWatchdog) { clearInterval(stallWatchdog); stallWatchdog = null; }
 }
 if (Dom.video) {
-  Dom.video.addEventListener('timeupdate', function () {
-    if (!Dom.video.paused) lastPlayTime = Date.now();
-  });
+  Dom.video.addEventListener('timeupdate', function () { if (!Dom.video.paused) lastPlayTime = Date.now(); });
+  Dom.video.addEventListener('progress', function () { if (!Dom.video.paused) lastPlayTime = Date.now(); });
+  Dom.video.addEventListener('playing', function () { lastPlayTime = Date.now(); });
 }
 
 // ── beforeunload: clean up Shaka to avoid Tizen WebKit crash ──────
@@ -362,12 +379,12 @@ window.addEventListener('beforeunload', function () {
 });
 
 // ══════════════════════════════════════════════════════════════════
-// VIRTUAL SCROLL
+// VIRTUAL SCROLL (FIXED: pool limit & DOM cleanup)
 // ══════════════════════════════════════════════════════════════════
 var VS = {
   IH: VS_IH, GAP: VS_GAP, OS: 4,
   c: null, inner: null, vh: 0, st: 0, total: 0,
-  pool: [], nodes: {}, raf: null,
+  pool: [], nodes: {}, raf: null, maxPool: 60,
 
   init: function (el) {
     this.c = el; el.innerHTML = '';
@@ -387,7 +404,7 @@ var VS = {
 
   setData: function (n) {
     this.total = n;
-    for (var k in this.nodes) { var nd = this.nodes[k]; nd.style.display='none'; nd._i=-1; this.pool.push(nd); }
+    for (var k in this.nodes) { var nd = this.nodes[k]; nd.style.display='none'; nd._i=-1; if (this.pool.length < this.maxPool) this.pool.push(nd); else nd.remove(); }
     this.nodes = {};
     this.inner.style.height = n > 0 ? (n*(this.IH+this.GAP)-this.GAP+20)+'px' : '0';
     this.c.scrollTop = 0; this.st = 0; this.vh = this.c.clientHeight || 900; this.paint();
@@ -413,7 +430,7 @@ var VS = {
     var e = Math.min(this.total-1, Math.ceil((this.st+this.vh)/H)+os);
     for (var oi in this.nodes) {
       var ii = parseInt(oi, 10);
-      if (ii<s||ii>e) { var nd=this.nodes[oi]; nd.style.display='none'; nd._i=-1; this.pool.push(nd); delete this.nodes[oi]; }
+      if (ii<s||ii>e) { var nd=this.nodes[oi]; nd.style.display='none'; nd._i=-1; if (this.pool.length < this.maxPool) this.pool.push(nd); else nd.remove(); delete this.nodes[oi]; }
     }
     for (var i = s; i <= e; i++) {
       if (this.nodes[i]) continue;
@@ -458,7 +475,7 @@ var VS = {
   },
 
   refresh: function () {
-    for (var j in this.nodes) { var n=this.nodes[j],on=(parseInt(j,10)===selectedIndex); if(on!==n._on){n._on=on;n.classList.toggle('active',on);} }
+    for (var j in this.nodes) { var n=this.nodes[j], on=(parseInt(j,10)===selectedIndex); if(on!==n._on){n._on=on;n.classList.toggle('active',on);} }
   },
   rebuildVisible: function () { for (var j in this.nodes) this.build(this.nodes[j], parseInt(j,10)); },
 };
@@ -618,7 +635,6 @@ async function startPreview(idx) {
   if (Dom.programInfoBox)      Dom.programInfoBox.style.display    = 'none';
   if (Dom.videoOverlay) Dom.videoOverlay.classList.add('hidden');
 
-  // Track last 2 channels for PreCh
   if (currentPlayUrl && currentPlayUrl !== ch.url) {
     lastChannelStack = [currentPlayUrl];
   }
@@ -627,7 +643,7 @@ async function startPreview(idx) {
   await SagaPlayer.play(ch.url, null);
   startStallWatchdog();
   _audioTrackIdx = 0;
-  setTimeout(_applyPreferredAudio, 1800);
+  _applyPreferredAudio();
 }
 function playSelected() { cancelPreview(); startPreview(selectedIndex); }
 
@@ -660,8 +676,8 @@ function applyExitFSState() {
   document.body.classList.remove('fullscreen');
   isFullscreen = false;
   if (Dom.fsHint) Dom.fsHint.classList.remove('visible');
-  window.dispatchEvent(new Event('resize'));  // restore sidebar layout
-  setFocus('list'); VS.refresh();             // restore list focus highlight
+  window.dispatchEvent(new Event('resize'));
+  setFocus('list'); VS.refresh();
 }
 function enterFS() {
   var fn = Dom.videoWrap && (Dom.videoWrap.requestFullscreen||Dom.videoWrap.webkitRequestFullscreen||Dom.videoWrap.mozRequestFullScreen);
@@ -755,7 +771,7 @@ function registerKeys() {
 function showJioPortal() {
   if(Dom.appMain)  Dom.appMain.style.display  = 'none';
   if(Dom.jiotvPortal) Dom.jiotvPortal.style.display = 'flex';
-  stopStallWatchdog();  // FIX: stop M3U watchdog when entering portal
+  stopStallWatchdog();
   jpApplyFilters();
   jpFocusRow=0; jpFocusCol=0;
   requestAnimationFrame(function () { jpFocusTile(); });
@@ -770,11 +786,11 @@ function hideJioPortal() {
   rebuildTabs(); loadPlaylist(); setFocus('list'); saveMode();
 }
 
-// ── Auto-connect to fixed JioTV IP ───────────────────────────────
-// No modal, no scan, no OTP. Just tries 172.20.10.2:5001 directly.
 async function _autoConnectJioTV() {
   try {
-    var client = await JioTVClient.directConnect(JIOTV_FIXED_SERVER);
+    var timeoutPromise = new Promise(function(_, reject) { setTimeout(function() { reject(new Error('Timeout')); }, 5000); });
+    var clientPromise = JioTVClient.directConnect(JIOTV_FIXED_SERVER);
+    var client = await Promise.race([clientPromise, timeoutPromise]);
     jiotvClient = client;
     jiotvMode   = true;
     return true;
@@ -785,7 +801,6 @@ async function _autoConnectJioTV() {
   }
 }
 
-// Called when user taps JioTV tab
 async function openJioPortalDirect() {
   jiotvMode = true; plIdx = TAB_JIOTV(); rebuildTabs();
 
@@ -844,7 +859,6 @@ function _jpBuildGrid() {
   Dom.jpGrid.appendChild(frag);
   if (Dom.jpCount) Dom.jpCount.textContent = jpFiltered.length + ' channels';
 
-  // ResizeObserver recalculates column count when grid reflows
   if (window.ResizeObserver && !_jpGridResizeObs) {
     _jpGridResizeObs = new ResizeObserver(function () {
       var tiles = Dom.jpGrid.querySelectorAll('.jp-tile');
@@ -910,11 +924,12 @@ function jpActivateFilter(f) {
   jpFocusRow=0; jpFocusCol=0; jpApplyFilters();
 }
 
-// ── JioTV player — proper promise mutex ───────────────────────────
+// ── JioTV player — proper promise mutex with timeout ──────────────
 function jpPlayChannel(ch, gridIdx) {
   _jpLoadPromise = _jpLoadPromise.then(async function () {
     if (_jpPlayerBusy) return;
     _jpPlayerBusy = true;
+    var timeoutId = null;
     try {
       jpActiveChannel = ch; jpInPlayer = true;
       if (Dom.jpPlayerLayer)   Dom.jpPlayerLayer.style.display = 'block';
@@ -940,6 +955,16 @@ function jpPlayChannel(ch, gridIdx) {
       var info    = await jiotvClient.getStreamInfo(ch.jioId);
       var playUrl = (info && info.url) ? info.url : ch.url;
 
+      // timeout to avoid infinite spinner
+      timeoutId = setTimeout(function() {
+        if (jpInPlayer) {
+          console.warn('[JioTV] play timeout');
+          if (Dom.jpPlSpinner) Dom.jpPlSpinner.classList.remove('active');
+          showToast('Stream load timeout');
+          jpExitPlayer();
+        }
+      }, JP_PLAY_TIMEOUT_MS);
+
       await jpPlayer.unload(); Dom.jpVideo.removeAttribute('src');
       if (info && info.isDRM) {
         var drmCfg = _buildJpDrm(info);
@@ -949,19 +974,20 @@ function jpPlayChannel(ch, gridIdx) {
       await jpPlayer.load(playUrl);
       await Dom.jpVideo.play().catch(function(){});
 
+      if (timeoutId) clearTimeout(timeoutId);
       jpShowOverlay();
       setTimeout(function(){ if(jpInPlayer) jpHideOverlay(); }, OVERLAY_AUTO_HIDE);
 
-      clearTimeout(jpEpgTimer);
-      (function schedEpg() {
-        jpEpgTimer = setTimeout(function () {
-          if (!jpInPlayer) return;
-          jpFetchEpg(ch.jioId).then(function () { schedEpg(); });
-        }, 800);
-      })();
+      // EPG every 30 seconds instead of 800ms
+      clearInterval(jpEpgTimer);
+      jpEpgTimer = setInterval(function () {
+        if (jpInPlayer && jpActiveChannel) jpFetchEpg(jpActiveChannel.jioId);
+      }, 30000);
+      jpFetchEpg(ch.jioId);
 
     } catch(err) {
       console.error('[JioTV] play:', err.message);
+      if (timeoutId) clearTimeout(timeoutId);
       if (Dom.jpPlSpinner) Dom.jpPlSpinner.classList.remove('active');
       showToast('Stream error: ' + err.message);
       // Native video fallback
@@ -986,7 +1012,7 @@ function jpHideOverlay() { if(Dom.jpPlayerOverlay)Dom.jpPlayerOverlay.classList.
 
 function jpExitPlayer() {
   jpInPlayer=false; _jpPlayerBusy=false;
-  clearTimeout(jpEpgTimer); clearTimeout(jpOverlayTimer);
+  clearInterval(jpEpgTimer); clearTimeout(jpOverlayTimer);
   if(jpPlayer) jpPlayer.unload().catch(function(){});
   if(Dom.jpVideo) Dom.jpVideo.removeAttribute('src');
   if(Dom.jpPlayerLayer)   Dom.jpPlayerLayer.style.display='none';
@@ -1070,7 +1096,6 @@ function saveMode(){ if(jiotvMode)lsSet('iptv:mode','jiotv');else{lsSet('iptv:mo
 async function loadMode(){
   var mode=lsGet('iptv:mode');
   if(mode==='jiotv'){
-    // Auto-reconnect to fixed IP on app start
     var ok=await _autoConnectJioTV();
     if(ok){ jiotvMode=true; plIdx=TAB_JIOTV(); rebuildTabs(); await loadJioChannels(); saveMode(); return; }
     jiotvMode=false; _fallbackM3u();
@@ -1106,12 +1131,11 @@ if(Dom.settingsAudioTrack) Dom.settingsAudioTrack.addEventListener('click', cycl
 // ══════════════════════════════════════════════════════════════════
 window.addEventListener('keydown', function(e) {
   var k=e.key, kc=e.keyCode;
-  resetSleepTimer();  // any keypress resets sleep countdown
+  resetSleepTimerOnAction(kc);  // only resets on navigation/playback keys
 
   // ── JioTV Portal ─────────────────────────────────────────────
   if(Dom.jiotvPortal&&Dom.jiotvPortal.style.display!=='none'){
     if(jpInPlayer){
-      // Media play/pause keys work in JioTV player
       if(kc===KEY.PLAY_PAUSE||kc===KEY.PLAY||kc===KEY.PAUSE){
         if(Dom.jpVideo){if(Dom.jpVideo.paused)Dom.jpVideo.play().catch(function(){});else Dom.jpVideo.pause();}
         e.preventDefault();return;
@@ -1165,7 +1189,6 @@ window.addEventListener('keydown', function(e) {
     if(focusArea==='tabs'){setFocus('list');e.preventDefault();return;}
     if(focusArea==='search'){clearSearch();e.preventDefault();return;}
     if(focusArea==='avLeft'||focusArea==='avRight'||focusArea==='addBtn'){setFocus('list');e.preventDefault();return;}
-    // Don't preventDefault on exit — let tizenhwkey handle it
     try{if(window.tizen)tizen.application.getCurrentApplication().exit();}catch(ex){}
     e.preventDefault();return;
   }
@@ -1219,7 +1242,6 @@ window.addEventListener('keydown', function(e) {
   if(k==='VolumeDown'||kc===KEY.VOL_DOWN){if(Dom.video)Dom.video.volume=Math.max(0,Dom.video.volume-0.05);e.preventDefault();return;}
   if(k==='Mute'      ||kc===KEY.MUTE)    {if(Dom.video)Dom.video.muted=!Dom.video.muted;e.preventDefault();return;}
 
-  // PreCh — previous channel
   if(k==='PreCh'||kc===10232){goPreCh();e.preventDefault();return;}
 });
 
@@ -1310,13 +1332,11 @@ function switchTab(idx){
   if(Dom.overlayBottom)Dom.overlayBottom.classList.remove('info-visible');
   overlaysVisible=false;
 
-  // Playlist modal
   if(Dom.addPlaylistBtn)   Dom.addPlaylistBtn.addEventListener('click',openAddPlaylistModal);
   if(Dom.savePlaylistBtn)  Dom.savePlaylistBtn.addEventListener('click',handleSavePlaylist);
   if(Dom.cancelPlaylistBtn)Dom.cancelPlaylistBtn.addEventListener('click',function(){Dom.addPlaylistModal.style.display='none';setFocus('list');});
   if(Dom.addPlaylistModal) Dom.addPlaylistModal.addEventListener('click',function(e){if(e.target===Dom.addPlaylistModal){Dom.addPlaylistModal.style.display='none';setFocus('list');}});
   [Dom.playlistName,Dom.playlistUrl].forEach(function(inp){if(inp)inp.addEventListener('keydown',function(e){if(e.key==='Enter'||e.keyCode===13)handleSavePlaylist();});});
 
-  // Show JioTV portal if last mode was JioTV and channels loaded
   if(jiotvMode&&jiotvChannels.length>0) setTimeout(function(){showJioPortal();},300);
 })();
