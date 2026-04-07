@@ -257,6 +257,39 @@
 </div>
 
 
+
+<!-- ══ JIOTV CONNECT MODAL ══════════════════════════════════════ -->
+<div id="jiotvConnectModal" class="modal" style="display:none">
+  <div class="modal-content">
+    <div class="modal-icon jiotv-icon">
+      <svg viewBox="0 0 24 24" fill="none" width="30" height="30">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 12l3 3 5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h3>JioTV Go</h3>
+    <div class="modal-status" id="jiotvConnectStatus">Searching your network…</div>
+
+    <div class="jiotv-note">
+      Make sure <strong>JioTV Go v3.17+</strong> is running on your phone.<br>
+      SAGA will find it automatically, or enter the IP manually below.
+    </div>
+
+    <div class="modal-field">
+      <label>Manual Server URL (optional)</label>
+      <div class="modal-scan-row">
+        <input type="url" id="jiotvManualUrl" placeholder="http://192.168.1.x:5001" autocomplete="off"/>
+        <button id="jiotvScanBtn" class="btn-scan">🔍 Scan</button>
+      </div>
+    </div>
+
+    <div class="modal-buttons">
+      <button id="jiotvManualBtn" class="btn-jiotv">Connect</button>
+      <button id="jiotvConnectCancel" class="btn-secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div id="settingsModal" class="modal">
   <div class="modal-content">
     <div class="modal-icon">
