@@ -38,12 +38,14 @@ var KEY = {
   VOL_UP:447, VOL_DOWN:448, MUTE:449,
 };
 
-// FIX H23: clear dialTimer on unload
-window.addEventListener('beforeunload', function () {
+// FIX H23 + B21: clear on both beforeunload AND pagehide (more reliable on Tizen)
+function _onAppUnload(){
   clearTimeout(dialTimer);
-  try { SagaPlayer.stop(); } catch(e) {}
-  try { if (jpPlayer) jpPlayer.destroy(); } catch(e) {}  // FIX M15
-});
+  try{SagaPlayer.stop();}catch(e){}
+  try{if(jpPlayer){jpPlayer.destroy();jpPlayer=null;}}catch(e){}  // FIX M15
+}
+window.addEventListener('beforeunload',_onAppUnload);
+window.addEventListener('pagehide',    _onAppUnload); // FIX B21: pagehide is more reliable
 
 // ── Tab helpers ───────────────────────────────────────────────────
 function TAB_FAV()   { return allPlaylists.length; }
@@ -76,6 +78,7 @@ var sleepRemainingMs = 0, sleepLastTick = 0;
 var toastTm = null;
 var lastChannelStack = [];
 var _exitingApp = false;          // FIX H24: prevent double tizenhwkey exit
+var _loadBarRaf = null;            // FIX B9: cancel rAF in startLoadBar
 
 // JioTV
 var jiotvClient     = null, jiotvMode = false;
@@ -132,7 +135,11 @@ function lsRemove(k){try{localStorage.removeItem(k);}catch(e){}}
 
 // ── Favourites ────────────────────────────────────────────────────
 (function(){try{var r=lsGet(FAV_KEY);if(r)favSet=new Set(JSON.parse(r));}catch(e){}})();
-function saveFavs(){lsSet(FAV_KEY,JSON.stringify([...favSet]));}
+function saveFavs(){
+  // FIX B22: warn user if localStorage write fails
+  var ok=lsSet(FAV_KEY,JSON.stringify([...favSet]));
+  if(!ok)showToast('Storage full — favourites may not be saved',3500);
+}
 function isFav(ch){return ch&&ch.url&&favSet.has(ch.url);}
 function toggleFav(ch){
   if(!ch||!ch.url)return;
@@ -165,13 +172,18 @@ function setLbl(label,count){
   if(Dom.listLabel)Dom.listLabel.textContent=count!==undefined?label+' · '+count:label;
 }
 function startLoadBar(){
-  clearTimeout(loadBarTimer);if(!Dom.loadBar)return;
+  // FIX B9: cancel both rAF and any pending timeout before starting fresh
+  clearTimeout(loadBarTimer);
+  if(_loadBarRaf){cancelAnimationFrame(_loadBarRaf);_loadBarRaf=null;}
+  if(!Dom.loadBar)return;
   Dom.loadBar.style.width='0%';Dom.loadBar.classList.add('active');
   var w=0;
   (function tick(){w=Math.min(w+Math.random()*9,85);Dom.loadBar.style.width=w+'%';if(w<85)loadBarTimer=setTimeout(tick,200);})();
 }
 function finishLoadBar(){
-  clearTimeout(loadBarTimer);if(!Dom.loadBar)return;
+  clearTimeout(loadBarTimer);
+  if(_loadBarRaf){cancelAnimationFrame(_loadBarRaf);_loadBarRaf=null;} // FIX B9
+  if(!Dom.loadBar)return;
   Dom.loadBar.style.width='100%';
   setTimeout(function(){Dom.loadBar.classList.remove('active');Dom.loadBar.style.width='0%';},440);
 }
@@ -270,6 +282,7 @@ function _updateAvLabel(){
 }
 function buildAvSyncBar(){
   var ctrl=document.querySelector('.player-controls');if(!ctrl)return;
+  if(document.getElementById('avSyncWrap'))return; // FIX B15: prevent duplicate
   var wrap=document.createElement('div');wrap.id='avSyncWrap';
   var bM=document.createElement('button');bM.className='av-btn';bM.id='avBtnLeft'; bM.textContent='◁ Audio';
   var bP=document.createElement('button');bP.className='av-btn';bP.id='avBtnRight';bP.textContent='Audio ▷';
@@ -326,7 +339,11 @@ function cycleAudioTrack(){
 // ── Sleep timer — FIX H8: sleepMinutes reset in _clearSleepState ──
 var _SLEEP_RESET_KEYS=new Set([KEY.UP,KEY.DOWN,KEY.LEFT,KEY.RIGHT,KEY.ENTER,KEY.PLAY,KEY.PAUSE,KEY.PLAY_PAUSE,KEY.STOP,KEY.CH_UP,KEY.CH_DOWN,KEY.FF,KEY.RW,KEY.RED,KEY.GREEN,KEY.YELLOW,KEY.BLUE,KEY.PAGE_UP,KEY.PAGE_DOWN,KEY.BACK]);
 function _shouldResetSleep(kc){return _SLEEP_RESET_KEYS.has(kc);}
-function setSleepTimer(m){_clearSleepState();sleepMinutes=m;if(!m){showToast('Sleep timer: Off');return;}showToast('Sleep timer: '+m+' min');_startSleepCountdown(m*60000);}
+function setSleepTimer(m){
+  _clearSleepState(); // FIX B16: _clearSleepState sets sleepMinutes=0
+  if(!m||m<=0){showToast('Sleep timer: Off');return;} // FIX B16: guard <=0
+  sleepMinutes=m;showToast('Sleep timer: '+m+' min');_startSleepCountdown(m*60000);
+}
 function _startSleepCountdown(ms){
   sleepRemainingMs=ms;sleepLastTick=Date.now();
   sleepTimer=setInterval(function(){
@@ -706,10 +723,13 @@ function enterFS(){
     if(Dom.overlayBottom)Dom.overlayBottom.classList.remove('info-visible');
     overlaysVisible=false;showFsHint();_applyFsFitCSS();
   };
+  // FIX B17: 3s timeout resets _fsRequesting if promise never settles
+  var _fsReqTimeout=setTimeout(function(){_fsRequesting=false;},3000);
   if(p&&typeof p.then==='function'){
-    p.then(doEnter).catch(function(){_fsRequesting=false;});
+    p.then(function(){clearTimeout(_fsReqTimeout);doEnter();})
+     .catch(function(){clearTimeout(_fsReqTimeout);_fsRequesting=false;});
   }else{
-    doEnter();  // fallback for non-promise FS APIs
+    clearTimeout(_fsReqTimeout);doEnter();  // fallback for non-promise FS APIs
   }
 }
 function exitFS(){
@@ -782,7 +802,13 @@ function hideJioPortal(){
 
 // ── Connect modal ─────────────────────────────────────────────────
 function _setConnectStatus(msg,color){if(!Dom.jiotvConnectStatus)return;Dom.jiotvConnectStatus.textContent=msg;Dom.jiotvConnectStatus.style.color=color||'var(--text-sec)';}
-function _openConnectModal(){if(Dom.jiotvConnectModal)Dom.jiotvConnectModal.style.display='flex';if(Dom.jiotvManualUrl)Dom.jiotvManualUrl.value='';_setConnectStatus('');}
+function _openConnectModal(){
+  if(Dom.jiotvConnectModal)Dom.jiotvConnectModal.style.display='flex';
+  if(Dom.jiotvManualUrl)Dom.jiotvManualUrl.value='';
+  _setConnectStatus('');
+  // FIX B12: focus URL input on modal open
+  setTimeout(function(){if(Dom.jiotvManualUrl)Dom.jiotvManualUrl.focus();},80);
+}
 function _closeConnectModal(){if(Dom.jiotvConnectModal)Dom.jiotvConnectModal.style.display='none';_jioScanInProgress=false;}
 
 async function _connectToServer(serverUrl){
@@ -802,7 +828,11 @@ async function openJioPortalDirect(){
   if(saved){
     setStatus('Connecting to JioTV…','loading');startLoadBar();
     try{var client=await _connectToServer(saved);jiotvClient=client;jiotvMode=true;await loadJioChannels();finishLoadBar();saveMode();showJioPortal();return;}
-    catch(e){console.warn('[JioTV] saved URL failed:',e.message);JioTVClient.clearSaved();}
+    catch(e){
+      console.warn('[JioTV] saved URL failed:',e.message);
+      JioTVClient.clearSaved();
+      showToast('JioTV server changed — rescanning…',3000); // FIX B18
+    }
   }
   finishLoadBar();_openConnectModal();_jioScanInProgress=true;
   _setConnectStatus('🔍 Scanning LAN for JioTV Go…','var(--gold)');
@@ -819,10 +849,12 @@ async function _jioManualConnect(){
   if(!raw){_setConnectStatus('Enter the server URL','var(--red)');return;}
   if(!raw.startsWith('http'))raw='http://'+raw;
   _setConnectStatus('Connecting…','var(--gold)');
+  // FIX B19: disable both buttons during connect
   if(Dom.jiotvManualBtn)Dom.jiotvManualBtn.disabled=true;
+  if(Dom.jiotvScanBtn)Dom.jiotvScanBtn.disabled=true;
   try{var client=await _connectToServer(raw);jiotvClient=client;jiotvMode=true;_closeConnectModal();await loadJioChannels();saveMode();showJioPortal();}
   catch(e){_setConnectStatus('❌ '+e.message,'var(--red)');}
-  finally{if(Dom.jiotvManualBtn)Dom.jiotvManualBtn.disabled=false;}
+  finally{if(Dom.jiotvManualBtn)Dom.jiotvManualBtn.disabled=false;if(Dom.jiotvScanBtn)Dom.jiotvScanBtn.disabled=false;} // FIX B19
 }
 async function _jioRescan(){
   if(_jioScanInProgress)return;_jioScanInProgress=true;
@@ -919,6 +951,8 @@ function jpPlayChannel(ch,gridIdx){
       if(_jpPlayId!==myPlayId){_jpPlayerBusy=false;return;}
 
       var playUrl=(info&&info.url)?info.url:ch.url;
+      // FIX B14: check before unload, not just before load
+      if(_jpPlayId!==myPlayId){_jpPlayerBusy=false;return;}
       await jpPlayer.unload();Dom.jpVideo.removeAttribute('src');
       if(info&&info.isDRM){var drmCfg=_buildJpDrm(info);if(drmCfg)jpPlayer.configure({drm:drmCfg});}
       else jpPlayer.configure({drm:{servers:{}}});
@@ -949,6 +983,8 @@ function jpHideOverlay(){if(Dom.jpPlayerOverlay)Dom.jpPlayerOverlay.classList.re
 function jpExitPlayer(){
   jpInPlayer=false;_jpPlayerBusy=false;_jpPlayId++;  // FIX C3: invalidate pending loads
   clearTimeout(jpEpgTimer);clearTimeout(jpOverlayTimer);clearTimeout(_jpPlayTimeoutTimer);
+  // FIX B20: reset _jpLoadPromise so next jpPlayChannel doesn't wait for hung chain
+  _jpLoadPromise=Promise.resolve();
   // FIX M15: destroy jpPlayer on exit instead of just unload
   if(jpPlayer){try{jpPlayer.destroy();}catch(e){}jpPlayer=null;}
   if(Dom.jpVideo)Dom.jpVideo.removeAttribute('src');
@@ -1024,9 +1060,19 @@ window.addEventListener('keydown',function(e){
       if(kc===KEY.MUTE){if(Dom.jpVideo)Dom.jpVideo.muted=!Dom.jpVideo.muted;e.preventDefault();return;}
       e.preventDefault();return;
     }
-    if(k==='ArrowUp'   ||kc===KEY.UP)   {jpMoveFocus(-1,0);e.preventDefault();return;}
+    if(k==='ArrowUp'||kc===KEY.UP){
+      if(jpFocusRow===0){if(Dom.jpSearch)Dom.jpSearch.focus();e.preventDefault();return;} // FIX B13
+      jpMoveFocus(-1,0);e.preventDefault();return;
+    }
     if(k==='ArrowDown' ||kc===KEY.DOWN) {jpMoveFocus(+1,0);e.preventDefault();return;}
-    if(k==='ArrowLeft' ||kc===KEY.LEFT) {jpMoveFocus(0,-1);e.preventDefault();return;}
+    if(k==='ArrowLeft'||kc===KEY.LEFT){
+      if(jpFocusCol===0){
+        // FIX B13: at leftmost column — move focus to category filters
+        if(Dom.jpFilters){var fb=Dom.jpFilters.querySelector('.jp-filter.active,.jp-filter');if(fb)fb.focus();}
+        e.preventDefault();return;
+      }
+      jpMoveFocus(0,-1);e.preventDefault();return;
+    }
     if(k==='ArrowRight'||kc===KEY.RIGHT){jpMoveFocus(0,+1);e.preventDefault();return;}
     if(k==='Enter'||kc===KEY.ENTER){var idx=jpGetFocusIdx();if(jpFiltered[idx])jpPlayChannel(jpFiltered[idx],idx);e.preventDefault();return;}
     if(k==='Escape'||k==='Back'||k==='GoBack'||kc===KEY.BACK||kc===27){hideJioPortal();e.preventDefault();return;}
@@ -1040,7 +1086,24 @@ window.addEventListener('keydown',function(e){
   // ── Connect modal ─────────────────────────────────────────────
   if(Dom.jiotvConnectModal&&Dom.jiotvConnectModal.style.display==='flex'){
     if(k==='Escape'||k==='Back'||kc===KEY.BACK||kc===27){Dom.jiotvConnectCancel&&Dom.jiotvConnectCancel.click();e.preventDefault();return;}
-    if(k==='Enter'||kc===KEY.ENTER){_jioManualConnect();e.preventDefault();return;}
+    if(k==='Enter'||kc===KEY.ENTER){
+      // FIX B12: Enter activates focused element
+      var fa=document.activeElement;
+      if(fa===Dom.jiotvScanBtn){_jioRescan();e.preventDefault();return;}
+      if(fa===Dom.jiotvConnectCancel){Dom.jiotvConnectCancel.click();e.preventDefault();return;}
+      _jioManualConnect();e.preventDefault();return;
+    }
+    // FIX B12: ArrowUp/Down cycles focus: input → scan → connect → cancel → input
+    if(k==='ArrowDown'||kc===KEY.DOWN||k==='ArrowUp'||kc===KEY.UP){
+      var _modalFocusOrder=[Dom.jiotvManualUrl,Dom.jiotvScanBtn,Dom.jiotvManualBtn,Dom.jiotvConnectCancel];
+      var _cur=document.activeElement;
+      var _ci=_modalFocusOrder.indexOf(_cur);
+      var _next;
+      if(k==='ArrowDown'||kc===KEY.DOWN){_next=_modalFocusOrder[(_ci+1)%_modalFocusOrder.length];}
+      else{_next=_modalFocusOrder[(_ci-1+_modalFocusOrder.length)%_modalFocusOrder.length];}
+      if(_next)_next.focus();
+      e.preventDefault();return;
+    }
     return;
   }
 
@@ -1100,10 +1163,23 @@ window.addEventListener('keydown',function(e){
     if(focusArea==='list'){
       playSelected();
       // FIX FS: enter fullscreen only after 'playing' fires, not on a fixed timer
-      var _fsListener=function(){Dom.video.removeEventListener('playing',_fsListener);enterFS();};
+      // FIX B11: 'playing' listener + 500ms polling fallback
+      var _fsListener=function(){
+        Dom.video.removeEventListener('playing',_fsListener);
+        if(!isFullscreen)enterFS();
+      };
       Dom.video.addEventListener('playing',_fsListener,{once:true});
-      // safety: if playing never fires within 5s, still try
-      setTimeout(function(){Dom.video.removeEventListener('playing',_fsListener);if(hasPlayed&&!isFullscreen)enterFS();},5000);
+      // Polling fallback every 500ms: if video is running but playing event missed
+      var _fsPollCount=0;
+      var _fsPoll=setInterval(function(){
+        _fsPollCount++;
+        if(isFullscreen||_fsPollCount>20){clearInterval(_fsPoll);return;} // stop after 10s
+        if(Dom.video&&Dom.video.duration>0&&!Dom.video.paused){
+          Dom.video.removeEventListener('playing',_fsListener);
+          clearInterval(_fsPoll);
+          enterFS();
+        }
+      },500);
     }
     e.preventDefault();return;
   }

@@ -1,8 +1,10 @@
 // ================================================================
-// SAGA IPTV — cache.js v3.0  |  All mandatory fixes applied
+// SAGA IPTV — cache.js v4.0
 // FIX H9:  LRU cap on _imgSeen (max 500 entries)
 // FIX M25: LS_QUOTA_WARN raised to 4.5 MB
-// FIX C6:  clearAllM3U returns Promise, caller awaits it
+// FIX C6:  clearAllM3U returns awaitable Promise
+// FIX B1:  IDB recovery correctly resets _dbInit = null so openDB() re-runs
+// FIX B2:  idbDelete returns Promise that resolves after tx completes
 // ================================================================
 'use strict';
 
@@ -10,7 +12,7 @@ var AppCache = (function () {
 
   var M3U_TTL       = 30 * 60 * 1000;
   var JIOTV_TTL     =  5 * 60 * 1000;
-  var LS_QUOTA_WARN = 4.5 * 1024 * 1024; // FIX M25: raised from 3.5 MB
+  var LS_QUOTA_WARN = 4.5 * 1024 * 1024; // FIX M25
   var IDB_NAME      = 'saga-cache';
   var IDB_VER       = 1;
   var IDB_STORE     = 'payloads';
@@ -41,9 +43,9 @@ var AppCache = (function () {
           _db.onerror = function (ev) { console.warn('[Cache] IDB error', ev); };
           resolve(_db);
         };
-        req.onerror   = function () { _dbFail = true; resolve(null); };
-        req.onblocked = function () { _dbFail = true; resolve(null); };
-      } catch (e) { _dbFail = true; resolve(null); }
+        req.onerror   = function () { _dbFail = true; _dbInit = null; resolve(null); }; // FIX B1: reset _dbInit on failure
+        req.onblocked = function () { _dbFail = true; _dbInit = null; resolve(null); }; // FIX B1
+      } catch (e) { _dbFail = true; _dbInit = null; resolve(null); }                   // FIX B1
     });
     return _dbInit;
   }
@@ -84,11 +86,19 @@ var AppCache = (function () {
     });
   }
 
+  // FIX B2: return Promise that resolves after tx completes (not fire-and-forget)
   function idbDelete(key) {
     delete _memCache[key];
     return openDB().then(function (db) {
-      if (!db) return;
-      try { db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).delete(key); } catch (e) {}
+      if (!db) return Promise.resolve();
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).delete(key);
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror    = function () { resolve(); }; // resolve anyway — best-effort
+        } catch (e) { resolve(); }
+      });
     });
   }
 
@@ -134,7 +144,7 @@ var AppCache = (function () {
     });
   }
 
-  // FIX C6: setM3U is async-safe — caller must await clearAllM3U before calling
+  // FIX C6: caller must await clearAllM3U() before setM3U()
   function setM3U(url, text) {
     var ck  = 'plCache:' + url;
     var ctk = 'plCacheTime:' + url;
@@ -147,10 +157,10 @@ var AppCache = (function () {
   function clearM3U(url) {
     var ck = 'plCache:' + url, ctk = 'plCacheTime:' + url;
     lsRemove(ck); lsRemove(ctk);
-    return idbDelete(ck);
+    return idbDelete(ck); // FIX B2: now awaitable
   }
 
-  // FIX C6: returns a Promise that resolves only after IDB clear completes
+  // FIX C6: returns Promise resolving after IDB clear
   function clearAllM3U() {
     try {
       var keys = [];
@@ -160,9 +170,12 @@ var AppCache = (function () {
       }
       keys.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) {}
-    delete _memCache['plCache'];  // clear any mem-cached entries
+    // Also clear mem cache entries
+    Object.keys(_memCache).forEach(function (k) {
+      if (k.startsWith('plCache:')) delete _memCache[k];
+    });
     return openDB().then(function (db) {
-      if (!db) return;
+      if (!db) return Promise.resolve();
       return new Promise(function (resolve) {
         try {
           var tx = db.transaction(IDB_STORE, 'readwrite');
@@ -183,18 +196,17 @@ var AppCache = (function () {
     });
   }
   function setJioChannels(list)  { return idbSet(JIOTV_KEY, list); }
-  function clearJioChannels()    { return idbDelete(JIOTV_KEY); }
+  function clearJioChannels()    { return idbDelete(JIOTV_KEY); } // FIX B2: now awaitable
 
-  // ── Image preload — FIX H9: LRU cap on _imgSeen ───────────────
+  // ── Image preload — FIX H9: LRU cap ──────────────────────────
   var _imgQueue   = [];
   var _imgActive  = 0;
-  var _imgSeen    = [];  // array acting as LRU queue (oldest first)
-  var _imgSeenSet = new Set();
+  var _imgSeen    = [];        // LRU order array (oldest first)
+  var _imgSeenSet = new Set(); // fast membership check
 
   function _imgLRUAdd(url) {
     if (_imgSeenSet.has(url)) return false;
     if (_imgSeen.length >= IMG_SEEN_MAX) {
-      // evict oldest
       var evicted = _imgSeen.shift();
       _imgSeenSet.delete(evicted);
     }
@@ -234,15 +246,18 @@ var AppCache = (function () {
   }
   function lsNearQuota() { return lsUsageBytes() > LS_QUOTA_WARN; }
 
-  // IDB recovery once per minute if failed
+  // ── IDB recovery — FIX B1: _dbInit = null so openDB() reruns ─
   openDB();
-  (function retry() {
-    if (!_dbFail) { setTimeout(retry, 60000); return; }
+  (function scheduleRecovery() {
     setTimeout(function () {
-      _dbFail = false; _dbInit = null;
+      if (!_dbFail) { scheduleRecovery(); return; }
+      console.log('[Cache] Attempting IDB recovery…');
+      _dbFail = false;
+      _dbInit = null; // FIX B1: must clear so openDB() creates fresh Promise
+      _db     = null;
       openDB().then(function (db) {
-        if (db) console.log('[Cache] IDB recovered');
-        else { _dbFail = true; setTimeout(retry, 60000); }
+        if (db) { console.log('[Cache] IDB recovered'); scheduleRecovery(); }
+        else    { _dbFail = true; scheduleRecovery(); }
       });
     }, 60000);
   })();

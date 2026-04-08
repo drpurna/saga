@@ -1,8 +1,9 @@
 // ================================================================
-// SAGA IPTV — jiotv.js v8.0  |  All mandatory fixes applied
+// SAGA IPTV — jiotv.js v9.0
 // FIX H13: EPG fail counter — no decrement, only cap+reset
 // FIX M20: scan limited to 2 subnets, larger batch delay
-// FIX (M3U fallback): /channels JSON failure → try /playlist.m3u
+// FIX B3:  getLocalIP fallback to empty string on any exception
+// FIX B4:  EPG fail counter resets after 10 min timeout regardless
 // ================================================================
 'use strict';
 
@@ -11,7 +12,8 @@ var JioTVClient = (function () {
   var DEFAULT_PORT  = 5001;
   var DEFAULT_IP    = '172.20.10.2';
   var SAVED_URL_KEY = 'jiotv:server';
-  var EPG_FAIL_CAP  = 5;  // FIX H13: no longer decrements
+  var EPG_FAIL_CAP  = 5;            // FIX H13: no longer decrements
+  var EPG_RESET_MS  = 10 * 60 * 1000; // FIX B4: reset fail counter after 10 min
 
   var CATEGORY_MAP = {
     1:'Entertainment', 2:'Movies',      3:'Kids',      4:'Sports',
@@ -50,7 +52,7 @@ var JioTVClient = (function () {
     });
   }
 
-  // Fetch raw text (for M3U fallback)
+  // Fetch raw text (M3U fallback)
   function fetchText(url, timeout) {
     return new Promise(function (resolve, reject) {
       var xhr  = new XMLHttpRequest();
@@ -92,34 +94,41 @@ var JioTVClient = (function () {
     });
   }
 
-  // ── WebRTC LAN IP detection ───────────────────────────────────
+  // FIX B3: getLocalIP — catches all exceptions, returns '' instead of null
   function getLocalIP() {
     return new Promise(function (resolve) {
       try {
+        if (typeof RTCPeerConnection === 'undefined') { resolve(''); return; }
         var pc   = new RTCPeerConnection({ iceServers: [] });
         var done = false;
-        function finish(ip) { if (done) return; done = true; try { pc.close(); } catch(e){} resolve(ip); }
+        function finish(ip) {
+          if (done) return; done = true;
+          try { pc.close(); } catch(e) {}
+          resolve(ip || ''); // FIX B3: return '' not null
+        }
         pc.createDataChannel('');
-        pc.createOffer().then(function (o) { return pc.setLocalDescription(o); }).catch(function(){ finish(null); });
+        pc.createOffer()
+          .then(function (o) { return pc.setLocalDescription(o); })
+          .catch(function () { finish(''); }); // FIX B3: explicit empty string
         pc.onicecandidate = function (ev) {
           if (!ev || !ev.candidate) return;
           var m = ev.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
           if (m && !m[1].startsWith('127.') && !m[1].startsWith('169.254.')) finish(m[1]);
         };
-        setTimeout(function () { finish(null); }, 2500);
-      } catch(e) { resolve(null); }
+        setTimeout(function () { finish(''); }, 2500); // FIX B3: '' not null
+      } catch (e) { resolve(''); } // FIX B3: always resolve with string
     });
   }
 
-  // FIX M20: limited to 2 subnets, larger delay between batches
+  // FIX M20: limited to 2 subnets, 200ms delay between batches
   function _buildSubnets(detectedIp) {
     var primary = DEFAULT_IP.split('.').slice(0, 3).join('.');
     var list    = [primary];
-    if (detectedIp) {
+    if (detectedIp && typeof detectedIp === 'string' && detectedIp.length > 0) {
       var sub = detectedIp.split('.').slice(0, 3).join('.');
       if (list.indexOf(sub) < 0) list.push(sub);
     }
-    // FIX M20: only add 2 fallback subnets (reduced from 7)
+    // FIX M20: only add 2 common fallback subnets
     ['192.168.43', '192.168.1'].forEach(function (s) {
       if (list.length < 4 && list.indexOf(s) < 0) list.push(s);
     });
@@ -141,8 +150,7 @@ var JioTVClient = (function () {
         batchIdx++;
         Promise.all(promises).then(function (res) {
           for (var j = 0; j < res.length; j++) if (res[j]) { found = res[j]; resolve(found); return; }
-          // FIX M20: 200ms delay between batches to reduce flood
-          setTimeout(nextBatch, 200);
+          setTimeout(nextBatch, 200); // FIX M20: 200ms between batches
         });
       }
       nextBatch();
@@ -160,7 +168,7 @@ var JioTVClient = (function () {
     if (await probe(defaultUrl, 2000)) return defaultUrl;
 
     if (onProgress) onProgress('Scanning LAN…');
-    var localIp = await getLocalIP();
+    var localIp = await getLocalIP(); // FIX B3: always returns string
     var subnets  = _buildSubnets(localIp);
 
     for (var s = 0; s < subnets.length; s++) {
@@ -178,11 +186,12 @@ var JioTVClient = (function () {
 
   // ── Constructor ───────────────────────────────────────────────
   function JioTVClient(opts) {
-    this.serverUrl     = (opts && opts.serverUrl || '').replace(/\/+$/, '');
-    this.timeout       = (opts && opts.timeout > 0) ? opts.timeout : 12000;
-    this.logged_in     = false;
-    this._cache        = null;
-    this._epgFailCount = 0;
+    this.serverUrl        = (opts && opts.serverUrl || '').replace(/\/+$/, '');
+    this.timeout          = (opts && opts.timeout > 0) ? opts.timeout : 12000;
+    this.logged_in        = false;
+    this._cache           = null;
+    this._epgFailCount    = 0;
+    this._epgResetTimer   = null; // FIX B4: timeout-based reset
   }
 
   var P = JioTVClient.prototype;
@@ -193,7 +202,7 @@ var JioTVClient = (function () {
   JioTVClient.clearSaved  = _clearSaved;
   JioTVClient.DEFAULT_URL = 'http://' + DEFAULT_IP + ':' + DEFAULT_PORT;
 
-  // ── Status check — /channels is truth ─────────────────────────
+  // ── Status check ─────────────────────────────────────────────
   P.checkStatus = async function () {
     var result = { status: false, channelCount: 0, reason: '' };
     try {
@@ -203,42 +212,32 @@ var JioTVClient = (function () {
         this.logged_in = true; this._cache = list;
         result.status = true; result.channelCount = list.length;
       } else {
-        // FIX: invalid JSON shape — report clearly
         result.reason = (d && d.error) ? String(d.error) : 'Server returned unexpected format. Try M3U mode.';
       }
-    } catch (e) {
-      result.reason = e.message;
-    }
+    } catch (e) { result.reason = e.message; }
     this.logged_in = result.status;
     return result;
   };
 
-  // ── Channel list — FIX: M3U fallback on bad JSON ──────────────
+  // ── Channels ─────────────────────────────────────────────────
   P.getChannels = async function (force) {
     if (this._cache && !force) return this._cache;
     var d = null;
-    try {
-      d = await fetchJSON(this.serverUrl + '/channels', null, this.timeout);
-    } catch (e) {
-      console.warn('[JioTV] /channels fetch error:', e.message);
-    }
+    try { d = await fetchJSON(this.serverUrl + '/channels', null, this.timeout); } catch (e) {}
 
     var list = Array.isArray(d) ? d : (d && Array.isArray(d.result)) ? d.result : null;
     if (list !== null) { this._cache = list; return list; }
 
-    // FIX: fallback to /playlist.m3u if JSON is missing/malformed
-    console.warn('[JioTV] Invalid /channels response — trying M3U fallback');
+    // M3U fallback when JSON missing/malformed
+    console.warn('[JioTV] /channels invalid — trying /playlist.m3u');
     try {
       var m3uText = await fetchText(this.serverUrl + '/playlist.m3u', 20000);
       if (m3uText && m3uText.includes('#EXTINF')) {
-        // Parse M3U into pseudo-channel objects
-        var lines   = m3uText.split(/\r?\n/);
-        var parsed  = [], meta = null;
+        var lines = m3uText.split(/\r?\n/), parsed = [], meta = null;
         for (var i = 0; i < lines.length; i++) {
           var line = lines[i].trim(); if (!line) continue;
           if (line.startsWith('#EXTINF')) {
-            var commaIdx = line.lastIndexOf(',');
-            var name = commaIdx >= 0 ? line.slice(commaIdx + 1).trim() : 'Channel';
+            var ci = line.lastIndexOf(','), name = ci >= 0 ? line.slice(ci + 1).trim() : 'Channel';
             var gm = line.match(/group-title="([^"]+)"/i);
             var lm = line.match(/tvg-logo="([^"]+)"/i);
             var im = line.match(/tvg-id="([^"]+)"/i);
@@ -250,9 +249,7 @@ var JioTVClient = (function () {
         }
         this._cache = parsed; return parsed;
       }
-    } catch (e2) {
-      console.warn('[JioTV] M3U fallback also failed:', e2.message);
-    }
+    } catch (e2) { console.warn('[JioTV] M3U fallback failed:', e2.message); }
     this._cache = []; return [];
   };
 
@@ -265,14 +262,11 @@ var JioTVClient = (function () {
       var name  = String(ch.channel_name || ch.name || 'Unknown').trim();
       var logo  = String(ch.logoUrl || ch.logo_url || ch.logo || '').trim();
       var lang  = String(ch.channelLanguage || ch.language || '').trim();
-      // Use _m3uUrl if available (M3U fallback path)
       var url   = ch._m3uUrl || (id ? (base + '/live/' + id + '.m3u8') : '');
       return {
-        name:   name || ('Channel ' + id),
-        group:  CATEGORY_MAP[catId] || 'Other',
-        logo:   logo, url: url, jioId: id,
-        isHD:   !!(ch.isHD || ch.is_hd),
-        lang:   lang, source: 'jiotv',
+        name: name || ('Channel ' + id), group: CATEGORY_MAP[catId] || 'Other',
+        logo: logo, url: url, jioId: id,
+        isHD: !!(ch.isHD || ch.is_hd), lang: lang, source: 'jiotv',
       };
     }).filter(function (ch) { return ch.url; });
   };
@@ -287,21 +281,34 @@ var JioTVClient = (function () {
     return { url: this.serverUrl + '/live/' + channelId + '.m3u8', isDRM: false };
   };
 
-  // FIX H13: no decrement — counter only increases up to cap, resets on success
+  // FIX H13: no decrement — only cap+reset on success
+  // FIX B4: reset fail counter after 10min timeout regardless of success
   P.getNowPlaying = async function (channelId) {
     if (!channelId) return null;
-    if (this._epgFailCount >= EPG_FAIL_CAP) return null; // FIX H13: no decrement, just skip
+    if (this._epgFailCount >= EPG_FAIL_CAP) return null; // FIX H13
     try {
       var d = await fetchJSON(
         this.serverUrl + '/epg/now?channel_id=' + encodeURIComponent(channelId),
         null, 6000
       );
-      this._epgFailCount = 0; // FIX H13: reset on any success
+      this._epgFailCount = 0;          // FIX H13: reset on success
+      this._scheduleEpgReset();        // FIX B4: also refresh reset timer
       return (d && d.result) ? d.result : null;
     } catch (e) {
       this._epgFailCount++;
+      this._scheduleEpgReset();        // FIX B4: start reset timer on failure too
       return null;
     }
+  };
+
+  // FIX B4: reset _epgFailCount after EPG_RESET_MS regardless
+  P._scheduleEpgReset = function () {
+    var self = this;
+    clearTimeout(this._epgResetTimer);
+    this._epgResetTimer = setTimeout(function () {
+      self._epgFailCount = 0;
+      console.log('[JioTV] EPG fail counter reset by timeout');
+    }, EPG_RESET_MS);
   };
 
   P.invalidateCache = function ()   { this._cache = null; };
