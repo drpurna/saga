@@ -400,3 +400,10 @@ body.fullscreen .ch-dialer      { z-index:10003; }
 .btn-scan:disabled { opacity:0.40; cursor:not-allowed; }
 
 .toast { position:fixed; bottom:42px; left:50%; transform:translateX(-50%); background:rgba(8,8,24,0.97); border:1.5px solid rgba(255,255,255,0.14); color:#fff; font-family:var(--font-ui); font-size:17px; font-weight:800; padding:14px 32px; border-radius:36px; z-index:30000; pointer-events:none; opacity:0; transition:opacity 0.20s ease; white-space:nowrap; box-shadow:0 10px 40px rgba(0,0,0,0.62); }
+/* ── Fullscreen video fit (cover vs contain) ─────────────────── */
+/* Default (contain) already set: video { object-fit:contain }   */
+/* Cover is applied dynamically via JS _applyFsFitCSS()          */
+body.fullscreen video.fs-cover { object-fit: cover; }
+
+/* ── Ensure portal ResizeObserver recalculates on show ───────── */
+.jiotv-portal[style*="flex"] .jp-grid { will-change: contents; }

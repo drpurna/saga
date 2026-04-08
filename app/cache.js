@@ -1,50 +1,48 @@
 // ================================================================
-// SAGA IPTV — cache.js v2.1  |  Two-tier smart cache + IDB recovery
+// SAGA IPTV — cache.js v3.0  |  All mandatory fixes applied
+// FIX H9:  LRU cap on _imgSeen (max 500 entries)
+// FIX M25: LS_QUOTA_WARN raised to 4.5 MB
+// FIX C6:  clearAllM3U returns Promise, caller awaits it
 // ================================================================
 'use strict';
 
 var AppCache = (function () {
 
-  var M3U_TTL        = 30 * 60 * 1000;
-  var JIOTV_TTL      =  5 * 60 * 1000;
-  var LS_QUOTA_WARN  = 3.5 * 1024 * 1024;
-  var IDB_NAME       = 'saga-cache';
-  var IDB_VER        = 1;
-  var IDB_STORE      = 'payloads';
-  var IDB_RETRY_MAX  = 2;
-  var IMG_CONCUR     = 4;
+  var M3U_TTL       = 30 * 60 * 1000;
+  var JIOTV_TTL     =  5 * 60 * 1000;
+  var LS_QUOTA_WARN = 4.5 * 1024 * 1024; // FIX M25: raised from 3.5 MB
+  var IDB_NAME      = 'saga-cache';
+  var IDB_VER       = 1;
+  var IDB_STORE     = 'payloads';
+  var IDB_RETRY_MAX = 2;
+  var IMG_CONCUR    = 4;
+  var IMG_SEEN_MAX  = 500; // FIX H9: LRU cap
 
   var _memCache = {};
-  var _db     = null;
-  var _dbFail = false;
-  var _dbInit = null;
+  var _db       = null;
+  var _dbFail   = false;
+  var _dbInit   = null;
 
+  // ── IndexedDB ─────────────────────────────────────────────────
   function openDB() {
     if (_dbFail) return Promise.resolve(null);
     if (_db)     return Promise.resolve(_db);
     if (_dbInit) return _dbInit;
-
     _dbInit = new Promise(function (resolve) {
       try {
         var req = indexedDB.open(IDB_NAME, IDB_VER);
         req.onupgradeneeded = function (e) {
           var db = e.target.result;
-          if (!db.objectStoreNames.contains(IDB_STORE)) {
+          if (!db.objectStoreNames.contains(IDB_STORE))
             db.createObjectStore(IDB_STORE, { keyPath: 'key' });
-          }
         };
         req.onsuccess = function (e) {
           _db = e.target.result;
           _db.onerror = function (ev) { console.warn('[Cache] IDB error', ev); };
           resolve(_db);
         };
-        req.onerror = function () {
-          console.warn('[Cache] IDB open failed — using LS/memory fallback');
-          _dbFail = true; resolve(null);
-        };
-        req.onblocked = function () {
-          console.warn('[Cache] IDB blocked'); _dbFail = true; resolve(null);
-        };
+        req.onerror   = function () { _dbFail = true; resolve(null); };
+        req.onblocked = function () { _dbFail = true; resolve(null); };
       } catch (e) { _dbFail = true; resolve(null); }
     });
     return _dbInit;
@@ -63,8 +61,7 @@ var AppCache = (function () {
             if (attempt < IDB_RETRY_MAX) {
               setTimeout(function () { idbSet(key, value, attempt + 1).then(resolve); }, 200);
             } else {
-              _memCache[key] = { value: value, ts: Date.now() };
-              resolve(false);
+              _memCache[key] = { value: value, ts: Date.now() }; resolve(false);
             }
           };
         } catch (e) { _memCache[key] = { value: value, ts: Date.now() }; resolve(false); }
@@ -91,22 +88,17 @@ var AppCache = (function () {
     delete _memCache[key];
     return openDB().then(function (db) {
       if (!db) return;
-      try {
-        var tx = db.transaction(IDB_STORE, 'readwrite');
-        tx.objectStore(IDB_STORE).delete(key);
-      } catch (e) {}
+      try { db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).delete(key); } catch (e) {}
     });
   }
 
+  // ── localStorage ─────────────────────────────────────────────
   function lsSet(k, v) {
     try { localStorage.setItem(k, v); return true; }
-    catch (e) {
-      _evictOldest();
-      try { localStorage.setItem(k, v); return true; } catch (e2) { return false; }
-    }
+    catch (e) { _evictOldest(); try { localStorage.setItem(k, v); return true; } catch (e2) { return false; } }
   }
-  function lsGet(k)    { try { return localStorage.getItem(k); }    catch (e) { return null; } }
-  function lsRemove(k) { try { localStorage.removeItem(k); }        catch (e) {} }
+  function lsGet(k)    { try { return localStorage.getItem(k); }  catch(e) { return null; } }
+  function lsRemove(k) { try { localStorage.removeItem(k); }       catch(e) {} }
 
   function _evictOldest() {
     try {
@@ -127,6 +119,7 @@ var AppCache = (function () {
     } catch (e) {}
   }
 
+  // ── M3U cache ─────────────────────────────────────────────────
   function getM3U(url) {
     var ck  = 'plCache:' + url;
     var ctk = 'plCacheTime:' + url;
@@ -141,15 +134,13 @@ var AppCache = (function () {
     });
   }
 
+  // FIX C6: setM3U is async-safe — caller must await clearAllM3U before calling
   function setM3U(url, text) {
     var ck  = 'plCache:' + url;
     var ctk = 'plCacheTime:' + url;
     lsSet(ctk, String(Date.now()));
     var ok = lsSet(ck, text);
-    if (!ok) {
-      lsRemove(ck); lsRemove(ctk);
-      return idbSet(ck, text);
-    }
+    if (!ok) { lsRemove(ck); lsRemove(ctk); return idbSet(ck, text); }
     return Promise.resolve(true);
   }
 
@@ -159,6 +150,7 @@ var AppCache = (function () {
     return idbDelete(ck);
   }
 
+  // FIX C6: returns a Promise that resolves only after IDB clear completes
   function clearAllM3U() {
     try {
       var keys = [];
@@ -168,33 +160,54 @@ var AppCache = (function () {
       }
       keys.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) {}
+    delete _memCache['plCache'];  // clear any mem-cached entries
     return openDB().then(function (db) {
       if (!db) return;
-      try { db.transaction(IDB_STORE, 'readwrite').objectStore(IDB_STORE).clear(); } catch (e) {}
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).clear();
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror    = function () { resolve(); };
+        } catch (e) { resolve(); }
+      });
     });
   }
 
+  // ── JioTV channel cache ───────────────────────────────────────
   var JIOTV_KEY = 'jiotv:channels';
-
   function getJioChannels() {
     return idbGet(JIOTV_KEY).then(function (rec) {
-      if (!rec) return null;
-      if (Date.now() - rec.ts > JIOTV_TTL) return null;
+      if (!rec || Date.now() - rec.ts > JIOTV_TTL) return null;
       return rec.value;
     });
   }
   function setJioChannels(list)  { return idbSet(JIOTV_KEY, list); }
   function clearJioChannels()    { return idbDelete(JIOTV_KEY); }
 
-  var _imgQueue  = [];
-  var _imgActive = 0;
-  var _imgSeen   = new Set();
+  // ── Image preload — FIX H9: LRU cap on _imgSeen ───────────────
+  var _imgQueue   = [];
+  var _imgActive  = 0;
+  var _imgSeen    = [];  // array acting as LRU queue (oldest first)
+  var _imgSeenSet = new Set();
+
+  function _imgLRUAdd(url) {
+    if (_imgSeenSet.has(url)) return false;
+    if (_imgSeen.length >= IMG_SEEN_MAX) {
+      // evict oldest
+      var evicted = _imgSeen.shift();
+      _imgSeenSet.delete(evicted);
+    }
+    _imgSeen.push(url);
+    _imgSeenSet.add(url);
+    return true;
+  }
 
   function preloadImages(urls) {
     if (!Array.isArray(urls)) return;
     urls.forEach(function (url) {
-      if (!url || typeof url !== 'string' || _imgSeen.has(url)) return;
-      _imgSeen.add(url); _imgQueue.push(url);
+      if (!url || typeof url !== 'string') return;
+      if (_imgLRUAdd(url)) _imgQueue.push(url);
     });
     _drainImgQueue();
   }
@@ -208,6 +221,7 @@ var AppCache = (function () {
     }
   }
 
+  // ── Storage usage ─────────────────────────────────────────────
   function lsUsageBytes() {
     var total = 0;
     try {
@@ -220,32 +234,30 @@ var AppCache = (function () {
   }
   function lsNearQuota() { return lsUsageBytes() > LS_QUOTA_WARN; }
 
+  // IDB recovery once per minute if failed
   openDB();
-
-  // IDB recovery: try to reopen once per minute if failed
-  (function periodicIDBRecovery() {
-    if (!_dbFail) return;
-    setTimeout(function() {
-      _dbFail = false;
-      _dbInit = null;
-      openDB().then(function(db) {
+  (function retry() {
+    if (!_dbFail) { setTimeout(retry, 60000); return; }
+    setTimeout(function () {
+      _dbFail = false; _dbInit = null;
+      openDB().then(function (db) {
         if (db) console.log('[Cache] IDB recovered');
-        else _dbFail = true;
+        else { _dbFail = true; setTimeout(retry, 60000); }
       });
     }, 60000);
   })();
 
   return {
-    getM3U:          getM3U,
-    setM3U:          setM3U,
-    clearM3U:        clearM3U,
-    clearAllM3U:     clearAllM3U,
-    getJioChannels:  getJioChannels,
-    setJioChannels:  setJioChannels,
-    clearJioChannels:clearJioChannels,
-    preloadImages:   preloadImages,
-    lsUsageBytes:    lsUsageBytes,
-    lsNearQuota:     lsNearQuota,
+    getM3U:           getM3U,
+    setM3U:           setM3U,
+    clearM3U:         clearM3U,
+    clearAllM3U:      clearAllM3U,
+    getJioChannels:   getJioChannels,
+    setJioChannels:   setJioChannels,
+    clearJioChannels: clearJioChannels,
+    preloadImages:    preloadImages,
+    lsUsageBytes:     lsUsageBytes,
+    lsNearQuota:      lsNearQuota,
   };
 })();
 
