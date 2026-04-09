@@ -26,6 +26,9 @@ var JP_PLAY_TIMEOUT_MS   = 15000;
 var EPG_INTERVAL_MS      = 30000;
 var M3U_RETRY_MAX        = 2;
 var M3U_RETRY_BASE_MS    = 1500;
+// FIX: freeze prevention — per-channel retry + timeout
+var CH_RETRY_MAX         = 2;
+var CH_PLAY_TIMEOUT_MS   = 15000;
 
 // ── Samsung BN59-01199F key codes ─────────────────────────────────
 var KEY = {
@@ -55,6 +58,8 @@ function TAB_TOTAL() { return allPlaylists.length + 2; }
 var DEFAULT_PLAYLISTS = [
   { name:'Telugu', url:'https://iptv-org.github.io/iptv/languages/tel.m3u' },
   { name:'India',  url:'https://iptv-org.github.io/iptv/countries/in.m3u'  },
+  // FIX: Jio playlist added
+  { name:'Jio',    url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u' },
 ];
 
 // ── Global state ──────────────────────────────────────────────────
@@ -78,6 +83,10 @@ var sleepRemainingMs = 0, sleepLastTick = 0;
 var toastTm = null;
 var lastChannelStack = [];
 var _exitingApp = false;          // FIX H24: prevent double tizenhwkey exit
+// FIX: freeze prevention state
+var _chRetryCount  = 0;
+var _chPlayTimer   = null;
+var _chPlaySeq     = 0;
 var _loadBarRaf = null;            // FIX B9: cancel rAF in startLoadBar
 
 // JioTV
@@ -239,8 +248,7 @@ function parseM3U(text) {
 async function _initPlayerCallbacks() {
   await SagaPlayer.init(Dom.video, {
     onStatus: function(msg,cls){
-      // FIX C2: reset reconnect count when Shaka reports playing_event
-      if(msg==='playing_event'){ reconnectCount=0; return; }
+      if(msg==='playing_event'){ reconnectCount=0; _chRetryCount=0; return; } // FIX C2 + freeze
       setStatus(msg,cls);
     },
     onBuffering: function(isBuffering){
@@ -250,6 +258,17 @@ async function _initPlayerCallbacks() {
     onTechUpdate: _updateChTech,
     onError: function(msg){setStatus(msg,'error');finishLoadBar();stopStallWatchdog();},
   });
+}
+// FIX: auto quality — restrict ABR by resolution
+function _applyQualityRestriction(quality){
+  if(!SagaPlayer.isReady())return;
+  if(quality==='slow'){
+    // FIX auto quality: cap at 480p on slow networks
+    SagaPlayer.setMaxResolution(854,480);
+    showToast('Slow network — quality capped at 480p',3000);
+  }else{
+    SagaPlayer.setMaxResolution(0,0); // remove restriction
+  }
 }
 function _updateChTech(){var info=SagaPlayer.getTechInfo();if(Dom.overlayChannelTech)Dom.overlayChannelTech.textContent=info;}
 
@@ -635,6 +654,8 @@ function updateNetworkIndicator(){
     else{networkQuality='online';el.classList.add('online');}
   }
   SagaPlayer.setNetworkQuality(networkQuality);
+  // FIX auto quality: apply resolution restriction based on network
+  _applyQualityRestriction(networkQuality);
 }
 function startNetworkMonitoring(){
   updateNetworkIndicator();
@@ -663,6 +684,12 @@ function schedulePreview(){cancelPreview();previewTimer=setTimeout(function(){pr
 async function startPreview(idx){
   if(!filtered.length)return;
   var ch=filtered[idx];if(!ch)return;
+
+  // FIX: freeze prevention — cancel any previous channel attempt
+  cancelPreview();
+  clearTimeout(_chPlayTimer);
+  var mySeq=++_chPlaySeq;
+
   if(Dom.overlayTop&&Dom.overlayBottom&&overlaysVisible){Dom.overlayTop.classList.remove('info-visible');Dom.overlayBottom.classList.remove('info-visible');overlaysVisible=false;}
   if(Dom.nowPlaying)Dom.nowPlaying.textContent=ch.name;
   if(Dom.overlayChannelName)Dom.overlayChannelName.textContent=ch.name;
@@ -672,12 +699,38 @@ async function startPreview(idx){
   if(Dom.nextProgramInfo)    Dom.nextProgramInfo.textContent='';
   if(Dom.programInfoBox)     Dom.programInfoBox.style.display='none';
   if(Dom.videoOverlay)Dom.videoOverlay.classList.add('hidden');
-  if(currentPlayUrl&&currentPlayUrl!==ch.url)lastChannelStack=[currentPlayUrl];
+  if(currentPlayUrl&&currentPlayUrl!==ch.url){ lastChannelStack=[currentPlayUrl]; _chRetryCount=0; }
   hasPlayed=true;currentPlayUrl=ch.url;
   setStatus('Buffering…','loading');startLoadBar();
   _hookAudioReady();  // FIX C1
+
+  // FIX: freeze prevention — 15s hard timeout per channel attempt
+  _chPlayTimer=setTimeout(function(){
+    if(mySeq!==_chPlaySeq)return;
+    _chRetryCount++;
+    if(_chRetryCount<=CH_RETRY_MAX){
+      // FIX: retry same channel
+      setStatus('Retrying ('+_chRetryCount+'/'+CH_RETRY_MAX+')…','loading');
+      SagaPlayer.stop().then(function(){
+        if(mySeq===_chPlaySeq) SagaPlayer.play(ch.url,null);
+      });
+    }else{
+      // FIX: max retries — fully stop and reset
+      _chRetryCount=0;
+      SagaPlayer.stop();
+      stopStallWatchdog();
+      setStatus('Channel unavailable','error');
+      finishLoadBar();
+      if(Dom.videoOverlay)Dom.videoOverlay.classList.remove('hidden');
+      showToast('Channel failed after '+CH_RETRY_MAX+' attempts',3500);
+    }
+  },CH_PLAY_TIMEOUT_MS);
+
   await SagaPlayer.play(ch.url,null);
-  startStallWatchdog();_audioTrackIdx=0;
+  if(mySeq===_chPlaySeq){
+    clearTimeout(_chPlayTimer); // FIX: cancel timeout on success
+    startStallWatchdog();_audioTrackIdx=0;
+  }
 }
 function playSelected(){cancelPreview();startPreview(selectedIndex);}
 function goPreCh(){
@@ -1150,8 +1203,22 @@ window.addEventListener('keydown',function(e){
 
   // ── AV / addBtn ───────────────────────────────────────────────
   if(focusArea==='avLeft'){if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(-1);e.preventDefault();return;}if(k==='ArrowRight'||kc===KEY.RIGHT){setFocus('avRight');e.preventDefault();return;}if(k==='ArrowLeft'||kc===KEY.LEFT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}e.preventDefault();return;}
-  if(focusArea==='avRight'){if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(+1);e.preventDefault();return;}if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('avLeft');e.preventDefault();return;}if(k==='ArrowRight'||kc===KEY.RIGHT||k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}e.preventDefault();return;}
-  if(focusArea==='addBtn'){if(k==='Enter'||kc===KEY.ENTER){openAddPlaylistModal();e.preventDefault();return;}if(k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('tabs');e.preventDefault();return;}e.preventDefault();return;}
+  if(focusArea==='avRight'){
+    if(k==='Enter'||kc===KEY.ENTER){adjustAvSync(+1);e.preventDefault();return;}
+    if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('avLeft');e.preventDefault();return;}
+    // FIX addBtn focus: ArrowRight from avRight → addBtn
+    if(k==='ArrowRight'||kc===KEY.RIGHT){setFocus('addBtn');e.preventDefault();return;}
+    if(k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}
+    e.preventDefault();return;
+  }
+  if(focusArea==='addBtn'){
+    if(k==='Enter'||kc===KEY.ENTER){openAddPlaylistModal();e.preventDefault();return;}
+    if(k==='ArrowDown'||kc===KEY.DOWN){setFocus('list');e.preventDefault();return;}
+    // FIX addBtn focus: ArrowLeft from addBtn → avRight, ArrowRight → tabs
+    if(k==='ArrowLeft'||kc===KEY.LEFT){setFocus('avRight');e.preventDefault();return;}
+    if(k==='ArrowRight'||kc===KEY.RIGHT){tabFocusIdx=0;setFocus('tabs');e.preventDefault();return;}
+    e.preventDefault();return;
+  }
 
   // ── List ──────────────────────────────────────────────────────
   if(k==='ArrowUp'   ||kc===KEY.UP)  {if(isFullscreen)showFsHint();else moveSel(-1);e.preventDefault();return;}

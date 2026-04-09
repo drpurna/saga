@@ -302,6 +302,20 @@ var SagaPlayer = (function () {
     else                    _player.configure({ streaming: { bufferingGoal: 10, rebufferingGoal: 1.5 } });
   }
 
+  // ── Public: set max resolution for ABR (FIX: auto quality) ───
+  function setMaxResolution(width, height) {
+    if (!_player) return;
+    try {
+      if (!width || !height) {
+        // Remove restriction
+        _player.configure({ abr: { restrictions: { maxWidth: Infinity, maxHeight: Infinity } } });
+      } else {
+        // FIX auto quality: restrict Shaka ABR to max resolution
+        _player.configure({ abr: { restrictions: { maxWidth: width, maxHeight: height } } });
+      }
+    } catch(e) { console.warn('[Player] setMaxResolution:', e.message); }
+  }
+
   // ── Public: tech info ─────────────────────────────────────────
   function getTechInfo() {
     if (!_player) return '';
@@ -342,6 +356,7 @@ var SagaPlayer = (function () {
   return {
     init: init, play: play, stop: stop,
     setNetworkQuality: setNetworkQuality,
+    setMaxResolution: setMaxResolution,  // FIX auto quality
     getTechInfo: getTechInfo,
     getAudioTracks: getAudioTracks,
     setAudioLanguage: setAudioLanguage,
