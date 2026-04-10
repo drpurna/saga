@@ -1,12 +1,10 @@
 // ================================================================
-// SAGA IPTV — player.js v5.0 (HIGH QUALITY FIX)
-// Changes: lowLatencyMode: false, aggressive ABR, force highest track
+// SAGA IPTV — player.js v6.0 (Freeze‑resistant + GPU acceleration)
 // ================================================================
 'use strict';
 
 var SagaPlayer = (function () {
 
-  // ── Private state ─────────────────────────────────────────────
   var _player           = null;
   var _videoEl          = null;
   var _loadPromise      = Promise.resolve();
@@ -26,7 +24,6 @@ var SagaPlayer = (function () {
     onError:      function () {},
   };
 
-  // ── DRM ladder ────────────────────────────────────────────────
   var DRM_LEVELS = [
     { video: 'HW_SECURE_ALL',    audio: 'HW_SECURE_CRYPTO' },
     { video: 'HW_SECURE_DECODE', audio: 'HW_SECURE_CRYPTO' },
@@ -34,30 +31,30 @@ var SagaPlayer = (function () {
     { video: '',                  audio: ''                 },
   ];
 
-  // ── HIGH QUALITY Shaka config (lowLatencyMode: false, aggressive ABR) ──
+  // 🔥 FREEZE FIX: larger buffer, gap skipping, stall recovery
   function _baseConfig(bufGoal) {
     return {
       streaming: {
-        lowLatencyMode: false,           // 🔥 KEY: allows quality upgrades
+        lowLatencyMode: false,
         inaccurateManifestTolerance: 0,
-        bufferingGoal: bufGoal || 15,    // larger buffer
-        rebufferingGoal: 2,
+        bufferingGoal: bufGoal || 20,        // larger buffer
+        rebufferingGoal: 3,                  // more aggressive pre‑buffer
         bufferBehind: 30,
         stallEnabled: true,
-        stallThreshold: 1,
-        stallSkip: 0,
+        stallThreshold: 0.5,                 // detect stall faster
+        stallSkip: 0.5,                      // 🔥 skip stuck segments (prevents freeze)
         autoCorrectDrift: true,
-        gapDetectionThreshold: 0.5,
-        gapPadding: 0.1,
+        gapDetectionThreshold: 1.0,          // handle larger timestamp gaps
+        gapPadding: 0.2,
         durationBackoff: 1,
         retryParameters: { maxAttempts: 6, baseDelay: 300, backoffFactor: 1.5, fuzzFactor: 0.3, timeout: 20000 },
       },
       abr: {
         enabled: true,
-        defaultBandwidthEstimate: 20000000,  // 20 Mbps → start high
-        switchInterval: 2,                    // check every 2 seconds
-        bandwidthUpgradeTarget: 0.7,          // upgrade at 70% of current
-        bandwidthDowngradeTarget: 0.9,        // downgrade only at 90%
+        defaultBandwidthEstimate: 20000000,
+        switchInterval: 2,
+        bandwidthUpgradeTarget: 0.7,
+        bandwidthDowngradeTarget: 0.9,
         restrictToElementSize: false,
         restrictions: { maxWidth: 4096, maxHeight: 2160 },
         advanced: { minTotalBytes: 32768, minBytesPerEstimate: 16384 },
@@ -78,11 +75,21 @@ var SagaPlayer = (function () {
     };
   }
 
-  // ── Init ─────────────────────────────────────────────────────
+  // Force GPU acceleration via video element attributes
+  function _setupVideoElement(video) {
+    if (!video) return;
+    video.setAttribute('preload', 'auto');
+    video.setAttribute('disableRemotePlayback', 'true');
+    // Ensure CSS does not force software rendering
+    video.style.willChange = 'transform';
+    video.style.transform = 'translateZ(0)';
+  }
+
   async function init(videoElement, callbacks) {
     if (_initialised) return;
     _initialised = true;
     _videoEl = videoElement;
+    _setupVideoElement(_videoEl);
     if (callbacks) {
       CB.onStatus     = callbacks.onStatus     || CB.onStatus;
       CB.onBuffering  = callbacks.onBuffering  || CB.onBuffering;
@@ -99,92 +106,60 @@ var SagaPlayer = (function () {
       _player.addEventListener('adaptation',     CB.onTechUpdate);
       _player.addEventListener('variantchanged', CB.onTechUpdate);
       
-      // 🔥 FORCE HIGHEST QUALITY AFTER MANIFEST LOADS
+      // Force highest quality after manifest loads
       _player.addEventListener('manifestparsed', function() {
         try {
           var tracks = _player.getVariantTracks();
-          var bestTrack = null;
-          var bestBandwidth = -1;
+          var bestTrack = null, bestBW = -1;
           for (var i = 0; i < tracks.length; i++) {
-            if (tracks[i].bandwidth > bestBandwidth) {
-              bestBandwidth = tracks[i].bandwidth;
-              bestTrack = tracks[i];
-            }
+            if (tracks[i].bandwidth > bestBW) { bestBW = tracks[i].bandwidth; bestTrack = tracks[i]; }
           }
-          if (bestTrack) {
-            _player.selectVariantTrack(bestTrack, true);
-            console.log('[SagaPlayer] Highest quality selected:', bestTrack.width + 'x' + bestTrack.height);
-          }
+          if (bestTrack) _player.selectVariantTrack(bestTrack, true);
         } catch(e) {}
       });
 
-      // 🔥 RE-APPLY HIGHEST TRACK IF ABR TRIES TO DOWNGRADE
-      _player.addEventListener('adaptation', function() {
-        try {
-          var tracks = _player.getVariantTracks();
-          var current = tracks.find(function(t) { return t.active; });
-          var best = tracks.reduce(function(a,b) { return a.bandwidth > b.bandwidth ? a : b; }, tracks[0]);
-          if (best && (!current || best.bandwidth > current.bandwidth)) {
-            _player.selectVariantTrack(best, false);
-          }
-        } catch(e) {}
-      });
-
-      // Signal playing event for app.js
       if (_videoEl) {
-        _videoEl.addEventListener('playing', function () {
-          CB.onStatus('playing_event');
-        });
+        _videoEl.addEventListener('playing', function () { CB.onStatus('playing_event'); });
       }
       document.addEventListener('visibilitychange', _onVisibilityChange, false);
       window.addEventListener('pagehide', _onPageHide, false);
     } catch (err) {
       _initialised = false;
-      console.error('[Player] init failed:', err);
       CB.onError('Player init failed', 0);
     }
   }
 
   function _onVisibilityChange() {
     if (!_player || !_videoEl) return;
-    if (document.hidden) {
-      _videoEl.pause();
-    } else {
-      if (_lastLoadSucceeded && _currentUrl && _videoEl.paused) {
-        _videoEl.play().catch(function () {});
-      }
-    }
+    if (document.hidden) _videoEl.pause();
+    else if (_lastLoadSucceeded && _currentUrl && _videoEl.paused) _videoEl.play().catch(function(){});
   }
   function _onPageHide() {
     if (_videoEl) _videoEl.pause();
     if (_player && !_unloading) {
       _unloading = true;
-      _player.unload().catch(function () {}).then(function () { _unloading = false; });
+      _player.unload().catch(function(){}).then(function(){ _unloading = false; });
     }
     _currentUrl = '';
   }
 
   async function _handleError(ev) {
-    var err  = ev && ev.detail;
-    var code = err && err.code;
-    console.error('[Player] Shaka error', code, err && err.message);
-
+    var err = ev && ev.detail, code = err && err.code;
     if (code >= 6000 && code <= 6999 && _drmLevelIdx < DRM_LEVELS.length - 1) {
       _drmLevelIdx++;
       var lvl = DRM_LEVELS[_drmLevelIdx];
-      console.warn('[Player] DRM fallback → level', _drmLevelIdx, lvl.video || 'none');
       var drmCfg = { advanced: { 'com.widevine.alpha': {} } };
       if (lvl.video) drmCfg.advanced['com.widevine.alpha'].videoRobustness = lvl.video;
       if (lvl.audio) drmCfg.advanced['com.widevine.alpha'].audioRobustness = lvl.audio;
       _player.configure({ drm: drmCfg });
       if (_currentUrl) {
         var retryInfo = _lastStreamInfo;
-        _loadPromise = _loadPromise.then(function () { return _load(_currentUrl, retryInfo, true); });
+        _loadPromise = _loadPromise.then(function(){ return _load(_currentUrl, retryInfo, true); });
       }
       return;
     }
-    if (code >= 7000 && code <= 7999) { CB.onError('Network error', code); return; }
-    CB.onError((code >= 6000 && code <= 6999) ? 'DRM error' : 'Stream error', code);
+    if (code >= 7000 && code <= 7999) CB.onError('Network error', code);
+    else CB.onError((code >= 6000 && code <= 6999) ? 'DRM error' : 'Stream error', code);
   }
 
   function _buildDrmConfig(info) {
@@ -210,32 +185,24 @@ var SagaPlayer = (function () {
 
   async function _load(url, streamInfo, isDrmRetry) {
     if (!_player || !_videoEl) return;
-    _currentUrl    = url;
-    if (!isDrmRetry) _lastStreamInfo = streamInfo;
-    if (!isDrmRetry) _drmLevelIdx = 0;
-
+    _currentUrl = url;
+    if (!isDrmRetry) { _lastStreamInfo = streamInfo; _drmLevelIdx = 0; }
     var mySeq = ++_loadSeq;
-    var drmCfg    = _buildDrmConfig(streamInfo);
+    var drmCfg = _buildDrmConfig(streamInfo);
     var timeoutId = null;
     _lastLoadSucceeded = false;
-
     try {
-      await new Promise(function (resolve, reject) {
-        timeoutId = setTimeout(function () {
+      await new Promise(function(resolve, reject) {
+        timeoutId = setTimeout(function() {
           if (_player && !_unloading) {
             _unloading = true;
             _player.unload().catch(function(){}).then(function(){ _unloading = false; });
           }
           reject(new Error('LOAD_TIMEOUT'));
         }, BUSY_TIMEOUT);
-
         (async function doLoad() {
           if (mySeq !== _loadSeq) { resolve(); return; }
-          if (!_unloading) {
-            _unloading = true;
-            await _player.unload().catch(function(){});
-            _unloading = false;
-          }
+          if (!_unloading) { _unloading = true; await _player.unload().catch(function(){}); _unloading = false; }
           if (mySeq !== _loadSeq) { resolve(); return; }
           _videoEl.removeAttribute('src');
           if (drmCfg) _player.configure({ drm: drmCfg });
@@ -246,15 +213,12 @@ var SagaPlayer = (function () {
           if (!isDrmRetry) _drmLevelIdx = 0;
           _lastLoadSucceeded = true;
           CB.onTechUpdate();
-        })().then(function () { clearTimeout(timeoutId); resolve(); })
-            .catch(function (e) { clearTimeout(timeoutId); reject(e); });
+        })().then(function(){ clearTimeout(timeoutId); resolve(); })
+          .catch(function(e){ clearTimeout(timeoutId); reject(e); });
       });
     } catch (err) {
       _lastLoadSucceeded = false;
-      if (err.message === 'LOAD_TIMEOUT') {
-        CB.onError('Load timeout', 0); throw err;
-      }
-      // Fallback A: .ts → .m3u8
+      if (err.message === 'LOAD_TIMEOUT') { CB.onError('Load timeout', 0); throw err; }
       if (url.endsWith('.ts')) {
         try {
           var m3u = url.replace(/\.ts$/, '.m3u8');
@@ -264,9 +228,8 @@ var SagaPlayer = (function () {
             await _videoEl.play().catch(function(){});
             _currentUrl = m3u; _lastLoadSucceeded = true; CB.onTechUpdate(); return;
           }
-        } catch (eA) {}
+        } catch(eA) {}
       }
-      // Fallback B: native video
       if (!drmCfg) {
         try {
           if (!_unloading) { _unloading = true; await _player.unload().catch(function(){}); _unloading = false; }
@@ -275,7 +238,7 @@ var SagaPlayer = (function () {
             await _videoEl.play().catch(function(){});
             _lastLoadSucceeded = true; return;
           }
-        } catch (eB) {}
+        } catch(eB) {}
       }
       CB.onError('Play error', 0);
       throw err;
@@ -284,11 +247,8 @@ var SagaPlayer = (function () {
 
   function play(url, streamInfo) {
     if (!url) return Promise.resolve();
-    _loadPromise = _loadPromise.then(function () {
-      return _load(url, streamInfo, false);
-    }).catch(function (err) {
-      console.warn('[Player] play error:', err && err.message);
-    });
+    _loadPromise = _loadPromise.then(function(){ return _load(url, streamInfo, false); })
+      .catch(function(err){ console.warn('[Player] play error:', err && err.message); });
     return _loadPromise;
   }
 
@@ -296,11 +256,11 @@ var SagaPlayer = (function () {
     _currentUrl = '';
     _lastLoadSucceeded = false;
     _loadSeq++;
-    _loadPromise = _loadPromise.then(function () {
+    _loadPromise = _loadPromise.then(function(){
       if (!_player || _unloading) return;
       _unloading = true;
       return _player.unload().catch(function(){});
-    }).then(function () {
+    }).then(function(){
       _unloading = false;
       if (_videoEl) { _videoEl.pause(); _videoEl.removeAttribute('src'); }
     });
@@ -309,55 +269,50 @@ var SagaPlayer = (function () {
 
   function setNetworkQuality(quality) {
     if (!_player) return;
-    if (quality === 'slow') _player.configure({ streaming: { bufferingGoal: 5,  rebufferingGoal: 1   } });
-    else                    _player.configure({ streaming: { bufferingGoal: 15, rebufferingGoal: 2 } });
+    if (quality === 'slow') _player.configure({ streaming: { bufferingGoal: 5, rebufferingGoal: 1 } });
+    else _player.configure({ streaming: { bufferingGoal: 20, rebufferingGoal: 3 } });
   }
 
   function setMaxResolution(width, height) {
     if (!_player) return;
     try {
-      if (!width || !height) {
-        _player.configure({ abr: { restrictions: { maxWidth: Infinity, maxHeight: Infinity } } });
-      } else {
-        _player.configure({ abr: { restrictions: { maxWidth: width, maxHeight: height } } });
-      }
-    } catch(e) { console.warn('[Player] setMaxResolution:', e.message); }
+      if (!width || !height) _player.configure({ abr: { restrictions: { maxWidth: Infinity, maxHeight: Infinity } } });
+      else _player.configure({ abr: { restrictions: { maxWidth: width, maxHeight: height } } });
+    } catch(e) {}
   }
 
   function getTechInfo() {
     if (!_player) return '';
     try {
       var tr = _player.getVariantTracks ? _player.getVariantTracks() : [];
-      var vt = tr.find(function (t) { return t.active; });
-      var s  = _player.getStats ? _player.getStats() : null;
-      var p  = [];
-      if (vt && vt.width && vt.height) p.push(vt.width + '×' + vt.height);
-      if (s  && s.streamBandwidth)     p.push((s.streamBandwidth / 1e6).toFixed(1) + ' Mbps');
-      if (vt && vt.frameRate)          p.push(Math.round(vt.frameRate) + 'fps');
-      if (vt && vt.videoCodec)         p.push(vt.videoCodec.split('.')[0]);
+      var vt = tr.find(function(t){ return t.active; });
+      var s = _player.getStats ? _player.getStats() : null;
+      var p = [];
+      if (vt && vt.width && vt.height) p.push(vt.width+'×'+vt.height);
+      if (s && s.streamBandwidth) p.push((s.streamBandwidth/1e6).toFixed(1)+' Mbps');
+      if (vt && vt.frameRate) p.push(Math.round(vt.frameRate)+'fps');
+      if (vt && vt.videoCodec) p.push(vt.videoCodec.split('.')[0]);
       return p.join(' · ');
-    } catch (e) { return ''; }
+    } catch(e){ return ''; }
   }
 
   function getAudioTracks() {
     if (!_player) return [];
-    try { return _player.getAudioLanguagesAndRoles ? _player.getAudioLanguagesAndRoles() : []; } catch(e) { return []; }
+    try { return _player.getAudioLanguagesAndRoles ? _player.getAudioLanguagesAndRoles() : []; } catch(e){ return []; }
   }
   function setAudioLanguage(lang, role) {
     if (!_player) return;
-    try { _player.selectAudioLanguage(lang, role || ''); } catch(e) {}
+    try { _player.selectAudioLanguage(lang, role||''); } catch(e){}
   }
-
   function isSeekable(videoEl) {
     try {
       var r = videoEl && videoEl.seekable;
-      if (!r || r.length === 0) return false;
-      return (r.end(0) - r.start(0)) > 2;
-    } catch (e) { return false; }
+      if (!r || r.length===0) return false;
+      return (r.end(0)-r.start(0))>2;
+    } catch(e){ return false; }
   }
-
   function currentUrl() { return _currentUrl; }
-  function isReady()    { return _initialised && !!_player; }
+  function isReady() { return _initialised && !!_player; }
 
   return {
     init: init, play: play, stop: stop,
@@ -370,7 +325,6 @@ var SagaPlayer = (function () {
     currentUrl: currentUrl,
     isReady: isReady,
   };
-
 })();
 
 if (typeof window !== 'undefined') window.SagaPlayer = SagaPlayer;
