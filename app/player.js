@@ -1,5 +1,5 @@
 // ================================================================
-// SAGA IPTV — player.js v11.0 (Custom ABR that actually works)
+// SAGA IPTV — player.js v11.0 (Enterprise: ABR + fallback + stall recovery)
 // ================================================================
 'use strict';
 
@@ -15,14 +15,13 @@ var SagaPlayer = (function () {
   var _unloading        = false;
   var _lastLoadSucceeded = false;
   var _loadSeq          = 0;
-  var BUSY_TIMEOUT      = 12000;
+  var BUSY_TIMEOUT      = 15000;
   var _currentNetworkQuality = 'online';
-  var _customAbrInterval = null;
-  var _allTracks = [];
-  var _currentTrackId = null;
-  var _rebufferingCount = 0;
-  var _lastBandwidth = 20000000;
-  var _stallDetection = false;
+  var _qualityLockTimer = null;
+  var _stallRecoveryTimer = null;
+  var _lastPlayTime = 0;
+  var _reconnectAttempt = 0;
+  var MAX_RECONNECT = 3;
 
   var CB = {
     onStatus:     function () {},
@@ -38,138 +37,158 @@ var SagaPlayer = (function () {
     { video: '',                  audio: ''                 },
   ];
 
-  // ── Shaka config: disable ABR, we control manually ──────────
+  // ── Enterprise Shaka config ─────────────────────────────────
   function _baseConfig() {
+    var bwEstimate = (_currentNetworkQuality === 'slow') ? 2000000 : 20000000;
     return {
       streaming: {
         lowLatencyMode: false,
         inaccurateManifestTolerance: 0,
-        bufferingGoal: 15,
-        rebufferingGoal: 2,
+        bufferingGoal: 20,                // large buffer
+        rebufferingGoal: 3,
         bufferBehind: 30,
         stallEnabled: true,
         stallThreshold: 0.5,
-        stallSkip: 0.5,
+        stallSkip: 0.8,                   // skip more aggressively
         autoCorrectDrift: true,
-        gapDetectionThreshold: 1.0,
-        gapPadding: 0.2,
+        gapDetectionThreshold: 1.2,
+        gapPadding: 0.3,
         durationBackoff: 1,
-        retryParameters: { maxAttempts: 6, baseDelay: 300, backoffFactor: 1.5, fuzzFactor: 0.3, timeout: 20000 },
+        retryParameters: { 
+          maxAttempts: 8,                 // more retries
+          baseDelay: 500,
+          backoffFactor: 2,
+          fuzzFactor: 0.5,
+          timeout: 25000 
+        },
+        segmentPrefetch: true,            // prefetch segments
+        liveSegments: 5,
       },
       abr: {
-        enabled: false,   // 🔥 Disable Shaka ABR, we control
-        defaultBandwidthEstimate: 20000000,
+        enabled: true,
+        defaultBandwidthEstimate: bwEstimate,
+        switchInterval: 2,                // fast switching
+        bandwidthUpgradeTarget: 0.65,     // upgrade when 65% of next tier
+        bandwidthDowngradeTarget: 0.55,   // downgrade at 55% of current
+        restrictToElementSize: false,
+        restrictions: {
+          maxWidth: (_currentNetworkQuality === 'slow') ? 1280 : 4096,
+          maxHeight: (_currentNetworkQuality === 'slow') ? 720 : 2160,
+        },
+        advanced: { minTotalBytes: 32768, minBytesPerEstimate: 16384 },
       },
       manifest: {
-        retryParameters: { maxAttempts: 5, baseDelay: 500, backoffFactor: 2 },
+        retryParameters: { maxAttempts: 6, baseDelay: 500, backoffFactor: 2, timeout: 20000 },
         hls: { ignoreManifestProgramDateTime: false, useSafariBehaviorForLive: false },
       },
       drm: {
-        retryParameters: { maxAttempts: 4, baseDelay: 500, backoffFactor: 2, timeout: 15000 },
+        retryParameters: { maxAttempts: 5, baseDelay: 500, backoffFactor: 2, timeout: 15000 },
         advanced: { 'com.widevine.alpha': {
           videoRobustness: DRM_LEVELS[0].video,
           audioRobustness: DRM_LEVELS[0].audio,
         }},
       },
+      preferredVideoCodecs: ['avc1', 'hvc1', 'hev1'],
+      preferredAudioCodecs: ['mp4a', 'ac-3', 'ec-3'],
     };
   }
 
-  // ── Get current bandwidth estimate from Shaka ───────────────
-  function _getCurrentBandwidth() {
-    if (!_player) return _lastBandwidth;
+  function _applyNetworkQuality() {
+    if (!_player) return;
+    var isSlow = (_currentNetworkQuality === 'slow');
+    var bwEstimate = isSlow ? 2000000 : 20000000;
+    var maxWidth = isSlow ? 1280 : 4096;
+    var maxHeight = isSlow ? 720 : 2160;
     try {
-      var stats = _player.getStats();
-      if (stats && stats.estimatedBandwidth) {
-        _lastBandwidth = stats.estimatedBandwidth;
-        return _lastBandwidth;
-      }
+      _player.configure({
+        abr: {
+          defaultBandwidthEstimate: bwEstimate,
+          restrictions: { maxWidth: maxWidth, maxHeight: maxHeight },
+        },
+        streaming: { bufferingGoal: isSlow ? 10 : 20, rebufferingGoal: isSlow ? 1.5 : 3 },
+      });
+      console.log('[Player] Network quality:', _currentNetworkQuality);
     } catch(e) {}
-    return _lastBandwidth;
   }
 
-  // ── Select best track based on bandwidth (upgrade only) ──────
-  function _selectBestTrackForBandwidth() {
-    if (!_player || !_allTracks.length) return;
-    var bw = _getCurrentBandwidth();
-    // Find the highest bandwidth track that is ≤ bw * 1.2 (allow a bit of overhead)
-    var bestCandidate = null;
-    for (var i = 0; i < _allTracks.length; i++) {
-      var track = _allTracks[i];
-      if (track.bandwidth <= bw * 1.2) {
-        if (!bestCandidate || track.bandwidth > bestCandidate.bandwidth) {
-          bestCandidate = track;
-        }
-      }
-    }
-    // If no candidate (bw too low), pick the lowest bandwidth track
-    if (!bestCandidate && _allTracks.length) {
-      bestCandidate = _allTracks.reduce(function(a,b) { return a.bandwidth < b.bandwidth ? a : b; }, _allTracks[0]);
-    }
-    if (bestCandidate && bestCandidate.id !== _currentTrackId) {
-      // Only upgrade or downgrade if bandwidth is significantly lower than current
-      var currentTrack = _allTracks.find(function(t) { return t.id === _currentTrackId; });
-      var shouldSwitch = false;
-      if (!currentTrack) shouldSwitch = true;
-      else if (bestCandidate.bandwidth > currentTrack.bandwidth) shouldSwitch = true; // upgrade
-      else if (bestCandidate.bandwidth < currentTrack.bandwidth * 0.7) shouldSwitch = true; // downgrade only if 30% lower
-      
-      if (shouldSwitch) {
-        try {
-          _player.selectVariantTrack(bestCandidate, false);
-          _currentTrackId = bestCandidate.id;
-          console.log('[CustomABR] Switched to', bestCandidate.width+'x'+bestCandidate.height, bestCandidate.bandwidth, 'bw='+bw);
-          CB.onTechUpdate();
-        } catch(e) {}
-      }
-    }
-  }
-
-  // ── Periodically update tracks list and select best ──────────
-  function _refreshTracksAndSelect() {
+  // ── Manual quality enforcement (fallback when ABR fails) ─────
+  function _forceBestQuality() {
     if (!_player) return;
     try {
       var tracks = _player.getVariantTracks();
-      if (tracks && tracks.length && JSON.stringify(tracks) !== JSON.stringify(_allTracks)) {
-        _allTracks = tracks;
-        _selectBestTrackForBandwidth();
+      if (!tracks || tracks.length === 0) return;
+      var current = tracks.find(function(t) { return t.active; });
+      var best = tracks.reduce(function(a,b) { return a.bandwidth > b.bandwidth ? a : b; }, tracks[0]);
+      if (best && (!current || best.bandwidth > current.bandwidth * 1.1)) {
+        // Only upgrade if best is at least 10% better
+        _player.selectVariantTrack(best, false);
+        console.log('[Player] Manual upgrade to:', best.width + 'x' + best.height);
       }
     } catch(e) {}
   }
 
-  function _startCustomAbr() {
-    if (_customAbrInterval) clearInterval(_customAbrInterval);
-    _customAbrInterval = setInterval(function() {
+  function _startQualityMonitor() {
+    if (_qualityLockTimer) clearInterval(_qualityLockTimer);
+    _qualityLockTimer = setInterval(function() {
       if (!_player || !_currentUrl) return;
-      _refreshTracksAndSelect();
-    }, 4000); // check every 4 seconds
+      _forceBestQuality();
+    }, 8000); // check every 8 seconds
   }
 
-  function _stopCustomAbr() {
-    if (_customAbrInterval) {
-      clearInterval(_customAbrInterval);
-      _customAbrInterval = null;
+  function _stopQualityMonitor() {
+    if (_qualityLockTimer) { clearInterval(_qualityLockTimer); _qualityLockTimer = null; }
+  }
+
+  // ── Stall recovery (independent watchdog) ────────────────────
+  function _startStallWatchdog() {
+    if (_stallRecoveryTimer) clearInterval(_stallRecoveryTimer);
+    _lastPlayTime = Date.now();
+    _reconnectAttempt = 0;
+    _stallRecoveryTimer = setInterval(function() {
+      if (!_videoEl || !_player || !_currentUrl) return;
+      // If video is paused but we expect playing, check for stall
+      if (!_videoEl.paused) {
+        _lastPlayTime = Date.now();
+        return;
+      }
+      // If paused for more than 8 seconds and we have a stream, try recovery
+      if (Date.now() - _lastPlayTime > 8000 && _currentUrl && !_unloading) {
+        console.log('[Player] Stall detected, attempting recovery');
+        _reconnectAttempt++;
+        if (_reconnectAttempt <= MAX_RECONNECT) {
+          // Try to resume
+          _videoEl.play().catch(function() {});
+          // If still stuck, reload the stream
+          setTimeout(function() {
+            if (_videoEl && _videoEl.paused && _currentUrl) {
+              _reloadCurrentStream();
+            }
+          }, 2000);
+        } else {
+          CB.onError('Stream stalled', 0);
+          _stopStallWatchdog();
+        }
+        _lastPlayTime = Date.now(); // reset timer
+      }
+    }, 3000);
+  }
+
+  function _stopStallWatchdog() {
+    if (_stallRecoveryTimer) { clearInterval(_stallRecoveryTimer); _stallRecoveryTimer = null; }
+    _reconnectAttempt = 0;
+  }
+
+  async function _reloadCurrentStream() {
+    if (!_currentUrl) return;
+    console.log('[Player] Reloading stream due to stall');
+    try {
+      await _player.unload();
+      await _player.load(_currentUrl);
+      await _videoEl.play();
+    } catch(e) {
+      console.warn('[Player] Reload failed', e);
     }
   }
-
-  // ── Apply network quality (affects streaming settings) ──────
-  function setNetworkQuality(quality) {
-    _currentNetworkQuality = (quality === 'slow') ? 'slow' : 'online';
-    if (!_player) return;
-    var isSlow = (_currentNetworkQuality === 'slow');
-    try {
-      _player.configure({
-        streaming: {
-          bufferingGoal: isSlow ? 8 : 15,
-          rebufferingGoal: isSlow ? 1 : 2,
-        },
-      });
-      // If slow, we might want to force lower max resolution via track selection
-      // But custom ABR will handle based on bandwidth.
-      console.log('[SagaPlayer] Network quality:', _currentNetworkQuality);
-    } catch(e) {}
-  }
-
-  function setMaxResolution(width, height) { /* not used with custom ABR */ }
 
   function _setupVideoElement(video) {
     if (!video) return;
@@ -177,6 +196,23 @@ var SagaPlayer = (function () {
     video.setAttribute('disableRemotePlayback', 'true');
     video.style.willChange = 'transform';
     video.style.transform = 'translateZ(0)';
+  }
+
+  // ── Public API ───────────────────────────────────────────────
+  function setNetworkQuality(quality) {
+    _currentNetworkQuality = (quality === 'slow') ? 'slow' : 'online';
+    _applyNetworkQuality();
+  }
+
+  function setMaxResolution(width, height) {
+    if (!_player) return;
+    try {
+      if (!width || !height) {
+        _player.configure({ abr: { restrictions: { maxWidth: Infinity, maxHeight: Infinity } } });
+      } else {
+        _player.configure({ abr: { restrictions: { maxWidth: width, maxHeight: height } } });
+      }
+    } catch(e) {}
   }
 
   async function init(videoElement, callbacks) {
@@ -198,38 +234,31 @@ var SagaPlayer = (function () {
       _player.addEventListener('error', _handleError);
       _player.addEventListener('buffering', function(ev) { 
         CB.onBuffering(ev.buffering);
-        if (ev.buffering) {
-          _rebufferingCount++;
-          if (_rebufferingCount > 2) {
-            // If repeated rebuffering, maybe bandwidth is overestimated, force lower track
-            setTimeout(function() {
-              if (_allTracks.length) {
-                var lowest = _allTracks.reduce(function(a,b) { return a.bandwidth < b.bandwidth ? a : b; }, _allTracks[0]);
-                if (lowest && lowest.id !== _currentTrackId) {
-                  try {
-                    _player.selectVariantTrack(lowest, false);
-                    _currentTrackId = lowest.id;
-                    console.log('[CustomABR] Rebuffering -> downgraded to lowest');
-                  } catch(e) {}
-                }
-              }
-            }, 1000);
-          }
-        } else {
-          _rebufferingCount = Math.max(0, _rebufferingCount - 1);
-        }
+        if (!ev.buffering) _lastPlayTime = Date.now();
       });
-      _player.addEventListener('adaptation', function() { CB.onTechUpdate(); });
-      _player.addEventListener('variantchanged', function() { CB.onTechUpdate(); });
-
-      _player.addEventListener('manifestparsed', function() {
-        _refreshTracksAndSelect();
-        _startCustomAbr();
+      _player.addEventListener('adaptation', function() { 
+        CB.onTechUpdate();
+        // After adaptation, re-check quality (prevent downgrade loops)
+        setTimeout(_forceBestQuality, 500);
+      });
+      _player.addEventListener('variantchanged', function() { 
+        CB.onTechUpdate();
       });
 
-      if (_videoEl) {
-        _videoEl.addEventListener('playing', function() { CB.onStatus('playing_event'); });
-      }
+      // Start stall watchdog and quality monitor after playing
+      _videoEl.addEventListener('playing', function() {
+        CB.onStatus('playing_event');
+        _startStallWatchdog();
+        _startQualityMonitor();
+        _lastPlayTime = Date.now();
+      });
+      _videoEl.addEventListener('pause', function() {
+        // Don't stop watchdog; we'll check stall later
+      });
+      _videoEl.addEventListener('waiting', function() {
+        _lastPlayTime = Date.now(); // reset during buffering
+      });
+
       document.addEventListener('visibilitychange', _onVisibilityChange, false);
       window.addEventListener('pagehide', _onPageHide, false);
     } catch (err) {
@@ -240,8 +269,13 @@ var SagaPlayer = (function () {
 
   function _onVisibilityChange() {
     if (!_player || !_videoEl) return;
-    if (document.hidden) _videoEl.pause();
-    else if (_lastLoadSucceeded && _currentUrl && _videoEl.paused) _videoEl.play().catch(function(){});
+    if (document.hidden) {
+      _videoEl.pause();
+    } else {
+      if (_lastLoadSucceeded && _currentUrl && _videoEl.paused) {
+        _videoEl.play().catch(function() {});
+      }
+    }
   }
 
   function _onPageHide() {
@@ -251,11 +285,11 @@ var SagaPlayer = (function () {
       _player.unload().catch(function(){}).then(function(){ _unloading = false; });
     }
     _currentUrl = '';
-    _stopCustomAbr();
   }
 
   async function _handleError(ev) {
     var err = ev && ev.detail, code = err && err.code;
+    console.error('[Player] Error:', code, err && err.message);
     if (code >= 6000 && code <= 6999 && _drmLevelIdx < DRM_LEVELS.length - 1) {
       _drmLevelIdx++;
       var lvl = DRM_LEVELS[_drmLevelIdx];
@@ -302,10 +336,6 @@ var SagaPlayer = (function () {
     var drmCfg = _buildDrmConfig(streamInfo);
     var timeoutId = null;
     _lastLoadSucceeded = false;
-    _allTracks = [];
-    _currentTrackId = null;
-    _rebufferingCount = 0;
-    _stopCustomAbr();
     try {
       await new Promise(function(resolve, reject) {
         timeoutId = setTimeout(function() {
@@ -320,7 +350,7 @@ var SagaPlayer = (function () {
           if (!_unloading) { _unloading = true; await _player.unload().catch(function(){}); _unloading = false; }
           if (mySeq !== _loadSeq) { resolve(); return; }
           _videoEl.removeAttribute('src');
-          setNetworkQuality(_currentNetworkQuality); // apply before load
+          _applyNetworkQuality();
           if (drmCfg) _player.configure({ drm: drmCfg });
           else if (!isDrmRetry) _player.configure({ drm: { servers: {} } });
           await _player.load(url);
@@ -328,12 +358,9 @@ var SagaPlayer = (function () {
           await _videoEl.play().catch(function(){});
           if (!isDrmRetry) _drmLevelIdx = 0;
           _lastLoadSucceeded = true;
-          // After load, wait a bit for manifest to be parsed, then tracks will be available
-          setTimeout(function() {
-            _refreshTracksAndSelect();
-            _startCustomAbr();
-          }, 1000);
           CB.onTechUpdate();
+          // Force initial quality after load
+          setTimeout(_forceBestQuality, 1000);
         })().then(function(){ clearTimeout(timeoutId); resolve(); })
           .catch(function(e){ clearTimeout(timeoutId); reject(e); });
       });
@@ -348,7 +375,7 @@ var SagaPlayer = (function () {
             await _player.load(m3u);
             await _videoEl.play().catch(function(){});
             _currentUrl = m3u; _lastLoadSucceeded = true; CB.onTechUpdate();
-            setTimeout(function() { _refreshTracksAndSelect(); _startCustomAbr(); }, 1000);
+            setTimeout(_forceBestQuality, 1000);
             return;
           }
         } catch(eA) {}
@@ -370,13 +397,16 @@ var SagaPlayer = (function () {
 
   function play(url, streamInfo) {
     if (!url) return Promise.resolve();
+    _stopQualityMonitor();
+    _stopStallWatchdog();
     _loadPromise = _loadPromise.then(function(){ return _load(url, streamInfo, false); })
       .catch(function(err){ console.warn('[Player] play error:', err && err.message); });
     return _loadPromise;
   }
 
   function stop() {
-    _stopCustomAbr();
+    _stopQualityMonitor();
+    _stopStallWatchdog();
     _currentUrl = '';
     _lastLoadSucceeded = false;
     _loadSeq++;
@@ -399,7 +429,7 @@ var SagaPlayer = (function () {
       var s = _player.getStats ? _player.getStats() : null;
       var p = [];
       if (vt && vt.width && vt.height) p.push(vt.width+'×'+vt.height);
-      if (s && s.estimatedBandwidth) p.push((s.estimatedBandwidth/1e6).toFixed(1)+' Mbps');
+      if (s && s.streamBandwidth) p.push((s.streamBandwidth/1e6).toFixed(1)+' Mbps');
       if (vt && vt.frameRate) p.push(Math.round(vt.frameRate)+'fps');
       if (vt && vt.videoCodec) p.push(vt.videoCodec.split('.')[0]);
       return p.join(' · ');
