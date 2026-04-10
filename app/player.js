@@ -397,16 +397,18 @@ async function refreshManifest() {
   function isReady()    { return _initialised && !!_player; }
 
   return {
-    init: init, play: play, stop: stop,
-    setNetworkQuality: setNetworkQuality,
-    setMaxResolution: setMaxResolution,  // FIX auto quality
-    getTechInfo: getTechInfo,
-    getAudioTracks: getAudioTracks,
-    setAudioLanguage: setAudioLanguage,
-    isSeekable: isSeekable,
-    currentUrl: currentUrl,
-    isReady: isReady,
-  };
+  init: init, play: play, stop: stop,
+  setNetworkQuality: setNetworkQuality,
+  setMaxResolution: setMaxResolution,
+  upgradeQuality: upgradeQuality,      // new
+  refreshManifest: refreshManifest,    // new
+  getTechInfo: getTechInfo,
+  getAudioTracks: getAudioTracks,
+  setAudioLanguage: setAudioLanguage,
+  isSeekable: isSeekable,
+  currentUrl: currentUrl,
+  isReady: isReady,
+};
 
 })();
 
