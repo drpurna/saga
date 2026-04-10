@@ -23,7 +23,7 @@
     "tv"
   ],
   "packageType": "app",
-  "appName": "IPTV Pro",
+  "appName": "IPTV",
   "appPath": "app/index.html",
   "keys": [
     "MediaPlay",
