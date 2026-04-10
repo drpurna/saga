@@ -42,7 +42,7 @@ var SagaPlayer = (function () {
   function _baseConfig(bufGoal) {
     return {
       streaming: {
-        lowLatencyMode: true, inaccurateManifestTolerance: 0,
+        lowLatencyMode: false, inaccurateManifestTolerance: 0,
         bufferingGoal: bufGoal || 10, rebufferingGoal: 1.5,
         bufferBehind: 20, stallEnabled: true, stallThreshold: 1,
         stallSkip: 0.1, autoCorrectDrift: true,
