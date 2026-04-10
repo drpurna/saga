@@ -1,5 +1,6 @@
 // ================================================================
-// SAGA IPTV — player.js v11.0 (Enterprise: ABR disabled, forced highest quality)
+// SAGA IPTV — player.js v12.0 (Aggressive quality + error resilience)
+// No network checks, ABR off, forced highest resolution, instant retry
 // ================================================================
 'use strict';
 
@@ -15,7 +16,7 @@ var SagaPlayer = (function () {
   var _unloading        = false;
   var _lastLoadSucceeded = false;
   var _loadSeq          = 0;
-  var BUSY_TIMEOUT      = 12000;
+  var BUSY_TIMEOUT      = 15000;        // longer timeout for slow starts
   var _qualityLockInterval = null;
   var _bestTrackId      = null;
 
@@ -33,34 +34,48 @@ var SagaPlayer = (function () {
     { video: '',                  audio: ''                 },
   ];
 
-  // ── Configuration: ABR disabled, aggressive stall handling ──
+  // ── Base config: ABR disabled, extreme error resilience ──
   function _baseConfig() {
     return {
       streaming: {
         lowLatencyMode: false,
-        inaccurateManifestTolerance: 0,
-        bufferingGoal: 20,
-        rebufferingGoal: 3,
-        bufferBehind: 30,
+        inaccurateManifestTolerance: 2,      // tolerate manifest time issues
+        bufferingGoal: 30,                   // large buffer
+        rebufferingGoal: 5,                  // re-buffer aggressively
+        bufferBehind: 60,
         stallEnabled: true,
-        stallThreshold: 0.3,          // detect stall faster
-        stallSkip: 1.0,               // skip up to 1 second of stuck data
+        stallThreshold: 0.3,                 // detect stall after 0.3s
+        stallSkip: 1.5,                      // skip up to 1.5s of stuck data
         autoCorrectDrift: true,
-        gapDetectionThreshold: 2.0,   // tolerate larger gaps
+        gapDetectionThreshold: 3.0,          // tolerate large gaps
         gapPadding: 0.5,
-        durationBackoff: 1,
-        retryParameters: { maxAttempts: 8, baseDelay: 200, backoffFactor: 1.2, fuzzFactor: 0.2, timeout: 15000 },
+        durationBackoff: 2,
+        retryParameters: {
+          maxAttempts: 10,                   // many retries
+          baseDelay: 100,                    // start retry after 100ms
+          backoffFactor: 1.2,                // small backoff
+          fuzzFactor: 0.1,
+          timeout: 10000,
+        },
       },
       abr: {
-        enabled: false,               // 🔥 COMPLETELY DISABLE ABR
-        defaultBandwidthEstimate: 50000000, // 50 Mbps (irrelevant but high)
+        enabled: false,                      // completely off
+        defaultBandwidthEstimate: 100000000, // 100 Mbps (irrelevant)
       },
       manifest: {
-        retryParameters: { maxAttempts: 5, baseDelay: 500, backoffFactor: 2 },
-        hls: { ignoreManifestProgramDateTime: true, useSafariBehaviorForLive: false },
+        retryParameters: {
+          maxAttempts: 8,
+          baseDelay: 200,
+          backoffFactor: 1.2,
+          timeout: 15000,
+        },
+        hls: {
+          ignoreManifestProgramDateTime: true,
+          useSafariBehaviorForLive: false,
+        },
       },
       drm: {
-        retryParameters: { maxAttempts: 4, baseDelay: 500, backoffFactor: 2, timeout: 15000 },
+        retryParameters: { maxAttempts: 6, baseDelay: 200, backoffFactor: 1.5, timeout: 12000 },
         advanced: { 'com.widevine.alpha': {
           videoRobustness: DRM_LEVELS[0].video,
           audioRobustness: DRM_LEVELS[0].audio,
@@ -81,7 +96,6 @@ var SagaPlayer = (function () {
       for (var i = 0; i < tracks.length; i++) {
         var t = tracks[i];
         var area = (t.width || 0) * (t.height || 0);
-        // Also prefer higher bandwidth if resolutions are equal
         if (area > bestArea || (area === bestArea && t.bandwidth > (bestTrack ? bestTrack.bandwidth : 0))) {
           bestArea = area;
           bestTrack = t;
@@ -93,17 +107,14 @@ var SagaPlayer = (function () {
         console.log('[SagaPlayer] 🔥 Forced highest quality:', bestTrack.width + 'x' + bestTrack.height, bestTrack.bandwidth + ' bps');
         CB.onTechUpdate();
       }
-    } catch(e) { console.warn('[SagaPlayer] Track selection error:', e); }
+    } catch(e) { /* ignore */ }
   }
 
-  // ── Periodic lock (every 4 seconds) ──
   function _startQualityLock() {
     if (_qualityLockInterval) clearInterval(_qualityLockInterval);
     _qualityLockInterval = setInterval(function() {
-      if (_player && _currentUrl) {
-        _selectHighestResolutionTrack();
-      }
-    }, 4000);
+      if (_player && _currentUrl) _selectHighestResolutionTrack();
+    }, 3000); // every 3 seconds
   }
 
   function _stopQualityLock() {
@@ -117,10 +128,8 @@ var SagaPlayer = (function () {
     if (!video) return;
     video.setAttribute('preload', 'auto');
     video.setAttribute('disableRemotePlayback', 'true');
-    // Force GPU compositing
     video.style.willChange = 'transform';
     video.style.transform = 'translateZ(0)';
-    // Ensure CSS object-fit is respected (app.js controls this)
   }
 
   async function init(videoElement, callbacks) {
@@ -142,14 +151,13 @@ var SagaPlayer = (function () {
       _player.addEventListener('error', _handleError);
       _player.addEventListener('buffering', function(ev) { CB.onBuffering(ev.buffering); });
       _player.addEventListener('adaptation', function() {
-        // If ABR somehow tries to change, force our track again
-        setTimeout(_selectHighestResolutionTrack, 50);
+        // If anything tries to change track, force ours again
+        setTimeout(_selectHighestResolutionTrack, 10);
       });
       _player.addEventListener('variantchanged', function() {
-        setTimeout(_selectHighestResolutionTrack, 50);
+        setTimeout(_selectHighestResolutionTrack, 10);
       });
 
-      // When manifest loads, select best track and start locking
       _player.addEventListener('manifestparsed', function() {
         _selectHighestResolutionTrack();
         _startQualityLock();
@@ -183,6 +191,7 @@ var SagaPlayer = (function () {
 
   async function _handleError(ev) {
     var err = ev && ev.detail, code = err && err.code;
+    // DRM fallback
     if (code >= 6000 && code <= 6999 && _drmLevelIdx < DRM_LEVELS.length - 1) {
       _drmLevelIdx++;
       var lvl = DRM_LEVELS[_drmLevelIdx];
@@ -196,8 +205,8 @@ var SagaPlayer = (function () {
       }
       return;
     }
-    if (code >= 7000 && code <= 7999) CB.onError('Network error', code);
-    else CB.onError((code >= 6000 && code <= 6999) ? 'DRM error' : 'Stream error', code);
+    // For other errors, notify app but do not stop trying (app may reload)
+    CB.onError('Stream error', code);
   }
 
   function _buildDrmConfig(info) {
@@ -251,7 +260,6 @@ var SagaPlayer = (function () {
           await _videoEl.play().catch(function(){});
           if (!isDrmRetry) _drmLevelIdx = 0;
           _lastLoadSucceeded = true;
-          // After load, wait a bit for tracks to be available
           setTimeout(function() {
             _selectHighestResolutionTrack();
             _startQualityLock();
@@ -263,25 +271,17 @@ var SagaPlayer = (function () {
     } catch (err) {
       _lastLoadSucceeded = false;
       _stopQualityLock();
-      if (err.message === 'LOAD_TIMEOUT') { CB.onError('Load timeout', 0); throw err; }
-      if (url.endsWith('.ts')) {
-        try {
-          var m3u = url.replace(/\.ts$/, '.m3u8');
-          if (!_unloading) { _unloading = true; await _player.unload().catch(function(){}); _unloading = false; }
-          if (mySeq === _loadSeq) {
-            await _player.load(m3u);
-            await _videoEl.play().catch(function(){});
-            _currentUrl = m3u; _lastLoadSucceeded = true;
-            setTimeout(function() { _selectHighestResolutionTrack(); _startQualityLock(); }, 500);
-            CB.onTechUpdate(); return;
-          }
-        } catch(eA) {}
+      if (err.message === 'LOAD_TIMEOUT') {
+        CB.onError('Load timeout', 0);
+        throw err;
       }
+      // Fallback: try native video if Shaka fails
       if (!drmCfg) {
         try {
           if (!_unloading) { _unloading = true; await _player.unload().catch(function(){}); _unloading = false; }
           if (mySeq === _loadSeq) {
-            _videoEl.src = url; _videoEl.load();
+            _videoEl.src = url;
+            _videoEl.load();
             await _videoEl.play().catch(function(){});
             _lastLoadSucceeded = true;
             return;
@@ -317,8 +317,8 @@ var SagaPlayer = (function () {
     return _loadPromise;
   }
 
-  // These are kept for compatibility with app.js but ABR is disabled
-  function setNetworkQuality(quality) { /* not used */ }
+  // Dummy functions (network checks removed)
+  function setNetworkQuality(quality) { /* ignored */ }
   function setMaxResolution(width, height) { /* not needed */ }
 
   function getTechInfo() {
