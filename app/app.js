@@ -685,6 +685,26 @@ function updateNetworkIndicator() {
   }
 }
 
+// Quality selector handler
+if (Dom.settingsQuality) {
+  Dom.settingsQuality.addEventListener('change', function() {
+    var val = Dom.settingsQuality.value;
+    if (val === 'auto') {
+      SagaPlayer.setMaxResolution(0, 0);
+    } else if (val === 'high') {
+      SagaPlayer.setMaxResolution(3840, 2160);
+    } else if (val === 'medium') {
+      SagaPlayer.setMaxResolution(1280, 720);
+    } else if (val === 'low') {
+      SagaPlayer.setMaxResolution(854, 480);
+    }
+    // Force re-adaptation
+    if (hasPlayed && !Dom.video.paused) {
+      SagaPlayer.refreshManifest();
+    }
+  });
+}
+
 // ── Clock ──────────────────────────────────────────────────────────
 function _updateAllClocks(){
   var now=new Date();
