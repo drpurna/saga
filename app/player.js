@@ -316,6 +316,49 @@ var SagaPlayer = (function () {
     } catch(e) { console.warn('[Player] setMaxResolution:', e.message); }
   }
 
+  // Force ABR to re-evaluate and upgrade if possible
+function upgradeQuality() {
+  if (!_player) return false;
+  try {
+    // Get current variant tracks
+    var tracks = _player.getVariantTracks();
+    if (!tracks || tracks.length === 0) return false;
+    
+    // Find the highest bandwidth track that's not already active
+    var bestTrack = null;
+    var bestBandwidth = 0;
+    for (var i = 0; i < tracks.length; i++) {
+      var t = tracks[i];
+      if (t.bandwidth > bestBandwidth && !t.active) {
+        bestBandwidth = t.bandwidth;
+        bestTrack = t;
+      }
+    }
+    if (bestTrack) {
+      _player.selectVariantTrack(bestTrack, true); // true = clear other tracks
+      console.log('[Player] Upgraded to track:', bestTrack.bandwidth, 'bps');
+      return true;
+    }
+  } catch(e) { console.warn('[Player] upgradeQuality failed', e); }
+  return false;
+}
+
+// Force a manifest reload to re-evaluate ABR (useful after network change)
+async function refreshManifest() {
+  if (!_player || !_currentUrl) return;
+  try {
+    var wasPlaying = !_videoEl.paused;
+    var currentTime = _videoEl.currentTime;
+    await _player.unload();
+    await _player.load(_currentUrl);
+    if (wasPlaying && currentTime > 0) {
+      _videoEl.currentTime = currentTime;
+      await _videoEl.play();
+    }
+    console.log('[Player] Manifest reloaded for quality upgrade');
+  } catch(e) { console.warn('[Player] refreshManifest failed', e); }
+}
+  
   // ── Public: tech info ─────────────────────────────────────────
   function getTechInfo() {
     if (!_player) return '';
