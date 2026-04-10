@@ -22,13 +22,13 @@ var MAX_RECONNECT        = 5;
 var STALL_TIMEOUT        = 12000;
 var OVERLAY_AUTO_HIDE    = 4000;
 var SEARCH_DEBOUNCE_MS   = 300;
-var JP_PLAY_TIMEOUT_MS   = 15000;
-var EPG_INTERVAL_MS      = 30000;
+var JP_PLAY_TIMEOUT_MS   = 25000;  // #30: raised to 25s
+var EPG_INTERVAL_MS      = 120000; // #23: 120s interval (was 30s)
 var M3U_RETRY_MAX        = 2;
 var M3U_RETRY_BASE_MS    = 1500;
 // FIX: freeze prevention — per-channel retry + timeout
 var CH_RETRY_MAX         = 2;
-var CH_PLAY_TIMEOUT_MS   = 15000;
+var CH_PLAY_TIMEOUT_MS   = 20000;  // #30: raised to 20s
 
 // ── Samsung BN59-01199F key codes ─────────────────────────────────
 var KEY = {
@@ -39,6 +39,7 @@ var KEY = {
   CH_UP:427, CH_DOWN:428, PAGE_UP:33, PAGE_DOWN:34,
   RED:403, GREEN:404, YELLOW:405, BLUE:406,
   VOL_UP:447, VOL_DOWN:448, MUTE:449,
+  PRECH: 10232,  // #33: previous channel
 };
 
 // FIX H23 + B21: clear on both beforeunload AND pagehide (more reliable on Tizen)
@@ -49,6 +50,16 @@ function _onAppUnload(){
 }
 window.addEventListener('beforeunload',_onAppUnload);
 window.addEventListener('pagehide',    _onAppUnload); // FIX B21: pagehide is more reliable
+
+// #7: Global error handlers — catch unexpected errors
+window.onerror = function(msg, src, line, col, err){
+  console.error('[SAGA] Uncaught:', msg, src+':'+line);
+  try{ showToast('Error: '+String(msg).slice(0,60), 3500); }catch(e){}
+  return false;
+};
+window.onunhandledrejection = function(ev){
+  console.error('[SAGA] Unhandled promise:', ev.reason);
+};
 
 // ── Tab helpers ───────────────────────────────────────────────────
 function TAB_FAV()   { return allPlaylists.length; }
@@ -131,6 +142,7 @@ var Dom = (function () {
     'jpPlSpinner','jpPlProg','jpPlDesc','jpPlTech','jpExitBtn','jpClock',
     'settingsModal','settingsCacheBtn','settingsSleepSelect',
     'settingsAVReset','settingsCloseBtn','settingsAudioTrack','settingsFsFit',
+    'settingsQuality',
   ];
   var d = {};
   ids.forEach(function (id) { d[id] = document.getElementById(id); });
@@ -154,7 +166,7 @@ function toggleFav(ch){
   if(!ch||!ch.url)return;
   if(favSet.has(ch.url))favSet.delete(ch.url);else favSet.add(ch.url);
   saveFavs();
-  if(plIdx===TAB_FAV())showFavourites();else VS.rebuildVisible();
+  if(plIdx===TAB_FAV())showFavourites();else VS.paint();  // #27: use paint() not rebuildVisible()
   showToast(isFav(ch)?'★ Added to Favourites':'✕ Removed from Favourites');
 }
 function showFavourites(){
@@ -205,6 +217,10 @@ function refreshLbl(){
 // ── HTML escape ───────────────────────────────────────────────────
 var _escMap={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'};
 function esc(s){return String(s||'').replace(/[&<>"]/g,function(c){return _escMap[c];});}
+
+// ── Sanitize user-controlled text (#1 XSS prevention) ────────────
+// Used wherever channel names, EPG titles, group names go into DOM text
+function sanitizeText(s) { return String(s||'').replace(/[<>&"']/g, function(c){ return({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'})[c]; }); }
 
 // ── M3U parser — robust quoted-attr + malformed-line skip ─────────
 function parseM3U(text) {
@@ -257,20 +273,31 @@ async function _initPlayerCallbacks() {
     },
     onTechUpdate: _updateChTech,
     onError: function(msg){setStatus(msg,'error');finishLoadBar();stopStallWatchdog();},
+    // ABR: quality change notification from player engine
+    onQuality: function(label){
+      _updateChTech();
+      // Brief toast so user knows quality changed (don't show on every ABR tick)
+      if(label) showToast('Quality: '+label, 1800);
+    },
   });
 }
-// FIX: auto quality — restrict ABR by resolution
+// ABR: feed network quality to player engine — no hard caps
+// The ABR engine in player.js handles variant selection dynamically.
+// We only pass the quality tier; Shaka + our buffer watcher decide.
+var _lastNetworkQuality = '';
 function _applyQualityRestriction(quality){
   if(!SagaPlayer.isReady())return;
-  if(quality==='slow'){
-    // FIX auto quality: cap at 480p on slow networks
-    SagaPlayer.setMaxResolution(854,480);
-    showToast('Slow network — quality capped at 480p',3000);
-  }else{
-    SagaPlayer.setMaxResolution(0,0); // remove restriction
-  }
+  if(quality === _lastNetworkQuality) return; // #40: skip if unchanged
+  _lastNetworkQuality = quality;
+  SagaPlayer.setNetworkQuality(quality);
+  if(quality==='slow') showToast('Slow network — quality auto-adjusted',2500);
+  if(quality==='offline') showToast('Network offline',2500);
 }
-function _updateChTech(){var info=SagaPlayer.getTechInfo();if(Dom.overlayChannelTech)Dom.overlayChannelTech.textContent=info;}
+function _updateChTech(){
+  var info=SagaPlayer.getTechInfo();
+  if(Dom.overlayChannelTech)Dom.overlayChannelTech.textContent=info;
+  if($('avSyncWrap')&&avSyncLabel){_updateAvLabel();}
+}
 
 // ── AV Sync — FIX C14/H17: readyState + isSeekable guard ─────────
 function loadAvSync(){var v=parseInt(lsGet(AV_SYNC_KEY)||'0',10);avSyncOffset=isNaN(v)?0:Math.max(-AV_SYNC_MAX,Math.min(AV_SYNC_MAX,v));}
@@ -653,8 +680,7 @@ function updateNetworkIndicator(){
     if(downlink>=0&&downlink<1){networkQuality='slow';el.classList.add('slow');}
     else{networkQuality='online';el.classList.add('online');}
   }
-  SagaPlayer.setNetworkQuality(networkQuality);
-  // FIX auto quality: apply resolution restriction based on network
+  // ABR: feed quality tier — engine handles variant selection
   _applyQualityRestriction(networkQuality);
 }
 function startNetworkMonitoring(){
@@ -823,7 +849,8 @@ function setFocus(a){
 function _syncTabHL(){if(Dom.tabBar)Dom.tabBar.querySelectorAll('.tab').forEach(function(b,i){b.classList.toggle('kbd-focus',i===tabFocusIdx);});}
 function _clearTabHL(){if(Dom.tabBar)Dom.tabBar.querySelectorAll('.tab').forEach(function(b){b.classList.remove('kbd-focus');});}
 function moveSel(d){if(!filtered.length)return;cancelPreview();clearTimeout(dialTimer);dialTimer=null;dialBuffer='';if(Dom.chDialer)Dom.chDialer.classList.remove('visible');selectedIndex=Math.max(0,Math.min(filtered.length-1,selectedIndex+d));VS.scrollTo(selectedIndex);VS.refresh();schedulePreview();}
-function moveTabFocus(d){var t=TAB_TOTAL();tabFocusIdx=((tabFocusIdx+d)%t+t)%t;_syncTabHL();if(Dom.tabBar){var btns=Dom.tabBar.querySelectorAll('.tab');if(btns[tabFocusIdx])btns[tabFocusIdx].scrollIntoView({inline:'nearest',block:'nearest'});}}
+function moveTabFocus(d){var t=TAB_TOTAL();tabFocusIdx=((tabFocusIdx+d)%t+t)%t;  // #48: correct negative modulo
+  _syncTabHL();if(Dom.tabBar){var btns=Dom.tabBar.querySelectorAll('.tab');if(btns[tabFocusIdx])btns[tabFocusIdx].scrollIntoView({inline:'nearest',block:'nearest'});}}
 function activateFocusedTab(){switchTab(tabFocusIdx);setFocus('list');}
 
 // ── Tizen key registration ────────────────────────────────────────
@@ -1090,6 +1117,12 @@ if(Dom.settingsSleepSelect)Dom.settingsSleepSelect.addEventListener('change',fun
 if(Dom.settingsAVReset)    Dom.settingsAVReset.addEventListener('click',function(){resetAvSync();});
 if(Dom.settingsAudioTrack) Dom.settingsAudioTrack.addEventListener('click',cycleAudioTrack);
 if(Dom.settingsFsFit)      Dom.settingsFsFit.addEventListener('change',function(){setFsFit(Dom.settingsFsFit.value);});
+if($('settingsQuality'))   $('settingsQuality').addEventListener('change',function(){
+  var v=this.value;
+  if(v==='auto'){SagaPlayer.selectQuality('auto');showToast('Quality: Auto (ABR)',2000);}
+  else if(v==='best'){SagaPlayer.selectQuality('best');showToast('Quality: Best',2000);}
+  else{SagaPlayer.selectQuality(v+'p');showToast('Quality locked: '+v+'p',2000);}
+});
 
 // ══════════════════════════════════════════════════════════════════
 // MASTER KEY HANDLER
