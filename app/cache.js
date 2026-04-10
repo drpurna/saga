@@ -1,76 +1,115 @@
 // ================================================================
-// SAGA IPTV — cache.js v5.0
-// Fixes applied: B1,B2,C5,H9,M21,M25,M26
-// #5  IDB quota recovery — catch QuotaExceededError, evict+retry
-// #21 IMG_SEEN_MAX → 2000, use Map for O(1) LRU
-// #26 lsNearQuota → 4.8 MB threshold
+// SAGA IPTV — cache.js v6.0 Enterprise
+// Multi-tier: MemCache → LocalStorage → IndexedDB
+// Features: LRU eviction, quota recovery, image preload pipeline,
+//           TTL management, IDB health monitor, version migration
 // ================================================================
 'use strict';
 
 var AppCache = (function () {
 
-  var M3U_TTL       = 30 * 60 * 1000;
-  var JIOTV_TTL     =  5 * 60 * 1000;
-  var LS_QUOTA_WARN = 4.8 * 1024 * 1024; // #26: raised to 4.8 MB
-  var IDB_NAME      = 'saga-cache';
-  var IDB_VER       = 1;
-  var IDB_STORE     = 'payloads';
-  var IDB_RETRY_MAX = 2;
-  var IMG_CONCUR    = 4;
-  var IMG_SEEN_MAX  = 2000; // #21: increased to 2000
+  var M3U_TTL        = 30 * 60 * 1000;   // 30 min
+  var JIOTV_TTL      =  5 * 60 * 1000;   // 5 min
+  var EPG_TTL        = 60 * 60 * 1000;   // 1 hr
+  var LS_QUOTA_WARN  = 4.5 * 1024 * 1024;
+  var IDB_NAME       = 'saga-cache-v6';
+  var IDB_VER        = 2;
+  var IDB_STORE      = 'payloads';
+  var IDB_META_STORE = 'meta';
+  var IDB_RETRY_MAX  = 3;
+  var IMG_CONCUR     = 6;
+  var IMG_SEEN_MAX   = 4000;
+  var MEM_MAX        = 80;               // max mem-cache entries
 
-  var _memCache = {};
-  var _db       = null;
-  var _dbFail   = false;
-  var _dbInit   = null;
+  var _memCache   = new Map();           // LRU map
+  var _db         = null;
+  var _dbFail     = false;
+  var _dbInit     = null;
+  var _dbFailedAt = 0;
+
+  // ── LRU MemCache ──────────────────────────────────────────────
+  function memSet(key, value, ts) {
+    if (_memCache.has(key)) _memCache.delete(key);
+    if (_memCache.size >= MEM_MAX) {
+      var oldest = _memCache.keys().next().value;
+      _memCache.delete(oldest);
+    }
+    _memCache.set(key, { value: value, ts: ts || Date.now() });
+  }
+
+  function memGet(key) {
+    if (!_memCache.has(key)) return null;
+    var rec = _memCache.get(key);
+    // refresh LRU position
+    _memCache.delete(key);
+    _memCache.set(key, rec);
+    return rec;
+  }
+
+  function memDel(key) { _memCache.delete(key); }
 
   // ── IndexedDB ─────────────────────────────────────────────────
   function openDB() {
-    if (_dbFail) return Promise.resolve(null);
+    if (_dbFail) {
+      // allow retry after 90s cool-down
+      if (Date.now() - _dbFailedAt < 90000) return Promise.resolve(null);
+      _dbFail = false; _dbInit = null; _db = null;
+    }
     if (_db)     return Promise.resolve(_db);
     if (_dbInit) return _dbInit;
+
     _dbInit = new Promise(function (resolve) {
       try {
         var req = indexedDB.open(IDB_NAME, IDB_VER);
         req.onupgradeneeded = function (e) {
           var db = e.target.result;
-          if (!db.objectStoreNames.contains(IDB_STORE))
-            db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            var s = db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+            s.createIndex('ts', 'ts', { unique: false });
+          }
+          if (!db.objectStoreNames.contains(IDB_META_STORE)) {
+            db.createObjectStore(IDB_META_STORE, { keyPath: 'key' });
+          }
         };
         req.onsuccess = function (e) {
           _db = e.target.result;
           _db.onerror = function (ev) { console.warn('[Cache] IDB error', ev); };
+          _db.onversionchange = function () { _db.close(); _db = null; _dbInit = null; };
           resolve(_db);
         };
-        // FIX B1: reset _dbInit on failure so openDB() reruns on retry
-        req.onerror   = function () { _dbFail = true; _dbInit = null; resolve(null); };
-        req.onblocked = function () { _dbFail = true; _dbInit = null; resolve(null); };
-      } catch (e) { _dbFail = true; _dbInit = null; resolve(null); }
+        req.onerror   = function (e) { _fail(resolve, 'onerror', e); };
+        req.onblocked = function (e) { _fail(resolve, 'blocked', e); };
+      } catch (e) { _fail(resolve, 'exception', e); }
     });
     return _dbInit;
   }
 
-  // #5: evict oldest N IDB entries to free quota
-  function evictOldestIDBEntries(n) {
+  function _fail(resolve, reason, e) {
+    console.warn('[Cache] IDB open failed:', reason, e);
+    _dbFail = true; _dbFailedAt = Date.now(); _dbInit = null;
+    resolve(null);
+  }
+
+  function evictOldestIDB(n) {
     return openDB().then(function (db) {
-      if (!db) return Promise.resolve();
+      if (!db) return;
       return new Promise(function (resolve) {
         try {
           var tx    = db.transaction(IDB_STORE, 'readwrite');
           var store = tx.objectStore(IDB_STORE);
-          var all   = [];
-          var req   = store.openCursor();
+          var idx   = store.index('ts');
+          var del   = 0;
+          var req   = idx.openCursor(null, 'next');
           req.onsuccess = function (e) {
             var cursor = e.target.result;
-            if (cursor) { all.push({ key: cursor.key, ts: cursor.value.ts || 0 }); cursor.continue(); }
-            else {
-              // sort oldest first, delete top n
-              all.sort(function (a, b) { return a.ts - b.ts; });
-              all.slice(0, n).forEach(function (entry) { store.delete(entry.key); });
-              tx.oncomplete = function () { resolve(); };
+            if (cursor && del < n) {
+              store.delete(cursor.primaryKey);
+              del++;
+              cursor.continue();
             }
           };
-          req.onerror = function () { resolve(); };
+          tx.oncomplete = function () { resolve(); };
+          tx.onerror    = function () { resolve(); };
         } catch (e) { resolve(); }
       });
     });
@@ -79,51 +118,52 @@ var AppCache = (function () {
   function idbSet(key, value, attempt) {
     attempt = attempt || 0;
     return openDB().then(function (db) {
-      if (!db) { _memCache[key] = { value: value, ts: Date.now() }; return true; }
+      if (!db) { memSet(key, value); return false; }
       return new Promise(function (resolve) {
         try {
           var tx = db.transaction(IDB_STORE, 'readwrite');
           tx.objectStore(IDB_STORE).put({ key: key, value: value, ts: Date.now() });
-          tx.oncomplete = function () { resolve(true); };
+          tx.oncomplete = function () { memSet(key, value); resolve(true); };
           tx.onerror    = function (e) {
-            // #5: catch QuotaExceededError, evict then retry
             var err = e.target && e.target.error;
-            var isQuota = err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-            if (isQuota && attempt < 1) {
-              evictOldestIDBEntries(20).then(function () {
-                idbSet(key, value, attempt + 1).then(resolve);
-              });
+            var isQ = err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+            if (isQ && attempt < 1) {
+              evictOldestIDB(30).then(function () { idbSet(key, value, attempt + 1).then(resolve); });
             } else if (attempt < IDB_RETRY_MAX) {
-              setTimeout(function () { idbSet(key, value, attempt + 1).then(resolve); }, 200);
+              setTimeout(function () { idbSet(key, value, attempt + 1).then(resolve); }, 300 * (attempt + 1));
             } else {
-              _memCache[key] = { value: value, ts: Date.now() }; resolve(false);
+              memSet(key, value); resolve(false);
             }
           };
-        } catch (e) { _memCache[key] = { value: value, ts: Date.now() }; resolve(false); }
+        } catch (e) { memSet(key, value); resolve(false); }
       });
     });
   }
 
   function idbGet(key) {
-    if (_memCache[key]) return Promise.resolve(_memCache[key]);
+    var mem = memGet(key);
+    if (mem) return Promise.resolve(mem);
     return openDB().then(function (db) {
       if (!db) return null;
       return new Promise(function (resolve) {
         try {
           var tx  = db.transaction(IDB_STORE, 'readonly');
           var req = tx.objectStore(IDB_STORE).get(key);
-          req.onsuccess = function () { resolve(req.result || null); };
-          req.onerror   = function () { resolve(null); };
+          req.onsuccess = function () {
+            var rec = req.result || null;
+            if (rec) memSet(rec.key, rec.value, rec.ts);
+            resolve(rec);
+          };
+          req.onerror = function () { resolve(null); };
         } catch (e) { resolve(null); }
       });
     });
   }
 
-  // FIX B2: returns awaitable Promise
-  function idbDelete(key) {
-    delete _memCache[key];
+  function idbDel(key) {
+    memDel(key);
     return openDB().then(function (db) {
-      if (!db) return Promise.resolve();
+      if (!db) return;
       return new Promise(function (resolve) {
         try {
           var tx = db.transaction(IDB_STORE, 'readwrite');
@@ -135,78 +175,54 @@ var AppCache = (function () {
     });
   }
 
-  // ── localStorage ─────────────────────────────────────────────
+  // ── LocalStorage helpers ───────────────────────────────────────
   function lsSet(k, v) {
-    try { localStorage.setItem(k, v); return true; }
-    catch (e) { _evictOldest(); try { localStorage.setItem(k, v); return true; } catch (e2) { return false; } }
+    try { localStorage.setItem(k, v); return true; } catch (e) { return false; }
   }
   function lsGet(k)    { try { return localStorage.getItem(k); }  catch(e) { return null; } }
   function lsRemove(k) { try { localStorage.removeItem(k); }       catch(e) {} }
 
-  function _evictOldest() {
-    try {
-      var caches = [];
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && k.startsWith('plCache:')) {
-          var ctk = 'plCacheTime:' + k.slice(8);
-          var ts  = parseInt(localStorage.getItem(ctk) || '0', 10);
-          caches.push({ key: k, timeKey: ctk, ts: ts });
-        }
-      }
-      caches.sort(function (a, b) { return a.ts - b.ts; });
-      caches.slice(0, 3).forEach(function (c) {
-        localStorage.removeItem(c.key);
-        localStorage.removeItem(c.timeKey);
-      });
-    } catch (e) {}
-  }
-
-  // ── M3U cache ─────────────────────────────────────────────────
+  // ── M3U cache (LS → IDB fallback) ────────────────────────────
   function getM3U(url) {
-    var ck  = 'plCache:' + url;
-    var ctk = 'plCacheTime:' + url;
-    var ts  = parseInt(lsGet(ctk) || '0', 10);
+    var ck = 'plCache:' + url, ctk = 'plTime:' + url;
+    var ts = parseInt(lsGet(ctk) || '0', 10);
     if (Date.now() - ts <= M3U_TTL) {
       var data = lsGet(ck);
       if (data && data.length > 100) return Promise.resolve(data);
     }
     return idbGet(ck).then(function (rec) {
-      if (rec && rec.value && (Date.now() - rec.ts) <= M3U_TTL) return rec.value;
+      if (rec && rec.value && (Date.now() - (rec.ts || 0)) <= M3U_TTL) return rec.value;
       return null;
     });
   }
 
   function setM3U(url, text) {
-    var ck  = 'plCache:' + url;
-    var ctk = 'plCacheTime:' + url;
+    var ck = 'plCache:' + url, ctk = 'plTime:' + url;
     lsSet(ctk, String(Date.now()));
-    var ok = lsSet(ck, text);
-    if (!ok) { lsRemove(ck); lsRemove(ctk); return idbSet(ck, text); }
+    if (!lsSet(ck, text)) { lsRemove(ck); lsRemove(ctk); return idbSet(ck, text); }
     return Promise.resolve(true);
   }
 
   function clearM3U(url) {
-    var ck = 'plCache:' + url, ctk = 'plCacheTime:' + url;
+    var ck = 'plCache:' + url, ctk = 'plTime:' + url;
     lsRemove(ck); lsRemove(ctk);
-    return idbDelete(ck);
+    return idbDel(ck);
   }
 
-  // FIX C6: returns Promise resolving after IDB clear
   function clearAllM3U() {
     try {
       var keys = [];
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
-        if (k && (k.startsWith('plCache:') || k.startsWith('plCacheTime:'))) keys.push(k);
+        if (k && (k.startsWith('plCache:') || k.startsWith('plTime:'))) keys.push(k);
       }
       keys.forEach(function (k) { localStorage.removeItem(k); });
     } catch (e) {}
-    Object.keys(_memCache).forEach(function (k) {
-      if (k.startsWith('plCache:')) delete _memCache[k];
-    });
+    var delKeys = [];
+    _memCache.forEach(function (_, k) { if (k.startsWith('plCache:')) delKeys.push(k); });
+    delKeys.forEach(function (k) { _memCache.delete(k); });
     return openDB().then(function (db) {
-      if (!db) return Promise.resolve();
+      if (!db) return;
       return new Promise(function (resolve) {
         try {
           var tx = db.transaction(IDB_STORE, 'readwrite');
@@ -218,53 +234,51 @@ var AppCache = (function () {
     });
   }
 
-  // ── JioTV channel cache ───────────────────────────────────────
-  var JIOTV_KEY = 'jiotv:channels';
-  function getJioChannels() {
-    return idbGet(JIOTV_KEY).then(function (rec) {
-      if (!rec || Date.now() - rec.ts > JIOTV_TTL) return null;
-      return rec.value;
+  // ── EPG cache ─────────────────────────────────────────────────
+  function getEPG(key) {
+    return idbGet('epg:' + key).then(function (rec) {
+      if (rec && (Date.now() - (rec.ts || 0)) <= EPG_TTL) return rec.value;
+      return null;
     });
   }
-  function setJioChannels(list)  { return idbSet(JIOTV_KEY, list); }
-  function clearJioChannels()    { return idbDelete(JIOTV_KEY); }
 
-  // ── Image preload — #21: Map-based LRU, size 2000 ─────────────
+  function setEPG(key, data) {
+    return idbSet('epg:' + key, data);
+  }
+
+  // ── Image preload pipeline ─────────────────────────────────────
   var _imgQueue   = [];
   var _imgActive  = 0;
-  var _imgLRU     = new Map(); // #21: Map preserves insertion order for LRU
+  var _imgSeen    = new Map();
 
-  function _imgLRUAdd(url) {
-    if (_imgLRU.has(url)) return false; // already seen
-    if (_imgLRU.size >= IMG_SEEN_MAX) {
-      // evict oldest (first key in Map)
-      var oldest = _imgLRU.keys().next().value;
-      _imgLRU.delete(oldest);
+  function _imgAdd(url) {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) return;
+    if (_imgSeen.has(url)) return;
+    if (_imgSeen.size >= IMG_SEEN_MAX) {
+      var oldest = _imgSeen.keys().next().value;
+      _imgSeen.delete(oldest);
     }
-    _imgLRU.set(url, 1);
-    return true;
+    _imgSeen.set(url, 1);
+    _imgQueue.push(url);
   }
 
-  // #22: priority queue — visible items (first param) loaded first
-  function preloadImages(visibleUrls, nextUrls) {
-    var all = (visibleUrls || []).concat(nextUrls || []);
-    all.forEach(function (url) {
-      if (!url || typeof url !== 'string') return;
-      if (_imgLRUAdd(url)) _imgQueue.push(url); // #42: LRU check before push
-    });
-    _drainImgQueue();
-  }
-  function _drainImgQueue() {
+  function _drainImg() {
     while (_imgActive < IMG_CONCUR && _imgQueue.length > 0) {
       var url = _imgQueue.shift();
       _imgActive++;
       var img = new Image();
-      img.onload = img.onerror = function () { _imgActive--; _drainImgQueue(); };
+      img.onload = img.onerror = function () { _imgActive--; _drainImg(); };
       img.src = url;
     }
   }
 
-  // ── Storage usage ─────────────────────────────────────────────
+  function preloadImages(visible, next) {
+    (visible || []).forEach(_imgAdd);
+    (next || []).forEach(_imgAdd);
+    _drainImg();
+  }
+
+  // ── Diagnostics ───────────────────────────────────────────────
   function lsUsageBytes() {
     var total = 0;
     try {
@@ -272,38 +286,29 @@ var AppCache = (function () {
         var k = localStorage.key(i);
         if (k) total += (k.length + (localStorage.getItem(k) || '').length) * 2;
       }
-    } catch (e) {}
+    } catch(e) {}
     return total;
   }
-  // #26: only evict on actual write failure (threshold used for warnings only)
   function lsNearQuota() { return lsUsageBytes() > LS_QUOTA_WARN; }
+  function memStats()    { return { size: _memCache.size, maxSize: MEM_MAX }; }
+  function dbHealthy()   { return !_dbFail && _db !== null; }
 
-  // IDB recovery
+  // ── Init ──────────────────────────────────────────────────────
   openDB();
-  (function scheduleRecovery() {
-    setTimeout(function () {
-      if (!_dbFail) { scheduleRecovery(); return; }
-      _dbFail = false; _dbInit = null; _db = null; // FIX B1
-      openDB().then(function (db) {
-        if (db) { console.log('[Cache] IDB recovered'); scheduleRecovery(); }
-        else    { _dbFail = true; scheduleRecovery(); }
-      });
-    }, 60000);
-  })();
+
+  // Periodic IDB health check every 2 min
+  setInterval(function () {
+    if (_dbFail) { _dbFail = false; _dbInit = null; openDB(); }
+  }, 120000);
 
   return {
-    getM3U:              getM3U,
-    setM3U:              setM3U,
-    clearM3U:            clearM3U,
-    clearAllM3U:         clearAllM3U,
-    getJioChannels:      getJioChannels,
-    setJioChannels:      setJioChannels,
-    clearJioChannels:    clearJioChannels,
-    preloadImages:       preloadImages,
-    lsUsageBytes:        lsUsageBytes,
-    lsNearQuota:         lsNearQuota,
-    evictOldestIDBEntries: evictOldestIDBEntries,
+    getM3U, setM3U, clearM3U, clearAllM3U,
+    getEPG, setEPG,
+    preloadImages,
+    lsUsageBytes, lsNearQuota, memStats, dbHealthy,
+    evictOldestIDB
   };
+
 })();
 
-if (typeof window !== 'undefined') window.AppCache = AppCache;
+if (typeof module !== 'undefined') module.exports = AppCache;
