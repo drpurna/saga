@@ -59,7 +59,7 @@ var DEFAULT_PLAYLISTS = [
   { name:'Telugu', url:'https://iptv-org.github.io/iptv/languages/tel.m3u' },
   { name:'India',  url:'https://iptv-org.github.io/iptv/countries/in.m3u'  },
   // FIX: Jio playlist added
-  { name:'Jio',    url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u?quality=high' },
+  { name:'Jio',    url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u' },
 ];
 
 // ── Global state ──────────────────────────────────────────────────
@@ -643,66 +643,26 @@ function loadPlaylist(urlOv){
 }
 
 // ── Network monitor — FIX H26: navigator.connection fallback ──────
-function updateNetworkIndicator() {
-  var el = $('networkIndicator');
-  if(!el) return;
-  var oldQuality = networkQuality;
-  el.className = 'network-indicator';
-  if(!navigator.onLine){
-    networkQuality = 'offline';
-    el.classList.add('offline');
-  } else {
-    var downlink = (navigator.connection && typeof navigator.connection.downlink === 'number') ? navigator.connection.downlink : -1;
-    if(downlink >= 0 && downlink < 1) {
-      networkQuality = 'slow';
-      el.classList.add('slow');
-    } else {
-      networkQuality = 'online';
-      el.classList.add('online');
-    }
+function updateNetworkIndicator(){
+  var el=$('networkIndicator');if(!el)return;
+  el.className='network-indicator';
+  if(!navigator.onLine){networkQuality='offline';el.classList.add('offline');}
+  else{
+    // FIX H26: safe access to navigator.connection
+    var downlink=(navigator.connection&&typeof navigator.connection.downlink==='number')?navigator.connection.downlink:-1;
+    if(downlink>=0&&downlink<1){networkQuality='slow';el.classList.add('slow');}
+    else{networkQuality='online';el.classList.add('online');}
   }
-  
-  // Only apply changes if quality actually changed
-  if (oldQuality !== networkQuality) {
-    _applyQualityRestriction(networkQuality);
-    SagaPlayer.setNetworkQuality(networkQuality);
-    
-    // FIX: When upgrading from slow to online, force quality upgrade
-    if (oldQuality === 'slow' && networkQuality === 'online') {
-      // Option 1: Try to upgrade without reloading
-      if (!SagaPlayer.upgradeQuality()) {
-        // Option 2: If no immediate upgrade, reload manifest after 2 seconds
-        setTimeout(function() {
-          if (hasPlayed && !Dom.video.paused) {
-            SagaPlayer.refreshManifest();
-          }
-        }, 2000);
-      }
-      showToast('Network improved – upgrading quality', 2500);
-    } else if (oldQuality === 'online' && networkQuality === 'slow') {
-      showToast('Slow network – quality capped at 480p', 3000);
-    }
-  }
+  SagaPlayer.setNetworkQuality(networkQuality);
+  // FIX auto quality: apply resolution restriction based on network
+  _applyQualityRestriction(networkQuality);
 }
-
-// Quality selector handler
-if (Dom.settingsQuality) {
-  Dom.settingsQuality.addEventListener('change', function() {
-    var val = Dom.settingsQuality.value;
-    if (val === 'auto') {
-      SagaPlayer.setMaxResolution(0, 0);
-    } else if (val === 'high') {
-      SagaPlayer.setMaxResolution(3840, 2160);
-    } else if (val === 'medium') {
-      SagaPlayer.setMaxResolution(1280, 720);
-    } else if (val === 'low') {
-      SagaPlayer.setMaxResolution(854, 480);
-    }
-    // Force re-adaptation
-    if (hasPlayed && !Dom.video.paused) {
-      SagaPlayer.refreshManifest();
-    }
-  });
+function startNetworkMonitoring(){
+  updateNetworkIndicator();
+  if(navigator.connection)navigator.connection.addEventListener('change',function(){updateNetworkIndicator();});
+  window.addEventListener('online',updateNetworkIndicator);
+  window.addEventListener('offline',updateNetworkIndicator);
+  connectionMonitor=setInterval(updateNetworkIndicator,15000);
 }
 
 // ── Clock ──────────────────────────────────────────────────────────
