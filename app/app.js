@@ -59,7 +59,7 @@ var DEFAULT_PLAYLISTS = [
   { name:'Telugu', url:'https://iptv-org.github.io/iptv/languages/tel.m3u' },
   { name:'India',  url:'https://iptv-org.github.io/iptv/countries/in.m3u'  },
   // FIX: Jio playlist added
-  { name:'Jio',    url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u' },
+  { name:'Jio',    url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u?quality=high' },
 ];
 
 // ── Global state ──────────────────────────────────────────────────
