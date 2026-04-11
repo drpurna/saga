@@ -8,506 +8,488 @@
 <script src="./shaka.js"></script>
 <script src="./cache.js"></script>
 <style>
-/*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v27 — Samsung One UI · 55″ · GPU-Native
-  Rules:
-  ① Every paint is a GPU composite — no layout during playback
-  ② Scroll does NOT trigger player.load() — OK/Enter only plays
-  ③ Icon-dominant tiles: logo 54×54, 2-col grid
-  ④ One UI design language: rounded cards, clear type hierarchy,
-     SF-style segmented controls, pill badges
-  ⑤ Every interactive element reachable via remote D-pad
-═══════════════════════════════════════════════════════════════*/
-
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;
+/*══════════════════════════════════════════════════════════════
+  SAGA IPTV v28 — One UI Enterprise · 55″+ · GPU-Native
+  Layout: 460px sidebar | flex-1 player (reduced height split)
+  Tile grid: icon-ONLY — logo fills 100% of tile, no text
+  Focus: FocusManager drives every zone, remote works everywhere
+  Colour keys: RED=fav  GREEN=search  YELLOW=aspect  BLUE=fullscreen
+══════════════════════════════════════════════════════════════*/
+*,*::before,*::after{
+  margin:0;padding:0;box-sizing:border-box;
   user-select:none;-webkit-user-select:none;
-  -webkit-tap-highlight-color:transparent}
+  -webkit-tap-highlight-color:transparent;
+}
 
 :root{
-  /* One UI dark palette */
-  --sys-bg:       #000000;
-  --sys-bg1:      #0d0d0d;
-  --sys-bg2:      #161616;
-  --sys-bg3:      #1e1e1e;
-  --sys-bg4:      #262626;
-  --sys-bg5:      #2e2e2e;
-  --sys-line:     rgba(255,255,255,0.08);
-  --sys-line2:    rgba(255,255,255,0.04);
+  /* One UI Dark palette */
+  --bg0:#000;
+  --bg1:#0c0c0c;
+  --bg2:#151515;
+  --bg3:#1c1c1c;
+  --bg4:#242424;
+  --bg5:#2c2c2c;
+  --line:rgba(255,255,255,0.07);
+  --line2:rgba(255,255,255,0.12);
 
-  /* One UI blue accent — matches Galaxy UI */
-  --accent:       #3584e4;
-  --accent-hi:    #5ba0f0;
-  --accent-lo:    rgba(53,132,228,0.15);
-  --accent-ring:  rgba(53,132,228,0.5);
+  /* One UI system blue */
+  --acc:#3478f6;
+  --acc-hi:#5a96ff;
+  --acc-lo:rgba(52,120,246,0.14);
+  --acc-ring:rgba(52,120,246,0.55);
 
-  --ok:           #2ab27b;
-  --warn:         #f0a800;
-  --err:          #e8445a;
+  /* Colour key palette */
+  --red:#e8445a;
+  --grn:#2ab27b;
+  --yel:#f0a800;
+  --blu:#3478f6;
 
-  --t1:           #ffffff;
-  --t2:           #b8bcc8;
-  --t3:           #6b7080;
-  --t4:           #363840;
+  --t1:#f2f2f2;
+  --t2:#a0a4b0;
+  --t3:#5a5e6a;
+  --t4:#2e3038;
 
-  /* Tile grid — icon dominant */
-  --cols:         2;
-  --tile-h:       116px;   /* tall enough for 54px logo + text */
-  --tile-gap:     8px;
-  --logo-sz:      54px;
+  /* Layout */
+  --sb:460px;          /* sidebar width — wide for 55" */
+  --tile-h:106px;      /* icon-only tile height */
+  --tile-gap:5px;      /* tight professional gap */
+  --cols:2;
 
-  /* Sidebar */
-  --sb-w:         400px;
+  /* One UI radius */
+  --r-xs:5px;
+  --r-sm:10px;
+  --r-md:16px;
+  --r-lg:22px;
+  --r-pill:999px;
 
-  /* OneUI radius */
-  --r-xs:         6px;
-  --r-sm:         10px;
-  --r-md:         16px;
-  --r-lg:         22px;
-  --r-pill:       100px;
+  /* Type — scaled for 55" at 3m */
+  --f-xs:12px;
+  --f-sm:15px;
+  --f-md:17px;
+  --f-lg:21px;
+  --f-xl:26px;
+  --f-2xl:34px;
 
-  /* Type scale — readable at 3m on 55″ */
-  --f-xs:   12px;
-  --f-sm:   14px;
-  --f-md:   16px;
-  --f-lg:   20px;
-  --f-xl:   24px;
-  --f-2xl:  32px;
-
-  /* OneUI transitions — snappy not floaty */
-  --dur:     150ms;
-  --ease:    cubic-bezier(.4,0,.2,1);
+  --dur:130ms;
+  --ease:cubic-bezier(.4,0,.2,1);
 }
 
 html,body{
   width:100vw;height:100vh;overflow:hidden;
-  background:var(--sys-bg);color:var(--t1);
+  background:var(--bg0);color:var(--t1);
   font-family:'SamsungOneUI','Segoe UI',-apple-system,system-ui,sans-serif;
-  font-size:var(--f-md);
-  /* Root GPU layer */
-  transform:translateZ(0);
   -webkit-font-smoothing:antialiased;
+  transform:translateZ(0);
 }
 
-/* ─── GPU LAYER STRATEGY ────────────────────────────────────────
-   Each major zone is promoted to its own compositor layer.
-   This matches what a native C++ EFL app does with evas layers.
-   The browser never needs to repaint one zone when another updates.
-──────────────────────────────────────────────────────────────── */
+/* ── APP ROOT ─────────────────────────────────────────────── */
 #app{
   display:flex;width:100%;height:100%;
-  isolation:isolate;          /* new stacking context */
+  isolation:isolate;
   transform:translateZ(0);
 }
 
-/* ═══ SIDEBAR — Layer 1 ═══════════════════════════════════════ */
-#sidebar{
-  width:var(--sb-w);min-width:var(--sb-w);
-  background:var(--sys-bg1);
-  border-right:1px solid var(--sys-line);
+/* ══════════════════════════════════════════════════════════
+   SIDEBAR — own compositor layer
+══════════════════════════════════════════════════════════ */
+#sb{
+  width:var(--sb);min-width:var(--sb);
+  background:var(--bg1);
+  border-right:1px solid var(--line);
   display:flex;flex-direction:column;
-  /* Own compositor layer */
   will-change:transform;
   transform:translateZ(0);
   transition:transform var(--dur) var(--ease),opacity var(--dur);
   z-index:10;
 }
-#app.fs #sidebar{
-  transform:translateX(calc(-1 * var(--sb-w)));
-  opacity:0;pointer-events:none;
-}
+#app.fs #sb{transform:translateX(calc(-1*var(--sb)));opacity:0;pointer-events:none;}
 
-/* ─── BRAND ─────────────────────────────────────────────────── */
-.brand{
-  display:flex;align-items:center;gap:12px;
-  padding:14px 18px 12px;
-  border-bottom:1px solid var(--sys-line);
+/* ── HEADER ──────────────────────────────────────────────── */
+.hdr{
+  display:flex;align-items:center;gap:14px;
+  padding:16px 20px 14px;
+  border-bottom:1px solid var(--line);
   flex-shrink:0;
 }
-.brand-icon{
-  width:38px;height:38px;border-radius:var(--r-sm);
-  background:var(--accent);
+.hdr-mark{
+  width:44px;height:44px;border-radius:var(--r-sm);
+  background:var(--acc);
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
 }
-.brand-icon svg{width:20px;height:20px;fill:#fff}
-.brand-text{flex:1;min-width:0}
-.brand-title{font-size:var(--f-lg);font-weight:700;letter-spacing:.5px;color:var(--t1);line-height:1}
-.brand-title b{color:var(--accent);font-weight:800}
-.brand-sub{font-size:var(--f-xs);color:var(--t3);margin-top:2px}
-.ch-pill{
+.hdr-mark svg{width:24px;height:24px;fill:#fff}
+.hdr-text{flex:1;min-width:0}
+.hdr-title{font-size:var(--f-lg);font-weight:800;letter-spacing:.4px;line-height:1}
+.hdr-title b{color:var(--acc)}
+.hdr-sub{font-size:var(--f-xs);color:var(--t3);margin-top:3px}
+.hdr-pill{
   font-size:var(--f-xs);font-weight:700;
-  background:var(--sys-bg3);color:var(--t2);
-  border:1px solid var(--sys-line);
-  border-radius:var(--r-pill);padding:4px 11px;
+  background:var(--bg3);color:var(--t2);
+  border:1px solid var(--line);
+  border-radius:var(--r-pill);padding:5px 13px;
   flex-shrink:0;white-space:nowrap;
 }
 
-/* ─── ONE UI SEGMENTED TAB BAR ──────────────────────────────── */
+/* ── ONE UI SEGMENTED CONTROL ────────────────────────────── */
 .seg-wrap{
-  padding:10px 12px 0;
-  border-bottom:1px solid var(--sys-line);
+  padding:10px 14px 0;
+  border-bottom:1px solid var(--line);
   flex-shrink:0;
-  background:var(--sys-bg1);
 }
 .seg{
-  display:flex;gap:0;
-  background:var(--sys-bg3);
+  display:flex;
+  background:var(--bg3);
   border-radius:var(--r-sm);
-  padding:3px;
+  padding:3px;gap:2px;
 }
 .seg-btn{
-  flex:1;padding:8px 4px;border:none;
+  flex:1;padding:9px 6px;border:none;
   background:transparent;color:var(--t3);
   font-size:var(--f-xs);font-weight:700;
-  letter-spacing:.4px;text-transform:uppercase;
+  letter-spacing:.5px;text-transform:uppercase;
   border-radius:var(--r-xs);cursor:pointer;outline:none;
-  transition:background var(--dur),color var(--dur);
-  position:relative;
+  transition:background var(--dur),color var(--dur),box-shadow var(--dur);
+  display:flex;align-items:center;justify-content:center;gap:5px;
 }
 .seg-btn.on{
-  background:var(--sys-bg5);
-  color:var(--t1);
-  box-shadow:0 1px 3px rgba(0,0,0,.4);
+  background:var(--bg5);color:var(--t1);
+  box-shadow:0 1px 4px rgba(0,0,0,.5);
 }
-/* OneUI focus ring on segmented btn */
 .seg-btn:focus{
-  outline:2px solid var(--accent-ring);
-  outline-offset:2px;
+  outline:2.5px solid var(--acc-ring);
+  outline-offset:1px;
 }
 .seg-n{
-  display:inline-block;
-  background:var(--sys-bg4);color:var(--t3);
+  background:var(--bg4);color:var(--t3);
   font-size:10px;border-radius:var(--r-pill);
-  padding:1px 5px;margin-left:3px;
-  vertical-align:middle;
+  padding:1px 6px;
 }
-.seg-btn.on .seg-n{background:var(--accent);color:#fff}
+.seg-btn.on .seg-n{background:var(--acc);color:#fff}
+/* Gear SVG for settings tab */
+.gear{width:16px;height:16px;fill:currentColor;flex-shrink:0}
 
-/* ─── SETTINGS TAB — OneUI gear icon ───────────────────────── */
-.seg-gear{
-  /* Wider to accommodate the gear + label */
-  flex:0 0 auto;padding:8px 10px;
-  display:flex;align-items:center;gap:5px;
+/* ── SEARCH BAR ───────────────────────────────────────────── */
+.srch-row{
+  padding:10px 14px;
+  border-bottom:1px solid var(--line);
+  flex-shrink:0;position:relative;display:flex;align-items:center;
 }
-.gear-svg{width:15px;height:15px;fill:currentColor;flex-shrink:0}
-
-/* ─── SEARCH ────────────────────────────────────────────────── */
-.search-wrap{
-  padding:8px 12px;
-  flex-shrink:0;position:relative;
-  display:flex;align-items:center;
-}
-#searchInput{
-  flex:1;padding:9px 36px 9px 14px;
-  background:var(--sys-bg3);
-  border:1.5px solid var(--sys-line);
+#srchInput{
+  flex:1;padding:11px 40px 11px 16px;
+  background:var(--bg3);
+  border:1.5px solid var(--line);
   border-radius:var(--r-pill);
   color:var(--t1);font-size:var(--f-sm);outline:none;
   transition:border-color var(--dur),background var(--dur);
 }
-#searchInput:focus{border-color:var(--accent-ring);background:var(--sys-bg4)}
-#searchInput::placeholder{color:var(--t4)}
-.s-ico{
-  position:absolute;right:22px;
-  color:var(--t3);font-size:14px;pointer-events:none;
+#srchInput:focus{border-color:var(--acc-ring);background:var(--bg4)}
+#srchInput::placeholder{color:var(--t4)}
+.srch-ico{
+  position:absolute;right:26px;top:50%;transform:translateY(-50%);
+  color:var(--t3);font-size:16px;pointer-events:none;
 }
-#clearBtn{
-  display:none;position:absolute;right:22px;
-  background:none;border:none;color:var(--t3);
-  font-size:15px;cursor:pointer;outline:none;padding:4px;
+#srchClear{
+  display:none;position:absolute;right:26px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--t3);font-size:17px;
+  cursor:pointer;outline:none;padding:4px;line-height:1;
 }
+#srchClear:focus{color:var(--t1)}
 
-/* ─── GROUP CHIPS (One UI pill chips) ───────────────────────── */
-.groups{
-  display:flex;gap:6px;padding:7px 12px;
-  overflow-x:auto;border-bottom:1px solid var(--sys-line);
+/* ── CATEGORY CHIPS ───────────────────────────────────────── */
+.cats{
+  display:flex;gap:6px;padding:9px 14px;
+  overflow-x:auto;border-bottom:1px solid var(--line);
   flex-shrink:0;scrollbar-width:none;
 }
-.groups::-webkit-scrollbar{display:none}
-.chip{
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
-  color:var(--t3);padding:5px 13px;
-  border-radius:var(--r-pill);font-size:var(--f-xs);
+.cats::-webkit-scrollbar{display:none}
+.cat{
+  background:var(--bg3);border:1.5px solid var(--line);
+  color:var(--t3);padding:7px 16px;
+  border-radius:var(--r-pill);font-size:var(--f-sm);
   font-weight:600;cursor:pointer;outline:none;
   white-space:nowrap;flex-shrink:0;
   transition:background var(--dur),color var(--dur),border-color var(--dur);
+  /* focusable for remote */
+  tabindex:0;
 }
-.chip.on{background:var(--accent-lo);color:var(--accent-hi);border-color:var(--accent-ring)}
-.chip:focus{border-color:var(--accent-ring);color:var(--t2)}
+.cat.on{background:var(--acc-lo);color:var(--acc-hi);border-color:var(--acc-ring)}
+.cat:focus{border-color:var(--acc-ring);color:var(--t1);
+  box-shadow:0 0 0 2px var(--acc-lo)}
 
-/* ═══ TILE VIEWPORT — Layer 2 ═══════════════════════════════
-   Virtual scroll: position:absolute rows, translateY on inner.
-   NO native overflow-y scroll. We drive vsTop manually.
-   `contain:strict` isolates layout/paint to this zone only.
-══════════════════════════════════════════════════════════════ */
-#tileVP{
+/* ══════════════════════════════════════════════════════════
+   ICON-ONLY TILE GRID
+   Virtual scroll — position:absolute rows, translateY on surface.
+   Each tile = 100% of its cell, logo fills entire tile.
+   NO text (name/group hidden) — icon is the entire visual.
+   Selected: accent border + bottom bar.  Focus: ring.
+══════════════════════════════════════════════════════════ */
+#tvp{
   flex:1;overflow:hidden;position:relative;
-  contain:strict;           /* isolate layout & paint */
-  transform:translateZ(0);  /* own GPU layer */
+  contain:strict;
+  transform:translateZ(0);
 }
-#tileInner{
+#tin{
   position:absolute;top:0;left:0;right:0;
-  will-change:transform;    /* GPU-promotes the scrolling surface */
-  /* height set by JS */
+  will-change:transform;
 }
-
-/* Row: 2 icon-dominant tiles */
-.tile-row{
+.trow{
   position:absolute;left:0;right:0;
   height:var(--tile-h);
-  display:grid;
-  grid-template-columns:1fr 1fr;
+  display:grid;grid-template-columns:1fr 1fr;
   gap:var(--tile-gap);
-  padding:0 calc(var(--tile-gap) + 2px);
-  transform:translateZ(0); /* each row = GPU layer */
+  padding:0 calc(var(--tile-gap)*1.5);
+  transform:translateZ(0);
 }
-
-/* ─── ICON-DOMINANT TILE ────────────────────────────────────
-   Layout:
-     [    LOGO 54×54    ]
-     [ name truncated   ]
-     [ group / number   ]
-   Selected state: accent border + brighter bg
-──────────────────────────────────────────────────────────── */
+/* The tile itself */
 .tile{
   height:100%;
-  display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-  gap:7px;padding:10px 8px 9px;
-  border-radius:var(--r-md);
-  background:var(--sys-bg2);
-  border:1.5px solid transparent;
-  cursor:pointer;outline:none;
   position:relative;overflow:hidden;
-  /* Only GPU-compositable props transition */
+  border-radius:var(--r-md);
+  background:var(--bg3);
+  border:2px solid transparent;
+  cursor:pointer;outline:none;
   transition:border-color var(--dur),background var(--dur);
 }
-/* Focus ring for remote nav */
-.tile:focus{
-  border-color:var(--accent-ring);
-  background:var(--sys-bg3);
-}
-/* Selected: playing now */
-.tile.sel{
-  background:var(--sys-bg3);
-  border-color:var(--accent);
-}
-/* Playing indicator — left accent pill */
-.tile.sel::after{
-  content:'';
-  position:absolute;bottom:0;left:50%;
-  transform:translateX(-50%);
-  width:24px;height:3px;
-  background:var(--accent);
-  border-radius:3px 3px 0 0;
-}
-/* Logo area — large and dominant */
-.t-logo{
-  width:var(--logo-sz);height:var(--logo-sz);
-  border-radius:var(--r-sm);
-  background:var(--sys-bg4);
-  display:flex;align-items:center;justify-content:center;
-  font-size:22px;flex-shrink:0;overflow:hidden;
-  position:relative;
-}
-.t-logo img{
-  width:100%;height:100%;object-fit:contain;
+/* Logo fills 100% — cover mode for visual impact */
+.t-img{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:contain;      /* contain keeps logo unclipped */
   display:block;
-  /* img decode on worker thread — no jank */
-  decoding:async;
 }
-/* Live dot on logo corner */
-.t-live{
-  position:absolute;bottom:3px;right:3px;
-  width:8px;height:8px;border-radius:50%;
-  background:var(--ok);
-  border:1.5px solid var(--sys-bg4);
-  display:none;
+/* Fallback emoji when no logo */
+.t-fallback{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:32px;
+  background:var(--bg4);
 }
-.tile.sel .t-live{display:block}
-/* Fav star — top-right of logo */
-.t-fav-mark{
-  position:absolute;top:2px;right:3px;
-  font-size:10px;color:var(--warn);line-height:1;
-  display:none;
-}
-/* Text block below logo */
-.t-body{width:100%;min-width:0;text-align:center}
-.t-name{
-  font-size:var(--f-xs);font-weight:600;color:var(--t1);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  line-height:1.3;
-}
-.tile.sel .t-name{color:var(--t1)}
-.t-meta{
-  font-size:10px;color:var(--t3);
-  margin-top:2px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-/* Channel number badge top-left */
+/* Channel number — subtle top-left */
 .t-num{
-  position:absolute;top:5px;left:6px;
-  font-size:9px;color:var(--t4);
+  position:absolute;top:5px;left:7px;
+  font-size:10px;color:rgba(255,255,255,.3);
   font-variant-numeric:tabular-nums;line-height:1;
+  pointer-events:none;
 }
+/* Fav dot — top-right */
+.t-fstar{
+  position:absolute;top:5px;right:6px;
+  font-size:12px;color:var(--yel);
+  line-height:1;display:none;
+  pointer-events:none;
+}
+/* Selected: accent border + bottom bar */
+.tile.sel{border-color:var(--acc);}
+.tile.sel::after{
+  content:'';position:absolute;bottom:0;left:20%;right:20%;
+  height:3px;background:var(--acc);border-radius:3px 3px 0 0;
+}
+/* Focus ring for remote */
+.tile:focus{
+  border-color:var(--acc-hi);
+  box-shadow:0 0 0 2px var(--acc-lo);
+}
+/* Playing: live dot on selected */
+.tile.sel .t-live{
+  position:absolute;bottom:6px;right:7px;
+  width:7px;height:7px;border-radius:50%;
+  background:var(--grn);
+  border:1.5px solid var(--bg3);
+  display:block;
+}
+.t-live{display:none}
+/* Name tooltip on focus/sel (bottom overlay) */
+.t-label{
+  position:absolute;bottom:0;left:0;right:0;
+  background:linear-gradient(transparent,rgba(0,0,0,.82));
+  padding:18px 8px 7px;
+  font-size:11px;font-weight:600;color:#fff;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-align:center;
+  opacity:0;transition:opacity var(--dur);
+  pointer-events:none;
+}
+.tile:focus .t-label,
+.tile.sel .t-label{opacity:1}
 
-/* ═══ SIDE PANELS ═════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   SIDE PANELS
+══════════════════════════════════════════════════════════ */
 .panel{
   display:none;flex:1;flex-direction:column;
-  overflow-y:auto;padding:12px;gap:8px;
-  scrollbar-width:thin;scrollbar-color:var(--sys-bg5) transparent;
+  overflow-y:auto;padding:14px;gap:9px;
+  scrollbar-width:thin;scrollbar-color:var(--bg5) transparent;
 }
 .panel.on{display:flex}
 
-/* ─── SOURCE CARDS ──────────────────────────────────────────── */
-.pl-card{
-  display:flex;align-items:center;gap:12px;
-  padding:13px 14px;border-radius:var(--r-md);
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
+/* Source cards */
+.src-card{
+  display:flex;align-items:center;gap:13px;
+  padding:15px 16px;border-radius:var(--r-md);
+  background:var(--bg3);border:1.5px solid var(--line);
   cursor:pointer;outline:none;
   transition:background var(--dur),border-color var(--dur);
 }
-.pl-card:focus{border-color:var(--accent-ring);background:var(--sys-bg4)}
-.pl-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0}
-.pl-info{flex:1;min-width:0}
-.pl-nm{font-size:var(--f-sm);font-weight:600}
-.pl-url{font-size:var(--f-xs);color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pl-del{background:none;border:none;color:var(--t3);cursor:pointer;
-  font-size:16px;padding:6px;outline:none;border-radius:var(--r-xs)}
-.pl-del:focus{color:var(--err);background:rgba(232,68,90,.1)}
+.src-card:focus,.src-card:hover{border-color:var(--acc-ring);background:var(--bg4)}
+.src-dot{width:9px;height:9px;border-radius:50%;background:var(--grn);flex-shrink:0}
+.src-info{flex:1;min-width:0}
+.src-nm{font-size:var(--f-sm);font-weight:700}
+.src-url{font-size:var(--f-xs);color:var(--t3);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-del{background:none;border:none;color:var(--t3);cursor:pointer;
+  font-size:18px;padding:6px;outline:none;border-radius:var(--r-xs);line-height:1}
+.src-del:focus{color:var(--red);background:rgba(232,68,90,.1)}
 
-/* ─── ONE UI SETTINGS ROWS ──────────────────────────────────── */
+/* Settings rows */
 .srow{
   display:flex;align-items:center;justify-content:space-between;
-  padding:14px 16px;border-radius:var(--r-md);
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
+  padding:15px 17px;border-radius:var(--r-md);
+  background:var(--bg3);border:1.5px solid var(--line);
   outline:none;
   transition:background var(--dur),border-color var(--dur);
 }
-.srow:focus-within{border-color:var(--accent-ring)}
-.srow-l{flex:1}
-.srow-title{font-size:var(--f-sm);font-weight:600;color:var(--t1)}
-.srow-desc{font-size:var(--f-xs);color:var(--t3);margin-top:2px}
+.srow:focus-within,.srow:focus{border-color:var(--acc-ring)}
+.srow-l{flex:1;margin-right:12px}
+.srow-title{font-size:var(--f-sm);font-weight:700;color:var(--t1)}
+.srow-desc{font-size:var(--f-xs);color:var(--t3);margin-top:3px;line-height:1.4}
 
-/* OneUI toggle — larger thumb, pill track */
-.tog{position:relative;width:48px;height:28px;flex-shrink:0}
+/* One UI toggle */
+.tog{position:relative;width:52px;height:30px;flex-shrink:0}
 .tog input{opacity:0;width:0;height:0;position:absolute}
 .tog-t{
   position:absolute;inset:0;cursor:pointer;
-  background:var(--sys-bg5);border:1.5px solid var(--sys-line);
-  border-radius:14px;
+  background:var(--bg5);border:1.5px solid var(--line2);
+  border-radius:15px;
   transition:background 200ms,border-color 200ms;
 }
 .tog-t::before{
   content:'';position:absolute;
-  width:20px;height:20px;top:3px;left:3px;
+  width:22px;height:22px;top:3px;left:3px;
   background:#fff;border-radius:50%;
   transition:transform 200ms var(--ease);
   will-change:transform;
-  box-shadow:0 1px 4px rgba(0,0,0,.5);
+  box-shadow:0 2px 6px rgba(0,0,0,.5);
 }
-.tog input:checked+.tog-t{background:var(--accent);border-color:var(--accent)}
-.tog input:checked+.tog-t::before{transform:translateX(20px)}
+.tog input:checked+.tog-t{background:var(--acc);border-color:var(--acc)}
+.tog input:checked+.tog-t::before{transform:translateX(22px)}
 
-/* OneUI select */
+/* Select */
 .oui-sel{
-  background:var(--sys-bg4);border:1.5px solid var(--sys-line);
-  border-radius:var(--r-sm);color:var(--t1);
-  font-size:var(--f-sm);padding:9px 12px;
-  outline:none;width:100%;margin-top:8px;
-  appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7080'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 12px center;
+  width:100%;padding:12px 14px;margin-top:8px;
+  background:var(--bg4);border:1.5px solid var(--line);
+  border-radius:var(--r-sm);color:var(--t1);font-size:var(--f-sm);
+  outline:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a5e6a'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;
 }
-.oui-sel:focus{border-color:var(--accent-ring)}
+.oui-sel:focus{border-color:var(--acc-ring)}
 
-/* Buttons */
+/* Action buttons — bigger for 55" */
 .btn{
-  width:100%;padding:13px;border:none;
+  width:100%;padding:15px 18px;border:none;
   border-radius:var(--r-md);font-size:var(--f-sm);
   font-weight:700;cursor:pointer;outline:none;
-  transition:filter var(--dur);
+  transition:filter var(--dur),transform var(--dur);
+  display:flex;align-items:center;justify-content:center;gap:8px;
 }
-.btn:focus{filter:brightness(1.2)}
-.btn-acc{background:var(--accent);color:#fff}
-.btn-ghost{background:var(--sys-bg4);color:var(--t1);border:1.5px solid var(--sys-line)}
-.btn-danger{background:rgba(232,68,90,.1);color:var(--err);border:1.5px solid rgba(232,68,90,.2)}
-
-/* Section label */
-.sec-label{
-  font-size:var(--f-xs);font-weight:700;
-  color:var(--t3);letter-spacing:.8px;text-transform:uppercase;
-  padding:4px 2px;
+.btn:focus{filter:brightness(1.15);transform:scale(0.985)}
+.btn-acc{background:var(--acc);color:#fff}
+.btn-ghost{background:var(--bg4);color:var(--t1);border:1.5px solid var(--line)}
+.btn-danger{background:rgba(232,68,90,.1);color:var(--red);border:1.5px solid rgba(232,68,90,.22)}
+.sec-lbl{
+  font-size:var(--f-xs);font-weight:700;color:var(--t3);
+  letter-spacing:.9px;text-transform:uppercase;padding:2px 1px;
 }
 
-/* ─── HINT BAR ──────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════
+   COLOUR KEY BAR — always visible at bottom of sidebar
+   RED=fav  GREEN=search  YELLOW=aspect  BLUE=fullscreen
+══════════════════════════════════════════════════════════ */
+.ckey-bar{
+  display:flex;gap:6px;padding:10px 14px;
+  border-top:1px solid var(--line);
+  flex-shrink:0;background:var(--bg1);
+}
+.ckey{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:9px 4px;border:none;border-radius:var(--r-sm);
+  background:var(--bg3);cursor:pointer;outline:none;
+  font-size:var(--f-xs);font-weight:700;color:var(--t2);
+  transition:background var(--dur),color var(--dur),border-color var(--dur);
+  border:1.5px solid transparent;
+}
+.ckey:focus{border-color:var(--acc-ring);color:var(--t1)}
+.ckey-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ck-red .ckey-dot{background:var(--red)}
+.ck-grn .ckey-dot{background:var(--grn)}
+.ck-yel .ckey-dot{background:var(--yel)}
+.ck-blu .ckey-dot{background:var(--blu)}
+.ck-red:focus,.ck-red.act{background:rgba(232,68,90,.12);color:var(--red);border-color:rgba(232,68,90,.4)}
+.ck-grn:focus,.ck-grn.act{background:rgba(42,178,123,.12);color:var(--grn);border-color:rgba(42,178,123,.4)}
+.ck-yel:focus,.ck-yel.act{background:rgba(240,168,0,.12);color:var(--yel);border-color:rgba(240,168,0,.4)}
+.ck-blu:focus,.ck-blu.act{background:rgba(52,120,246,.14);color:var(--acc-hi);border-color:var(--acc-ring)}
+
+/* Hint row above colour keys */
 .hints{
-  display:flex;gap:6px;flex-wrap:wrap;
-  justify-content:center;
-  padding:6px 10px;
-  border-top:1px solid var(--sys-line);
-  flex-shrink:0;background:var(--sys-bg1);
+  display:flex;gap:5px;flex-wrap:wrap;justify-content:center;
+  padding:5px 10px 0;flex-shrink:0;
 }
 .hk{font-size:10px;color:var(--t3);display:flex;align-items:center;gap:3px}
 .hk kbd{
-  background:var(--sys-bg3);border:1px solid var(--sys-line);
+  background:var(--bg4);border:1px solid var(--line2);
   border-radius:4px;padding:1px 5px;
   font-size:9px;color:var(--t2);font-family:monospace;
 }
 
-/* ═══ PLAYER — Layer 3 ════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   PLAYER — own GPU layer
+══════════════════════════════════════════════════════════ */
 #player{
   flex:1;display:flex;flex-direction:column;
-  background:#000;
-  transform:translateZ(0);   /* isolated GPU layer */
-  min-width:0;
+  background:#000;transform:translateZ(0);min-width:0;
 }
 
-/* ─── NOW BAR ───────────────────────────────────────────────── */
-#nowBar{
+/* Now bar */
+#nbar{
   display:flex;align-items:center;gap:14px;
-  padding:10px 20px;
-  background:var(--sys-bg1);
-  border-bottom:1px solid var(--sys-line);
+  padding:11px 20px;
+  background:var(--bg1);
+  border-bottom:1px solid var(--line);
   flex-shrink:0;
 }
-.now-info{flex:1;min-width:0}
-#nowName{
+.nbar-info{flex:1;min-width:0}
+#nName{
   font-size:var(--f-lg);font-weight:700;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1);
 }
-#nowSub{font-size:var(--f-xs);color:var(--t3);margin-top:2px}
-/* OneUI icon buttons row */
-.nctl{display:flex;align-items:center;gap:6px;flex-shrink:0}
+#nSub{font-size:var(--f-xs);color:var(--t3);margin-top:2px}
+.nctl{display:flex;align-items:center;gap:7px;flex-shrink:0}
 .nc{
-  width:38px;height:38px;
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
+  width:42px;height:42px;
+  background:var(--bg3);border:1.5px solid var(--line);
   border-radius:var(--r-sm);color:var(--t1);
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;outline:none;
   transition:background var(--dur),border-color var(--dur);
+  flex-shrink:0;
 }
-.nc svg{width:18px;height:18px;fill:currentColor;pointer-events:none}
-.nc:focus,.nc:hover{background:var(--sys-bg4);border-color:var(--accent-ring)}
-.nc.act{background:var(--accent);border-color:var(--accent);color:#fff}
+.nc svg{width:20px;height:20px;fill:currentColor;pointer-events:none}
+.nc:focus,.nc:hover{background:var(--bg4);border-color:var(--acc-ring)}
+.nc.act{background:var(--acc);border-color:var(--acc);color:#fff}
 
-/* ─── VIDEO — Layer 4 (deepest) ────────────────────────────── */
+/* Video */
 #vwrap{
-  flex:1;position:relative;
-  background:#000;overflow:hidden;
-  transform:translateZ(0);
+  flex:1;position:relative;background:#000;
+  overflow:hidden;transform:translateZ(0);
 }
 #video{
-  width:100%;height:100%;object-fit:contain;
-  display:block;
-  transform:translateZ(0);
-  will-change:transform;          /* decoder in its own layer */
-  backface-visibility:hidden;
-  -webkit-backface-visibility:hidden;
+  width:100%;height:100%;object-fit:contain;display:block;
+  transform:translateZ(0);will-change:transform;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
 }
 #video.fill{object-fit:cover}
 
-/* ─── OSD — Layer 5 ─────────────────────────────────────────── */
+/* OSD */
 #osd{
   position:absolute;inset:0;pointer-events:none;
   display:flex;flex-direction:column;justify-content:space-between;
@@ -516,123 +498,116 @@ html,body{
   transition:opacity 250ms ease;
 }
 #osd.off{opacity:0}
-
 .osd-top{display:flex;align-items:flex-start;justify-content:space-between}
 .osd-card{
   background:rgba(0,0,0,.75);
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   border:1px solid rgba(255,255,255,.07);
-  border-radius:var(--r-lg);
-  padding:14px 20px;max-width:420px;
+  border-radius:var(--r-lg);padding:15px 22px;max-width:440px;
 }
 .osd-ch{font-size:var(--f-xl);font-weight:800;color:#fff}
-.osd-num{font-size:var(--f-xs);color:rgba(255,255,255,.45);margin-top:3px}
-.osd-grp{font-size:var(--f-sm);color:var(--accent-hi);margin-top:5px}
-
+.osd-num{font-size:var(--f-xs);color:rgba(255,255,255,.4);margin-top:3px}
+.osd-grp{font-size:var(--f-sm);color:var(--acc-hi);margin-top:5px}
 .osd-pills{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
 .pill{
-  background:rgba(0,0,0,.72);
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  background:rgba(0,0,0,.72);backdrop-filter:blur(8px);
   border:1px solid rgba(255,255,255,.07);
-  border-radius:var(--r-pill);
-  padding:5px 14px;font-size:var(--f-xs);font-weight:700;
+  border-radius:var(--r-pill);padding:6px 15px;
+  font-size:var(--f-xs);font-weight:700;
 }
-.pill-live{color:var(--ok)}
+.pill-live{color:var(--grn)}
 .pill-live::before{
-  content:'';display:inline-block;
-  width:6px;height:6px;border-radius:50%;
-  background:var(--ok);margin-right:5px;vertical-align:middle;
-  animation:livepulse 2s ease-in-out infinite;
+  content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+  background:var(--grn);margin-right:5px;vertical-align:middle;
+  animation:lp 2s ease-in-out infinite;
 }
-.pill-q{color:var(--accent-hi)}
-.pill-buf{color:var(--warn);display:none}
+@keyframes lp{0%,100%{opacity:1}50%{opacity:.4}}
+.pill-q{color:var(--acc-hi)}
+.pill-buf{color:var(--yel);display:none}
 .pill-buf.on{display:block}
-@keyframes livepulse{
-  0%,100%{opacity:1}50%{opacity:.5}
-}
 
-/* ─── SCROLL PLAY INDICATOR — shown while scroll-debounce pending */
+/* Scroll hint */
 #scrollHint{
-  position:absolute;bottom:80px;left:50%;transform:translateX(-50%);
-  background:rgba(0,0,0,.75);backdrop-filter:blur(8px);
+  position:absolute;bottom:70px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.78);backdrop-filter:blur(8px);
   border:1px solid rgba(255,255,255,.1);
-  border-radius:var(--r-pill);padding:8px 18px;
+  border-radius:var(--r-pill);padding:9px 20px;
   font-size:var(--f-sm);font-weight:700;color:#fff;
-  pointer-events:none;opacity:0;
-  will-change:opacity;transition:opacity 200ms;
+  pointer-events:none;opacity:0;will-change:opacity;transition:opacity 180ms;
   white-space:nowrap;
 }
 #scrollHint.on{opacity:1}
 
-/* ─── SKIP FLASH ────────────────────────────────────────────── */
+/* Skip */
 .skip{
   position:absolute;top:50%;transform:translateY(-50%);
-  background:rgba(0,0,0,.65);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:var(--r-lg);
-  padding:11px 22px;font-size:var(--f-lg);font-weight:700;
-  pointer-events:none;opacity:0;
-  will-change:opacity;transition:opacity 150ms;
+  background:rgba(0,0,0,.68);border:1px solid rgba(255,255,255,.08);
+  border-radius:var(--r-lg);padding:12px 24px;
+  font-size:var(--f-lg);font-weight:700;
+  pointer-events:none;opacity:0;will-change:opacity;transition:opacity 140ms;
 }
 .skip.on{opacity:1}
 #skipL{left:60px}#skipR{right:60px}
 
-/* ─── STATUS BAR ────────────────────────────────────────────── */
-#statusBar{
+/* Status bar */
+#sbar{
   display:flex;align-items:center;justify-content:space-between;
-  padding:5px 18px;
-  background:var(--sys-bg);border-top:1px solid var(--sys-line);
+  padding:5px 20px;background:var(--bg0);border-top:1px solid var(--line);
   flex-shrink:0;
 }
-#statusTxt{font-size:11px;color:var(--t3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sbar-r{display:flex;align-items:center;gap:14px;flex-shrink:0}
-.sbar-item{font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px}
+#sTxt{font-size:11px;color:var(--t3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sbr{display:flex;align-items:center;gap:14px;flex-shrink:0}
+.sbri{font-size:11px;color:var(--t4);display:flex;align-items:center;gap:4px}
 .sdot{width:5px;height:5px;border-radius:50%;background:var(--t4);flex-shrink:0}
-.sdot.g{background:var(--ok)}.sdot.a{background:var(--warn)}.sdot.r{background:var(--err)}
+.sdot.g{background:var(--grn)}.sdot.a{background:var(--yel)}.sdot.r{background:var(--red)}
 
-/* ═══ TOAST ══════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════════════ */
 #toasts{
   position:fixed;top:22px;right:22px;z-index:9999;
   display:flex;flex-direction:column;gap:7px;pointer-events:none;
 }
 .toast{
-  background:rgba(14,14,14,.95);
-  border:1.5px solid var(--sys-line);
-  border-radius:var(--r-lg);
-  padding:11px 18px;font-size:var(--f-sm);color:var(--t1);
-  max-width:300px;display:flex;align-items:center;gap:9px;
+  background:rgba(12,12,12,.95);border:1.5px solid var(--line);
+  border-radius:var(--r-lg);padding:12px 20px;
+  font-size:var(--f-sm);color:var(--t1);max-width:320px;
+  display:flex;align-items:center;gap:10px;
   animation:tIn 180ms var(--ease) forwards;
-  box-shadow:0 8px 28px rgba(0,0,0,.6);
+  box-shadow:0 8px 28px rgba(0,0,0,.65);
 }
 .toast.out{animation:tOut 160ms ease forwards}
 .toast.ok{border-color:rgba(42,178,123,.35)}
 .toast.err{border-color:rgba(232,68,90,.35)}
-.toast.hi{border-color:var(--accent-ring)}
+.toast.hi{border-color:var(--acc-ring)}
 @keyframes tIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
-@keyframes tOut{from{transform:translateX(0);opacity:1}to{transform:translateX(110%);opacity:0}}
+@keyframes tOut{from{opacity:1}to{transform:translateX(110%);opacity:0}}
 
-/* ═══ LOADING ════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   LOADING
+══════════════════════════════════════════════════════════ */
 #loading{
   position:fixed;inset:0;background:#000;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   z-index:9500;transition:opacity 350ms ease;
 }
 #loading.off{opacity:0;pointer-events:none}
-.ld-icon{
-  width:64px;height:64px;border-radius:var(--r-md);
-  background:var(--accent);
+.ld-ico{
+  width:68px;height:68px;border-radius:var(--r-md);background:var(--acc);
   display:flex;align-items:center;justify-content:center;margin-bottom:22px;
 }
-.ld-icon svg{width:34px;height:34px;fill:#fff}
+.ld-ico svg{width:36px;height:36px;fill:#fff}
 .ld-title{font-size:var(--f-2xl);font-weight:800;letter-spacing:1px;color:#fff}
-.ld-title b{color:var(--accent)}
-.ld-sub{font-size:var(--f-xs);color:var(--t3);margin-top:4px;letter-spacing:.8px;text-transform:uppercase}
-.ld-bar{width:160px;height:2px;background:var(--sys-bg3);border-radius:2px;overflow:hidden;margin-top:28px}
-.ld-fill{height:100%;background:var(--accent);border-radius:2px;animation:ldBar 1s ease-in-out infinite}
-.ld-msg{font-size:var(--f-xs);color:var(--t4);margin-top:11px}
-@keyframes ldBar{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
+.ld-title b{color:var(--acc)}
+.ld-sub{font-size:var(--f-xs);color:var(--t3);margin-top:4px;letter-spacing:.9px;text-transform:uppercase}
+.ld-bar{width:160px;height:2px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-top:30px}
+.ld-fill{height:100%;background:var(--acc);border-radius:2px;animation:lb 1s ease-in-out infinite}
+.ld-msg{font-size:var(--f-xs);color:var(--t4);margin-top:12px}
+@keyframes lb{0%{transform:translateX(-100%)}100%{transform:translateX(400%)}}
 
-/* ═══ MODALS ════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════
+   MODALS
+══════════════════════════════════════════════════════════ */
 .mover{
   display:none;position:fixed;inset:0;
   background:rgba(0,0,0,.88);
@@ -640,64 +615,61 @@ html,body{
 }
 .mover.on{display:flex}
 .mbox{
-  background:var(--sys-bg2);border:1.5px solid var(--sys-line);
-  border-radius:var(--r-lg);width:460px;max-width:88vw;
-  padding:28px;box-shadow:0 24px 64px rgba(0,0,0,.75);
+  background:var(--bg2);border:1.5px solid var(--line);
+  border-radius:var(--r-lg);width:480px;max-width:90vw;
+  padding:30px;box-shadow:0 24px 64px rgba(0,0,0,.8);
   animation:mIn 160ms var(--ease);
 }
-@keyframes mIn{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
-.mhdr{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-.mhdr-ico{font-size:22px}
+@keyframes mIn{from{transform:scale(.93);opacity:0}to{transform:scale(1);opacity:1}}
+.mhdr{display:flex;align-items:center;gap:13px;margin-bottom:24px}
+.mhdr-ico{font-size:24px}
 .mhdr-title{font-size:var(--f-lg);font-weight:700;color:#fff;flex:1}
-.mclose{background:none;border:none;color:var(--t3);font-size:20px;
+.mcls{background:none;border:none;color:var(--t3);font-size:22px;
   cursor:pointer;outline:none;padding:4px 7px;border-radius:var(--r-xs)}
-.mclose:focus{background:var(--sys-bg4);color:var(--t1)}
-
-.fg{margin-bottom:14px}
-.flabel{display:block;font-size:var(--f-xs);color:var(--t3);
-  margin-bottom:5px;letter-spacing:.4px;text-transform:uppercase;font-weight:700}
+.mcls:focus{background:var(--bg4);color:var(--t1)}
+.fg{margin-bottom:16px}
+.flbl{display:block;font-size:var(--f-xs);color:var(--t3);
+  margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;font-weight:700}
 .finput{
-  width:100%;padding:12px 15px;
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
+  width:100%;padding:13px 16px;
+  background:var(--bg3);border:1.5px solid var(--line);
   border-radius:var(--r-md);color:var(--t1);font-size:var(--f-sm);outline:none;
   transition:border-color var(--dur),background var(--dur);
 }
-.finput:focus{border-color:var(--accent-ring);background:var(--sys-bg4)}
+.finput:focus{border-color:var(--acc-ring);background:var(--bg4)}
 .finput::placeholder{color:var(--t4)}
-.btn-row{display:flex;gap:9px}
-.btn-row .btn{flex:1}
+.brow{display:flex;gap:10px}.brow .btn{flex:1}
 
-/* ─── DIALER ────────────────────────────────────────────────── */
-.d-screen{
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
-  border-radius:var(--r-md);padding:18px 22px;
-  text-align:center;margin-bottom:14px;
+/* Dialer */
+.dscr{
+  background:var(--bg3);border:1.5px solid var(--line);
+  border-radius:var(--r-md);padding:18px 24px;text-align:center;margin-bottom:14px;
 }
-.d-num{font-size:40px;font-weight:800;color:var(--accent);
-  letter-spacing:6px;min-height:52px;font-variant-numeric:tabular-nums}
-.d-hint{font-size:var(--f-xs);color:var(--t4);margin-top:3px}
-.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.dnum{font-size:42px;font-weight:800;color:var(--acc);
+  letter-spacing:7px;min-height:54px;font-variant-numeric:tabular-nums}
+.dhint{font-size:var(--f-xs);color:var(--t4);margin-top:3px}
+.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .dk{
-  background:var(--sys-bg3);border:1.5px solid var(--sys-line);
-  color:var(--t1);padding:15px;border-radius:var(--r-md);
+  background:var(--bg3);border:1.5px solid var(--line);
+  color:var(--t1);padding:16px;border-radius:var(--r-md);
   font-size:var(--f-xl);font-weight:700;cursor:pointer;outline:none;
   transition:background var(--dur),border-color var(--dur);
 }
-.dk:focus,.dk:hover{background:var(--accent);border-color:var(--accent);color:#fff}
-.dk.go{grid-column:span 2;background:var(--accent);color:#fff;border-color:var(--accent)}
-.dk.clr{color:var(--err)}
+.dk:focus,.dk:hover{background:var(--acc);border-color:var(--acc);color:#fff}
+.dk.go{grid-column:span 2;background:var(--acc);color:#fff;border-color:var(--acc)}
+.dk.clr{color:var(--red)}
 
 /* scrollbar */
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--sys-bg5);border-radius:3px}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:3px}
 </style>
 </head>
 <body>
 
 <!-- LOADING -->
 <div id="loading">
-  <div class="ld-icon">
+  <div class="ld-ico">
     <svg viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2H6v2h12v-2h-2v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12z"/></svg>
   </div>
   <div class="ld-title">SAGA <b>IPTV</b></div>
@@ -709,149 +681,155 @@ html,body{
 <div id="toasts"></div>
 
 <div id="app">
-<!-- ═══════════════ SIDEBAR ════════════════════════════════════ -->
-<div id="sidebar">
+<!-- ══════════ SIDEBAR ══════════════════════════════════════ -->
+<div id="sb">
 
-  <!-- Brand -->
-  <div class="brand">
-    <div class="brand-icon">
+  <!-- Header -->
+  <div class="hdr">
+    <div class="hdr-mark">
       <svg viewBox="0 0 24 24"><path d="M21 3H3a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h5v2H6v2h12v-2h-2v-2h5a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 14H3V5h18v12z"/></svg>
     </div>
-    <div class="brand-text">
-      <div class="brand-title">SAGA <b>IPTV</b></div>
-      <div class="brand-sub">v27 · One UI · 55″</div>
+    <div class="hdr-text">
+      <div class="hdr-title">SAGA <b>IPTV</b></div>
+      <div class="hdr-sub">v28 · Enterprise · 55″</div>
     </div>
-    <div class="ch-pill" id="chPill">0 CH</div>
+    <div class="hdr-pill" id="chPill">0 CH</div>
   </div>
 
-  <!-- One UI Segmented Tab Bar -->
+  <!-- One UI Segmented Tabs -->
   <div class="seg-wrap">
     <div class="seg" id="segBar">
-      <button class="seg-btn on" data-tab="all" tabindex="0">
+      <button class="seg-btn on" data-tab="all" id="tabAll">
         All<span class="seg-n" id="tnAll">0</span>
       </button>
-      <button class="seg-btn" data-tab="favs" tabindex="-1">
-        ★ Favs<span class="seg-n" id="tnFavs">0</span>
+      <button class="seg-btn" data-tab="favs" id="tabFavs">
+        ★<span class="seg-n" id="tnFavs">0</span>
       </button>
-      <button class="seg-btn" data-tab="pl" tabindex="-1">Sources</button>
-      <!-- OneUI Settings — gear icon + label -->
-      <button class="seg-btn seg-gear" data-tab="cfg" tabindex="-1">
-        <svg class="gear-svg" viewBox="0 0 24 24">
-          <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.01 7.01 0 0 0-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.47.47 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-        </svg>
+      <button class="seg-btn" data-tab="pl" id="tabPl">Sources</button>
+      <button class="seg-btn" data-tab="cfg" id="tabCfg">
+        <svg class="gear" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
         Settings
       </button>
     </div>
   </div>
 
   <!-- Search -->
-  <div class="search-wrap" id="searchWrap">
-    <input id="searchInput" type="text" placeholder="Search channels…" autocomplete="off" spellcheck="false">
-    <span class="s-ico" id="sIco">⌕</span>
-    <button id="clearBtn">✕</button>
+  <div class="srch-row" id="srchRow">
+    <input id="srchInput" type="text" placeholder="Search channels…" autocomplete="off" spellcheck="false">
+    <span class="srch-ico" id="srchIco">⌕</span>
+    <button id="srchClear">✕</button>
   </div>
 
-  <!-- Groups -->
-  <div class="groups" id="groupsBar"></div>
+  <!-- Category chips -->
+  <div class="cats" id="catsBar"></div>
 
-  <!-- Tile viewport -->
-  <div id="tileVP"><div id="tileInner"></div></div>
+  <!-- Icon tile grid -->
+  <div id="tvp"><div id="tin"></div></div>
 
   <!-- Sources panel -->
   <div class="panel" id="panelPl">
-    <div id="plList" style="display:flex;flex-direction:column;gap:8px"></div>
-    <button class="btn btn-acc"   id="addPlBtn">+ Add M3U Source</button>
-    <button class="btn btn-ghost" id="reloadBtn" style="margin-top:6px">↺ Refresh All</button>
+    <div id="srcList" style="display:flex;flex-direction:column;gap:9px"></div>
+    <button class="btn btn-acc"   id="addSrcBtn">+ Add M3U Source</button>
+    <button class="btn btn-ghost" id="refreshBtn" style="margin-top:7px">↺ Refresh All</button>
   </div>
 
-  <!-- Settings panel — One UI style -->
+  <!-- Settings panel -->
   <div class="panel" id="panelCfg">
-    <div class="sec-label">Playback</div>
 
-    <div class="srow" tabindex="-1">
+    <div class="sec-lbl">Playback</div>
+
+    <div class="srow" tabindex="-1" id="srow-smart">
       <div class="srow-l">
-        <div class="srow-title">Smart Scroll — Play on OK only</div>
-        <div class="srow-desc">Scroll fast without launching streams</div>
+        <div class="srow-title">Smart Scroll</div>
+        <div class="srow-desc">Play channel after 600ms scroll idle, not on every key</div>
       </div>
-      <label class="tog"><input type="checkbox" id="sSmartScroll" checked><span class="tog-t"></span></label>
+      <label class="tog"><input type="checkbox" id="cfgSmart" checked><span class="tog-t"></span></label>
     </div>
     <div class="srow" tabindex="-1">
       <div class="srow-l">
         <div class="srow-title">Force Highest Quality</div>
-        <div class="srow-desc">Lock to max bitrate — no upscale stutter</div>
+        <div class="srow-desc">Lock to max bitrate — prevents upscale stutter</div>
       </div>
-      <label class="tog"><input type="checkbox" id="sForceHQ" checked><span class="tog-t"></span></label>
+      <label class="tog"><input type="checkbox" id="cfgHQ" checked><span class="tog-t"></span></label>
     </div>
     <div class="srow" tabindex="-1">
       <div class="srow-l">
-        <div class="srow-title">Mute During Channel Switch</div>
-        <div class="srow-desc">Prevents audio burst when zapping</div>
+        <div class="srow-title">Mute on Channel Switch</div>
+        <div class="srow-desc">Silence during zap, unmute after 700ms</div>
       </div>
-      <label class="tog"><input type="checkbox" id="sMute"><span class="tog-t"></span></label>
+      <label class="tog"><input type="checkbox" id="cfgMute"><span class="tog-t"></span></label>
     </div>
 
-    <div class="sec-label" style="margin-top:4px">Buffer Goal</div>
-    <div class="srow" tabindex="-1">
-      <div class="srow-l">
-        <div class="srow-title">Buffering Target</div>
-        <div class="srow-desc">Higher = more stable, less agile</div>
-      </div>
-    </div>
-    <select class="oui-sel" id="sBuf">
+    <div class="sec-lbl" style="margin-top:4px">Buffer</div>
+    <select class="oui-sel" id="cfgBuf">
       <option value="8">8 s — Low Latency</option>
       <option value="12" selected>12 s — Balanced</option>
       <option value="20">20 s — Stable</option>
       <option value="30">30 s — Ultra Stable</option>
     </select>
 
-    <div class="sec-label" style="margin-top:4px">Display</div>
+    <div class="sec-lbl" style="margin-top:8px">Display</div>
     <div class="srow" tabindex="-1">
       <div class="srow-l">
         <div class="srow-title">OSD Auto-hide</div>
-        <div class="srow-desc">Hide overlay after 4 seconds</div>
+        <div class="srow-desc">Overlay fades after 4 seconds</div>
       </div>
-      <label class="tog"><input type="checkbox" id="sOsdHide" checked><span class="tog-t"></span></label>
+      <label class="tog"><input type="checkbox" id="cfgOsd" checked><span class="tog-t"></span></label>
     </div>
     <div class="srow" tabindex="-1">
       <div class="srow-l">
         <div class="srow-title">Fill Screen</div>
-        <div class="srow-desc">Stretch to edges (crops 4:3 content)</div>
+        <div class="srow-desc">Stretch video to edges (Yellow key)</div>
       </div>
-      <label class="tog"><input type="checkbox" id="sFill"><span class="tog-t"></span></label>
+      <label class="tog"><input type="checkbox" id="cfgFill"><span class="tog-t"></span></label>
     </div>
 
-    <div class="sec-label" style="margin-top:4px">Tools</div>
-    <button class="btn btn-ghost"  id="openDialerBtn">📱  Channel Dialer</button>
-    <button class="btn btn-danger" id="clearCacheBtn" style="margin-top:6px">🗑  Clear Cache</button>
+    <div class="sec-lbl" style="margin-top:4px">Tools</div>
+    <button class="btn btn-ghost"  id="dialerBtn">📱  Channel Dialer</button>
+    <button class="btn btn-danger" id="clearBtn2" style="margin-top:7px">🗑  Clear Cache</button>
   </div>
 
   <!-- Hints -->
   <div class="hints">
     <span class="hk"><kbd>▲▼◀▶</kbd> Nav</span>
     <span class="hk"><kbd>OK</kbd> Play</span>
-    <span class="hk"><kbd>F</kbd> ★</span>
     <span class="hk"><kbd>0–9</kbd> CH#</span>
     <span class="hk"><kbd>↩</kbd> Back</span>
     <span class="hk"><kbd>■</kbd> Stop</span>
   </div>
+
+  <!-- Colour Key Bar -->
+  <div class="ckey-bar">
+    <button class="ckey ck-red" id="ckRed" tabindex="-1">
+      <span class="ckey-dot"></span>Fav
+    </button>
+    <button class="ckey ck-grn" id="ckGrn" tabindex="-1">
+      <span class="ckey-dot"></span>Search
+    </button>
+    <button class="ckey ck-yel" id="ckYel" tabindex="-1">
+      <span class="ckey-dot"></span>Aspect
+    </button>
+    <button class="ckey ck-blu" id="ckBlu" tabindex="-1">
+      <span class="ckey-dot"></span>Full
+    </button>
+  </div>
+
 </div>
 
-<!-- ═══════════════ PLAYER ════════════════════════════════════ -->
+<!-- ══════════ PLAYER ══════════════════════════════════════ -->
 <div id="player">
 
-  <!-- Now bar -->
-  <div id="nowBar">
-    <div class="now-info">
-      <div id="nowName">Select a channel</div>
-      <div id="nowSub">SAGA IPTV · Enterprise</div>
+  <div id="nbar">
+    <div class="nbar-info">
+      <div id="nName">Select a channel</div>
+      <div id="nSub">SAGA IPTV · Enterprise</div>
     </div>
     <div class="nctl">
-      <!-- SVG icons — no emoji, renders crisply at all DPIs -->
-      <button class="nc" id="ncMute" title="Mute">
-        <svg id="icoMute" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+      <button class="nc" id="ncMute" title="Mute/Unmute">
+        <svg id="icoMute" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
       </button>
-      <button class="nc" id="ncFill" title="Fill">
-        <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+      <button class="nc" id="ncAspect" title="Aspect Ratio">
+        <svg viewBox="0 0 24 24"><path d="M19 12h-2v3h-3v2h5v-5zM7 9h3V7H5v5h2V9zm14-6H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16.01H3V4.99h18v14.02z"/></svg>
       </button>
       <button class="nc" id="ncFav" title="Favourite">
         <svg id="icoFav" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
@@ -862,11 +840,9 @@ html,body{
     </div>
   </div>
 
-  <!-- Video -->
   <div id="vwrap">
     <video id="video" playsinline autoplay></video>
 
-    <!-- OSD -->
     <div id="osd" class="off">
       <div class="osd-top">
         <div class="osd-card">
@@ -883,70 +859,60 @@ html,body{
       <div></div>
     </div>
 
-    <!-- Scroll-play hint -->
     <div id="scrollHint">Press OK to play</div>
-
-    <!-- Skip indicators -->
     <div class="skip" id="skipL">⏪ 10s</div>
     <div class="skip" id="skipR">⏩ 10s</div>
   </div>
 
-  <!-- Status bar -->
-  <div id="statusBar">
-    <div id="statusTxt">Ready · Tizen OS 9 · GPU</div>
-    <div class="sbar-r">
-      <div class="sbar-item"><div class="sdot" id="sdot"></div><span id="bwTxt">—</span></div>
-      <div class="sbar-item" id="clockEl">00:00</div>
+  <div id="sbar">
+    <div id="sTxt">Ready · Tizen OS 9 · GPU</div>
+    <div class="sbr">
+      <div class="sbri"><div class="sdot" id="sdot"></div><span id="bwTxt">—</span></div>
+      <div class="sbri" id="clkEl">00:00</div>
     </div>
   </div>
 </div>
 </div>
 
-<!-- Modal: Add Playlist -->
+<!-- Modal: Add Source -->
 <div id="mPl" class="mover">
   <div class="mbox">
     <div class="mhdr">
       <span class="mhdr-ico">📋</span>
       <span class="mhdr-title">Add M3U Source</span>
-      <button class="mclose" id="mPlClose">✕</button>
+      <button class="mcls" id="mPlCls">✕</button>
     </div>
     <div class="fg">
-      <label class="flabel">Playlist Name</label>
+      <label class="flbl">Playlist Name</label>
       <input class="finput" id="plName" type="text" placeholder="My IPTV" autocomplete="off">
     </div>
     <div class="fg">
-      <label class="flabel">M3U URL</label>
+      <label class="flbl">M3U URL</label>
       <input class="finput" id="plUrl" type="url" placeholder="https://…/playlist.m3u" autocomplete="off">
     </div>
-    <div class="btn-row">
-      <button class="btn btn-acc"   id="savePlBtn">Add &amp; Load</button>
-      <button class="btn btn-ghost" id="cancelPlBtn">Cancel</button>
+    <div class="brow">
+      <button class="btn btn-acc"   id="plSave">Add &amp; Load</button>
+      <button class="btn btn-ghost" id="plCancel">Cancel</button>
     </div>
   </div>
 </div>
 
 <!-- Modal: Dialer -->
 <div id="mDial" class="mover">
-  <div class="mbox" style="width:300px">
+  <div class="mbox" style="width:310px">
     <div class="mhdr">
       <span class="mhdr-ico">📱</span>
       <span class="mhdr-title">Channel Dialer</span>
-      <button class="mclose" id="mDialClose">✕</button>
+      <button class="mcls" id="mDialCls">✕</button>
     </div>
-    <div class="d-screen">
-      <div class="d-num" id="dnum">—</div>
-      <div class="d-hint">Enter channel number then OK</div>
+    <div class="dscr">
+      <div class="dnum" id="dnum">—</div>
+      <div class="dhint">Enter number · OK to jump</div>
     </div>
     <div class="dgrid">
-      <button class="dk" data-d="1">1</button>
-      <button class="dk" data-d="2">2</button>
-      <button class="dk" data-d="3">3</button>
-      <button class="dk" data-d="4">4</button>
-      <button class="dk" data-d="5">5</button>
-      <button class="dk" data-d="6">6</button>
-      <button class="dk" data-d="7">7</button>
-      <button class="dk" data-d="8">8</button>
-      <button class="dk" data-d="9">9</button>
+      <button class="dk" data-d="1">1</button><button class="dk" data-d="2">2</button><button class="dk" data-d="3">3</button>
+      <button class="dk" data-d="4">4</button><button class="dk" data-d="5">5</button><button class="dk" data-d="6">6</button>
+      <button class="dk" data-d="7">7</button><button class="dk" data-d="8">8</button><button class="dk" data-d="9">9</button>
       <button class="dk clr" data-d="clr">⌫</button>
       <button class="dk" data-d="0">0</button>
       <button class="dk go"  data-d="go">▶ Go</button>
@@ -955,127 +921,102 @@ html,body{
 </div>
 
 <script>
-/*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v27 — Application Core
-  Key fixes vs v26:
-  ① SCROLL-SAFE PLAY: playback only fires after 600ms idle on
-     nav keys (smartScroll=true). OK/Enter always plays immediately.
-     Fast key repeat → only selection moves, player stays stable.
-  ② UPSCALE FREEZE FIX: ABR disabled when forceHQ=on.
-     lockHQ() called after 3s; uses selectVariantTrack(best,true)
-     with clearBuffer=true. No mid-stream resolution switching.
-  ③ ICON-DOMINANT TILES: 54×54 logo, col=2, vertical layout.
-  ④ ALL ELEMENTS REMOTE-LINKED: every focusable has tabIndex,
-     full D-pad trap per zone (sidebar ↔ nowBar ↔ tileVP).
-  ⑤ GPU NATIVE: contain:strict, will-change:transform on scroll
-     surface, no layout-triggering props animated.
-═══════════════════════════════════════════════════════════════*/
+/*══════════════════════════════════════════════════════════════
+  SAGA IPTV v28 — Application Core
+  ─────────────────────────────────────────────────────────────
+  KEY ARCHITECTURE DECISIONS:
+  ① FocusManager: a zone-based D-pad router. Zones:
+     seg → search → cats → tiles → nctl (loop)
+     Each zone knows its neighbours. Remote always works.
+  ② Icon-only tiles: no text DOM nodes in tile. Name shown only
+     as .t-label overlay on :focus/.sel (CSS opacity transition).
+  ③ Scroll-safe play: armScrollPlay(ci) → 600ms idle → _doPlay.
+     OK/Enter always fires immediatePlay → PLAY_DEBOUNCE → _doPlay.
+  ④ Colour keys: RED=fav GREEN=search YELLOW=aspect BLUE=fullscreen.
+  ⑤ All panels/buttons: bigger padding, larger font, tabindex set.
+══════════════════════════════════════════════════════════════*/
 (function(){
 'use strict';
 
 /* ── Constants ────────────────────────────────────────────── */
-const COLS       = 2;
-const TILE_H     = 116;      // must match CSS --tile-h
-const OVERSHOOT  = 3;        // extra rows in DOM above/below
-const DEFAULT_PL = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
+const COLS            = 2;
+const TILE_H          = 106;    // match CSS --tile-h
+const OVERSHOOT       = 3;
+const SCROLL_IDLE_MS  = 600;
+const PLAY_DEBOUNCE   = 100;
+const DEFAULT_PL      = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
+const LS = {FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
 
-// Scroll-safe: after this many ms of nav-key idle → play
-const SCROLL_IDLE_MS = 600;
-// Debounce for player.load() — prevents rapid consecutive loads
-const PLAY_DEBOUNCE  = 120;
+/* ── DOM helpers ─────────────────────────────────────────── */
+const $  = id => document.getElementById(id);
+const QA = sel => [...document.querySelectorAll(sel)];
 
-const LS = { FAVS:'saga:favs', PL:'saga:pl', CFG:'saga:cfg', LCHU:'saga:lchu' };
-
-/* ── DOM ──────────────────────────────────────────────────── */
-const $ = id => document.getElementById(id);
-const video     = $('video');
-const tileVP    = $('tileVP');
-const tileInner = $('tileInner');
-const searchIn  = $('searchInput');
-const clearBtn  = $('clearBtn');
-const sIco      = $('sIco');
-const groupsBar = $('groupsBar');
-const chPill    = $('chPill');
-const tnAll     = $('tnAll');
-const tnFavs    = $('tnFavs');
-const statusTxt = $('statusTxt');
-const nowName   = $('nowName');
-const nowSub    = $('nowSub');
-const osd       = $('osd');
-const osdCh     = $('osdCh');
-const osdNum    = $('osdNum');
-const osdGrp    = $('osdGrp');
-const pillQ     = $('pillQ');
-const pillBuf   = $('pillBuf');
-const scrollHint= $('scrollHint');
-const sdot      = $('sdot');
-const bwTxt     = $('bwTxt');
-const clockEl   = $('clockEl');
-const skipL     = $('skipL');
-const skipR     = $('skipR');
-const ncMute    = $('ncMute');
-const ncFill    = $('ncFill');
-const ncFav     = $('ncFav');
-const ncFS      = $('ncFS');
-const ldMsg     = $('ldMsg');
-const dnum      = $('dnum');
-const mPl       = $('mPl');
-const mDial     = $('mDial');
+const video    = $('video');
+const tvp      = $('tvp');
+const tin      = $('tin');
+const srchIn   = $('srchInput');
+const srchClear= $('srchClear');
+const srchIco  = $('srchIco');
+const catsBar  = $('catsBar');
+const chPill   = $('chPill');
+const tnAll    = $('tnAll');
+const tnFavs   = $('tnFavs');
+const sTxt     = $('sTxt');
+const nName    = $('nName');
+const nSub     = $('nSub');
+const osd      = $('osd');
+const osdCh    = $('osdCh');
+const osdNum   = $('osdNum');
+const osdGrp   = $('osdGrp');
+const pillQ    = $('pillQ');
+const pillBuf  = $('pillBuf');
+const scrollHint=$('scrollHint');
+const sdot     = $('sdot');
+const bwTxt    = $('bwTxt');
+const clkEl    = $('clkEl');
+const skipL    = $('skipL');
+const skipR    = $('skipR');
+const ncMute   = $('ncMute');
+const ncAspect = $('ncAspect');
+const ncFav    = $('ncFav');
+const ncFS     = $('ncFS');
+const ldMsg    = $('ldMsg');
+const dnum     = $('dnum');
+const mPl      = $('mPl');
+const mDial    = $('mDial');
+const ckRed    = $('ckRed');
+const ckGrn    = $('ckGrn');
+const ckYel    = $('ckYel');
+const ckBlu    = $('ckBlu');
 
 /* ── State ────────────────────────────────────────────────── */
-let player       = null;
-let allChs       = [];
-let viewChs      = [];
-let selIdx       = 0;
-let curUrl       = '';
-let isPlaying    = false;
-let isMuted      = false;
-let favs         = new Set();
-let pls          = [];
-let activeTab    = 'all';
-let activeGrp    = 'All';
-let searchQ      = '';
-let dialStr      = '';
-let dialTimer    = null;
-let rDialStr     = '';
-let rDialTimer   = null;
-let osdTimer     = null;
-let scrollIdleTimer = null;  // fires playback after scroll stops
-let playTimer    = null;     // debounce player.load
-let pendingIdx   = -1;       // channel idx waiting for scroll idle
-let vsTop        = 0;
-let vsRaf        = null;
-let rowMap       = new Map(); // rowIdx → {el, tiles[]}
+let player=null,allChs=[],viewChs=[],selIdx=0;
+let curUrl='',isPlaying=false,isMuted=false,isFill=false;
+let favs=new Set(),pls=[],activeTab='all',activeGrp='All',searchQ='';
+let dialStr='',dialTimer=null,rDialStr='',rDialTimer=null;
+let osdTimer=null,scrollIdleTimer=null,playTimer=null,pendingIdx=-1;
+let vsTop=0,vsRaf=null;
+let rowMap=new Map();
 
-let cfg = {
-  smartScroll: true,   // ← KEY FIX: don't play during fast scroll
-  forceHQ:    true,
-  muteSwitch: false,
-  buf:        12,
-  osdHide:    true,
-  fill:       false,
-};
+let cfg={smart:true,hq:true,muteSwitch:false,buf:12,osd:true,fill:false};
 
-/* ── Utils ────────────────────────────────────────────────── */
+/* ── Utilities ───────────────────────────────────────────── */
 function esc(s){
   if(!s)return'';
   return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 }
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
-function setSt(m){statusTxt.textContent=m}
-
-/* ── Toast ────────────────────────────────────────────────── */
+function setSt(m){sTxt.textContent=m}
 const toastBox=$('toasts');
 function toast(msg,type='info',ms=3000){
   const el=document.createElement('div');
   el.className='toast '+(type==='success'?'ok':type==='error'?'err':'hi');
-  el.textContent=msg;
-  toastBox.appendChild(el);
+  el.textContent=msg;toastBox.appendChild(el);
   setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),180);},ms);
 }
 
-/* ── Storage ──────────────────────────────────────────────── */
+/* ── Storage ─────────────────────────────────────────────── */
 function loadStore(){
   try{const r=lsGet(LS.FAVS);if(r)favs=new Set(JSON.parse(r))}catch(e){}
   try{const r=lsGet(LS.PL);  if(r)pls=JSON.parse(r)}catch(e){}
@@ -1085,21 +1026,19 @@ function loadStore(){
 function saveFavs(){lsSet(LS.FAVS,JSON.stringify([...favs]))}
 function savePls() {lsSet(LS.PL,  JSON.stringify(pls))}
 function saveCfg() {lsSet(LS.CFG, JSON.stringify(cfg))}
-
 function applyCfgUI(){
-  $('sSmartScroll').checked=cfg.smartScroll;
-  $('sForceHQ').checked    =cfg.forceHQ;
-  $('sMute').checked       =cfg.muteSwitch;
-  $('sBuf').value          =String(cfg.buf);
-  $('sOsdHide').checked    =cfg.osdHide;
-  $('sFill').checked       =cfg.fill;
-  if(cfg.fill){video.classList.add('fill');ncFill.classList.add('act')}
+  $('cfgSmart').checked=cfg.smart;
+  $('cfgHQ').checked   =cfg.hq;
+  $('cfgMute').checked =cfg.muteSwitch;
+  $('cfgBuf').value    =String(cfg.buf);
+  $('cfgOsd').checked  =cfg.osd;
+  $('cfgFill').checked =cfg.fill;
+  if(cfg.fill){video.classList.add('fill');isFill=true;ncAspect.classList.add('act')}
 }
 
-/* ── M3U parser ───────────────────────────────────────────── */
+/* ── M3U Parser ──────────────────────────────────────────── */
 function parseM3U(txt){
-  const lines=txt.split(/\r?\n/);
-  const out=[];let cur=null;
+  const lines=txt.split(/\r?\n/);const out=[];let cur=null;
   for(let i=0,n=lines.length;i<n;i++){
     const l=lines[i].trim();
     if(l.startsWith('#EXTINF')){
@@ -1108,7 +1047,7 @@ function parseM3U(txt){
       name=name.replace(/\s*\([^)]*\)|\s*\[[^\]]*\]/g,'').trim()||'Channel';
       cur={
         name,
-        logo: (l.match(/tvg-logo="([^"]*)"/i)||[])[1]||'',
+        logo:(l.match(/tvg-logo="([^"]*)"/i)||[])[1]||'',
         group:(l.match(/group-title="([^"]*)"/i)||[])[1]||'General',
         url:''
       };
@@ -1119,30 +1058,27 @@ function parseM3U(txt){
   return out;
 }
 
-/* ── Playlist load ────────────────────────────────────────── */
+/* ── Playlist load ───────────────────────────────────────── */
 async function loadPl(url,force=false){
   setSt('Loading…');
   try{
     let txt=force?null:await AppCache.getM3U(url);
     if(!txt){
-      setSt('Fetching from server…');
+      setSt('Fetching…');
       const ctrl=new AbortController();
       const tid=setTimeout(()=>ctrl.abort(),22000);
       const resp=await fetch(url,{signal:ctrl.signal});
       clearTimeout(tid);
       if(!resp.ok)throw new Error('HTTP '+resp.status);
-      txt=await resp.text();
-      AppCache.setM3U(url,txt);
+      txt=await resp.text();AppCache.setM3U(url,txt);
     }
     const parsed=parseM3U(txt);
     if(!parsed.length)throw new Error('No channels found');
     const seen=new Set(allChs.map(c=>c.url));
     allChs=allChs.concat(parsed.filter(c=>!seen.has(c.url)));
     lsSet('saga:last',url);
-    buildGroups();
-    applyFilter();
-    updateCounts();
-    setSt('✓ '+allChs.length+' channels loaded');
+    buildCats();applyFilter();updateCounts();
+    setSt('✓ '+allChs.length+' channels');
     toast('Loaded '+parsed.length+' channels','success');
     AppCache.preloadImages(parsed.slice(0,60).map(c=>c.logo).filter(Boolean),[]);
     if(!isPlaying){
@@ -1151,12 +1087,8 @@ async function loadPl(url,force=false){
       const vi=li>=0?viewChs.findIndex(c=>c.url===allChs[li].url):0;
       immediatePlay(vi>=0?vi:0);
     }
-  }catch(e){
-    setSt('Error: '+e.message.slice(0,60));
-    toast(e.message.slice(0,50),'error');
-  }
+  }catch(e){setSt('Error: '+e.message.slice(0,60));toast(e.message.slice(0,50),'error');}
 }
-
 async function loadAll(force=false){
   allChs=[];
   const srcs=pls.length?pls:[{name:'Default',url:DEFAULT_PL}];
@@ -1164,156 +1096,128 @@ async function loadAll(force=false){
   hideLd();
 }
 
-/* ── Groups ───────────────────────────────────────────────── */
-function buildGroups(){
-  const gs=['All',...new Set(allChs.map(c=>c.group))].slice(0,28);
-  groupsBar.innerHTML=gs.map(g=>
-    `<button class="chip${g===activeGrp?' on':''}" data-g="${esc(g)}" tabindex="-1">${esc(g)}</button>`
+/* ── Categories ──────────────────────────────────────────── */
+function buildCats(){
+  const gs=['All',...new Set(allChs.map(c=>c.group))].slice(0,30);
+  catsBar.innerHTML=gs.map(g=>
+    `<button class="cat${g===activeGrp?' on':''}" data-g="${esc(g)}" tabindex="-1">${esc(g)}</button>`
   ).join('');
-  groupsBar.querySelectorAll('.chip').forEach(b=>{
+  catsBar.querySelectorAll('.cat').forEach(b=>{
     b.addEventListener('click',()=>{
       activeGrp=b.dataset.g;
-      groupsBar.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===b));
+      catsBar.querySelectorAll('.cat').forEach(x=>x.classList.toggle('on',x===b));
       applyFilter();
     });
   });
 }
 
-/* ── Filter ───────────────────────────────────────────────── */
+/* ── Filter ──────────────────────────────────────────────── */
 function applyFilter(){
   let arr=allChs;
   if(activeTab==='favs')arr=arr.filter(c=>favs.has(c.url));
   if(activeGrp!=='All') arr=arr.filter(c=>c.group===activeGrp);
-  if(searchQ){
-    const q=searchQ.toLowerCase();
-    arr=arr.filter(c=>c.name.toLowerCase().includes(q)||(c.group||'').toLowerCase().includes(q));
-  }
+  if(searchQ){const q=searchQ.toLowerCase();arr=arr.filter(c=>c.name.toLowerCase().includes(q)||(c.group||'').toLowerCase().includes(q));}
   viewChs=arr;
   if(selIdx>=viewChs.length)selIdx=Math.max(0,viewChs.length-1);
   vsInvalidate();scrollToSel();updateCounts();
 }
-
 function updateCounts(){
   const t=allChs.length;
   const f=[...favs].filter(u=>allChs.some(c=>c.url===u)).length;
-  tnAll.textContent=t; tnFavs.textContent=f; chPill.textContent=t+' CH';
+  tnAll.textContent=t;tnFavs.textContent=f;chPill.textContent=t+' CH';
 }
 
 /* ══════════════════════════════════════════════════════════
-   VIRTUAL SCROLL — GPU-only
-   translateY on tileInner — NO layout recalc during scroll.
-   contain:strict on tileVP isolates paint to that zone.
+   ICON-ONLY VIRTUAL TILE GRID
+   translateY on #tin — zero layout during scroll.
+   contain:strict on #tvp isolates paint.
+   Tiles: no text DOM. Name shown via .t-label CSS on :focus/.sel.
 ════════════════════════════════════════════════════════════ */
-function numRows(){ return Math.ceil(viewChs.length/COLS); }
-function totalH() { return numRows()*TILE_H; }
-function vpH()    { return tileVP.clientHeight||600; }
-function rowOf(i) { return Math.floor(i/COLS); }
-function fr()     { return Math.max(0,Math.floor(vsTop/TILE_H)-OVERSHOOT); }
-function lr()     { return Math.min(numRows()-1,Math.floor((vsTop+vpH())/TILE_H)+OVERSHOOT); }
+function numRows(){return Math.ceil(viewChs.length/COLS)}
+function totalH() {return numRows()*TILE_H}
+function vpH()    {return tvp.clientHeight||600}
+function rowOf(i) {return Math.floor(i/COLS)}
+function fr()     {return Math.max(0,Math.floor(vsTop/TILE_H)-OVERSHOOT)}
+function lr()     {return Math.min(numRows()-1,Math.floor((vsTop+vpH())/TILE_H)+OVERSHOOT)}
 
 function vsInvalidate(){
-  rowMap.forEach(r=>r.el.remove());
-  rowMap.clear();
-  tileInner.style.height=totalH()+'px';
+  rowMap.forEach(r=>r.el.remove());rowMap.clear();
+  tin.style.height=totalH()+'px';
   vsRenderRows();
 }
-
 function vsRenderRows(){
   const F=fr(),L=lr();
-  // prune
   for(const[ri,row]of rowMap){
     if(ri<F||ri>L){row.el.remove();rowMap.delete(ri);}
   }
-  // add / update
   for(let ri=F;ri<=L;ri++){
     if(rowMap.has(ri)){
+      // Update sel state and fav marks only
       const row=rowMap.get(ri);
       for(let c=0;c<COLS;c++){
         const ci=ri*COLS+c;
-        if(row.tiles[c]){
-          const isSel=ci===selIdx;
-          row.tiles[c].classList.toggle('sel',isSel);
-          // show fav mark
-          const fmk=row.tiles[c].querySelector('.t-fav-mark');
-          const ch=viewChs[ci];
-          if(fmk&&ch)fmk.style.display=favs.has(ch.url)?'block':'none';
-        }
+        const t=row.tiles[c];if(!t)continue;
+        t.classList.toggle('sel',ci===selIdx);
+        const fmk=t.querySelector('.t-fstar');
+        if(fmk)fmk.style.display=favs.has(viewChs[ci]?.url)?'block':'none';
       }
       continue;
     }
-    // build row
     const el=document.createElement('div');
-    el.className='tile-row';
-    el.style.top=(ri*TILE_H)+'px';
+    el.className='trow';el.style.top=(ri*TILE_H)+'px';
     el.style.transform='translateZ(0)';
     const tiles=[];
     for(let c=0;c<COLS;c++){
-      const ci=ri*COLS+c;
-      const ch=viewChs[ci];
-      if(!ch)break;
+      const ci=ri*COLS+c;const ch=viewChs[ci];if(!ch)break;
       tiles.push(buildTile(ch,ci,el));
     }
-    tileInner.appendChild(el);
-    rowMap.set(ri,{el,tiles});
+    tin.appendChild(el);rowMap.set(ri,{el,tiles});
   }
 }
 
 function buildTile(ch,ci,parent){
   const t=document.createElement('div');
   t.className='tile'+(ci===selIdx?' sel':'');
-  t.dataset.ci=ci;
-  t.tabIndex=ci===selIdx?0:-1;
+  t.dataset.ci=ci;t.tabIndex=ci===selIdx?0:-1;
 
-  // Icon-dominant layout: logo 54×54 on top, text below
-  const logoHtml=ch.logo
-    ?`<img src="${esc(ch.logo)}" loading="lazy" decoding="async" onerror="this.style.display='none';this.parentNode.querySelector('.t-fb').style.display='flex'">`
-    :'';
+  // Icon fills 100% of tile
+  let inner='';
+  if(ch.logo){
+    inner=`<img class="t-img" src="${esc(ch.logo)}" loading="lazy" decoding="async"
+      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="t-fallback" style="display:none">📡</div>`;
+  }else{
+    inner=`<div class="t-fallback">📡</div>`;
+  }
 
   t.innerHTML=`
+    ${inner}
     <div class="t-num">${ci+1}</div>
-    <div class="t-fav-mark" style="display:${favs.has(ch.url)?'block':'none'}">★</div>
-    <div class="t-logo">
-      ${logoHtml}
-      <span class="t-fb" style="display:${ch.logo?'none':'flex'};align-items:center;justify-content:center;width:100%;height:100%;font-size:22px">📡</span>
-      <div class="t-live"></div>
-    </div>
-    <div class="t-body">
-      <div class="t-name">${esc(ch.name)}</div>
-      <div class="t-meta">${esc(ch.group)}</div>
-    </div>`;
+    <div class="t-fstar" style="display:${favs.has(ch.url)?'block':'none'}">★</div>
+    <div class="t-live"></div>
+    <div class="t-label">${esc(ch.name)}</div>`;
 
   t.addEventListener('click',()=>selAndPlay(ci));
   parent.appendChild(t);
   return t;
 }
 
-function vsScroll(dy){
-  const max=Math.max(0,totalH()-vpH());
-  vsTop=Math.max(0,Math.min(max,vsTop+dy));
-  // GPU-only move — no layout
-  tileInner.style.transform=`translateY(${-vsTop}px)`;
-  schedRender();
-}
-
 function schedRender(){
   if(!vsRaf)vsRaf=requestAnimationFrame(()=>{vsRenderRows();vsRaf=null;});
 }
-
 function scrollToSel(){
   const ri=rowOf(selIdx);
   const top=ri*TILE_H,bot=top+TILE_H,vph=vpH();
-  if(top<vsTop)      vsTop=Math.max(0,top-TILE_H);
-  else if(bot>vsTop+vph) vsTop=bot-vph+TILE_H;
-  tileInner.style.transform=`translateY(${-vsTop}px)`;
+  if(top<vsTop)       vsTop=Math.max(0,top-TILE_H);
+  else if(bot>vsTop+vph)vsTop=bot-vph+TILE_H;
+  tin.style.transform=`translateY(${-vsTop}px)`;
   schedRender();
-  // Focus tile after render
   requestAnimationFrame(()=>{
     const row=rowMap.get(rowOf(selIdx));
     if(row){
       const t=row.tiles[selIdx%COLS];
       if(t){t.tabIndex=0;t.focus({preventScroll:true});}
     }
-    // reset other tabIndexes
     rowMap.forEach((r,rri)=>r.tiles.forEach((tile,tc)=>{
       tile.tabIndex=(rri*COLS+tc===selIdx)?0:-1;
     }));
@@ -1322,16 +1226,12 @@ function scrollToSel(){
 
 /* ══════════════════════════════════════════════════════════
    SHAKA PLAYER
-   Critical config: ABR OFF when forceHQ, stallSkip for freeze,
-   generous retry, buffer tuned per setting.
 ════════════════════════════════════════════════════════════ */
 async function initPlayer(){
   await shaka.polyfill.installAll();
   if(!shaka.Player.isBrowserSupported()){setSt('Shaka not supported');return;}
-
   player=new shaka.Player(video);
   recfgPlayer();
-
   player.addEventListener('adaptation',     updateQPill);
   player.addEventListener('variantchanged', updateQPill);
   player.addEventListener('buffering',e=>{
@@ -1340,17 +1240,13 @@ async function initPlayer(){
   });
   player.addEventListener('error',e=>{
     const msg=(e.detail&&e.detail.message)||'Stream error';
-    setSt('⚠ '+msg.slice(0,60));
-    isPlaying=false;
-    // Auto-retry after 3 s — only if user hasn't navigated away
+    setSt('⚠ '+msg.slice(0,60));isPlaying=false;
     setTimeout(()=>{if(!isPlaying&&curUrl===viewChs[selIdx]?.url)_doPlay(selIdx);},3000);
   });
-
-  video.addEventListener('waiting', ()=>pillBuf.classList.add('on'));
-  video.addEventListener('playing', ()=>{pillBuf.classList.remove('on');setSt('Streaming · '+viewChs[selIdx]?.name||'');});
-  video.addEventListener('stalled', ()=>setSt('Stream stalled…'));
-  video.addEventListener('error',   ()=>{setSt('Video decode error');isPlaying=false;});
-
+  video.addEventListener('waiting',  ()=>pillBuf.classList.add('on'));
+  video.addEventListener('playing',  ()=>{pillBuf.classList.remove('on');setSt('Streaming · '+(viewChs[selIdx]?.name||''));});
+  video.addEventListener('stalled',  ()=>setSt('Stream stalled…'));
+  video.addEventListener('error',    ()=>{setSt('Video error');isPlaying=false;});
   setSt('Ready · GPU decode');
 }
 
@@ -1358,31 +1254,20 @@ function recfgPlayer(){
   if(!player)return;
   player.configure({
     abr:{
-      // ← FIX: disable ABR when forceHQ=on to prevent upscale stutter
-      enabled:!cfg.forceHQ,
+      enabled:!cfg.hq,
       defaultBandwidthEstimate:12000000,
       switchInterval:6,
       bandwidthUpgradeTarget:0.75,
       bandwidthDowngradeTarget:0.88,
-      // Restrict to ONE resolution change per interval
-      restrictions:{minBandwidth:0,maxBandwidth:Infinity},
     },
     streaming:{
       bufferingGoal:   cfg.buf,
       rebufferingGoal: 2,
       stallEnabled:    true,
       stallThreshold:  1.0,
-      stallSkip:       0.1,       // skip 100ms instead of stalling
-      // Force low-latency HLS/DASH segment fetch
-      retryParameters:{
-        maxAttempts:  5,
-        baseDelay:    500,
-        backoffFactor:2.0,
-        fuzzFactor:   0.3,
-        timeout:      25000,
-      },
-      // Don't switch segments mid-buffer when track changes
-      safeSeekOffset:2,
+      stallSkip:       0.1,
+      retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:.3,timeout:25000},
+      safeSeekOffset:  2,
     },
   });
 }
@@ -1390,144 +1275,75 @@ function recfgPlayer(){
 function updateQPill(){
   if(!player)return;
   try{
-    const tracks=player.getVariantTracks();
-    const a=tracks.find(t=>t.active);
-    if(a){
-      const res=a.height?a.height+'p':'Auto';
-      pillQ.textContent=res+' · '+(a.bandwidth/1e6).toFixed(1)+'M';
-    }else pillQ.textContent='—';
+    const a=player.getVariantTracks().find(t=>t.active);
+    if(a)pillQ.textContent=(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1e6).toFixed(1)+'M';
+    else pillQ.textContent='—';
   }catch(e){}
 }
 
 function lockHQ(){
   if(!player||!isPlaying)return;
   try{
-    const tracks=player.getVariantTracks();
-    if(!tracks.length)return;
+    const tracks=player.getVariantTracks();if(!tracks.length)return;
     const best=tracks.reduce((m,t)=>t.bandwidth>m.bandwidth?t:m,tracks[0]);
-    // clearBuffer=false → no freeze while switching
     player.selectVariantTrack(best,false);
   }catch(e){}
 }
 
-/* ══════════════════════════════════════════════════════════
-   PLAYBACK LOGIC
-   ─────────────────────────────────────────────────────────
-   smartScroll=true (default):
-     navUp/navDown → update selIdx + visual → arm scrollIdleTimer
-     scrollIdleTimer fires SCROLL_IDLE_MS after last key → _doPlay()
-     OK/Enter → cancelTimers + _doPlay() immediately
-
-   smartScroll=false:
-     Same as v26 — debounced play 120ms after each nav key.
-
-   This means: hold down ▼ key → channels fly past, player stays
-   on current stream. Release key → 600ms → play highlighted channel.
-════════════════════════════════════════════════════════════ */
+/* ── Playback ────────────────────────────────────────────── */
 function armScrollPlay(ci){
-  pendingIdx=ci;
-  clearTimeout(scrollIdleTimer);
-  clearTimeout(playTimer);
-  // Show "Press OK to play" hint during fast scroll
+  pendingIdx=ci;clearTimeout(scrollIdleTimer);clearTimeout(playTimer);
   scrollHint.classList.add('on');
   scrollIdleTimer=setTimeout(()=>{
-    scrollHint.classList.remove('on');
-    _doPlay(pendingIdx);
-    pendingIdx=-1;
+    scrollHint.classList.remove('on');_doPlay(pendingIdx);pendingIdx=-1;
   },SCROLL_IDLE_MS);
 }
-
 function immediatePlay(ci){
-  clearTimeout(scrollIdleTimer);
-  clearTimeout(playTimer);
-  scrollHint.classList.remove('on');
-  pendingIdx=-1;
-  clearTimeout(playTimer);
+  clearTimeout(scrollIdleTimer);clearTimeout(playTimer);
+  scrollHint.classList.remove('on');pendingIdx=-1;
   playTimer=setTimeout(()=>_doPlay(ci),PLAY_DEBOUNCE);
 }
-
-function selAndPlay(ci){
-  selIdx=ci;scrollToSel();
-  immediatePlay(ci);
-}
+function selAndPlay(ci){selIdx=ci;scrollToSel();immediatePlay(ci);}
 
 async function _doPlay(ci){
   if(!player||ci<0||ci>=viewChs.length)return;
-  const ch=viewChs[ci];
-  if(!ch||!ch.url)return;
+  const ch=viewChs[ci];if(!ch||!ch.url)return;
   if(ch.url===curUrl&&isPlaying)return;
-
-  curUrl=ch.url;selIdx=ci;
-  lsSet(LS.LCHU,ch.url);
-
+  curUrl=ch.url;selIdx=ci;lsSet(LS.LCHU,ch.url);
   if(cfg.muteSwitch&&isPlaying)video.muted=true;
-
-  nowName.textContent=ch.name;
-  nowSub.textContent=ch.group||'Live TV';
-  osdCh.textContent=ch.name;
-  osdNum.textContent='CH '+String(ci+1).padStart(3,'0');
+  nName.textContent=ch.name;nSub.textContent=ch.group||'Live TV';
+  osdCh.textContent=ch.name;osdNum.textContent='CH '+String(ci+1).padStart(3,'0');
   osdGrp.textContent=ch.group||'';
-  showOSD();updateFavBtn(ch);
-  setSt('Connecting to '+ch.name+'…');
-  isPlaying=false;
-  pillBuf.classList.remove('on');
-  schedRender();
-
+  showOSD();updateFavBtn(ch);setSt('Connecting…');
+  isPlaying=false;pillBuf.classList.remove('on');schedRender();
   try{
-    await player.load(ch.url);
-    await video.play();
-    isPlaying=true;
-    setSt('Streaming · '+ch.name);
-    if(cfg.muteSwitch)setTimeout(()=>{video.muted=isMuted;},600);
-    // Lock HQ after stream stabilises (3s) — no freeze
-    if(cfg.forceHQ)setTimeout(lockHQ,3000);
+    await player.load(ch.url);await video.play();
+    isPlaying=true;setSt('Streaming · '+ch.name);
+    if(cfg.muteSwitch)setTimeout(()=>{video.muted=isMuted;},700);
+    if(cfg.hq)setTimeout(lockHQ,3000);
     updateQPill();
   }catch(err){
     setSt('Load failed: '+err.message.slice(0,50));
-    isPlaying=false;
-    if(cfg.muteSwitch)video.muted=isMuted;
+    isPlaying=false;if(cfg.muteSwitch)video.muted=isMuted;
   }
 }
 
-/* ── OSD ──────────────────────────────────────────────────── */
+/* ── OSD ─────────────────────────────────────────────────── */
 function showOSD(){
-  osd.classList.remove('off');
-  clearTimeout(osdTimer);
-  if(cfg.osdHide)osdTimer=setTimeout(()=>osd.classList.add('off'),4000);
+  osd.classList.remove('off');clearTimeout(osdTimer);
+  if(cfg.osd)osdTimer=setTimeout(()=>osd.classList.add('off'),4000);
 }
 
-/* ══════════════════════════════════════════════════════════
-   NAVIGATION — full D-pad linkage
-   Tab order: segBar → searchInput → groupsBar → tileVP → nowBar buttons
-════════════════════════════════════════════════════════════ */
-function navUp(){
+/* ── Navigation ──────────────────────────────────────────── */
+function nav(di){
   if(!viewChs.length)return;
-  selIdx=Math.max(0,selIdx-COLS);
-  scrollToSel();
-  if(cfg.smartScroll)armScrollPlay(selIdx);
-  else immediatePlay(selIdx);
-}
-function navDown(){
-  if(!viewChs.length)return;
-  selIdx=Math.min(viewChs.length-1,selIdx+COLS);
-  scrollToSel();
-  if(cfg.smartScroll)armScrollPlay(selIdx);
-  else immediatePlay(selIdx);
-}
-function navLeft(){
-  if(!viewChs.length||selIdx<=0)return;
-  selIdx--;scrollToSel();
-  if(cfg.smartScroll)armScrollPlay(selIdx);
-  else immediatePlay(selIdx);
-}
-function navRight(){
-  if(!viewChs.length||selIdx>=viewChs.length-1)return;
-  selIdx++;scrollToSel();
-  if(cfg.smartScroll)armScrollPlay(selIdx);
-  else immediatePlay(selIdx);
+  const next=Math.max(0,Math.min(viewChs.length-1,selIdx+di));
+  if(next===selIdx)return;
+  selIdx=next;scrollToSel();
+  if(cfg.smart)armScrollPlay(selIdx);else immediatePlay(selIdx);
 }
 
-/* ── Favourite ────────────────────────────────────────────── */
+/* ── Favourite ───────────────────────────────────────────── */
 function toggleFav(){
   const ch=viewChs[selIdx];if(!ch)return;
   if(favs.has(ch.url)){favs.delete(ch.url);toast('Removed from favourites');}
@@ -1535,12 +1351,21 @@ function toggleFav(){
   saveFavs();updateFavBtn(ch);updateCounts();schedRender();
 }
 function updateFavBtn(ch){
-  if(!ch)return;
-  const on=favs.has(ch.url);
+  const on=ch&&favs.has(ch.url);
   ncFav.classList.toggle('act',on);
+  ckRed.classList.toggle('act',on);
 }
 
-/* ── Fullscreen ───────────────────────────────────────────── */
+/* ── Aspect ──────────────────────────────────────────────── */
+function toggleAspect(){
+  isFill=!isFill;cfg.fill=isFill;saveCfg();
+  video.classList.toggle('fill',isFill);
+  ncAspect.classList.toggle('act',isFill);
+  ckYel.classList.toggle('act',isFill);
+  $('cfgFill').checked=isFill;
+}
+
+/* ── Fullscreen ──────────────────────────────────────────── */
 function enterFS(){
   const el=$('vwrap');
   (el.requestFullscreen||el.webkitRequestFullscreen).call(el).catch(()=>{});
@@ -1551,54 +1376,51 @@ function exitFS(){
   $('app').classList.remove('fs');
 }
 document.addEventListener('fullscreenchange',()=>{
-  if(!document.fullscreenElement)$('app').classList.remove('fs');
+  const fs=!!document.fullscreenElement;
+  $('app').classList.toggle('fs',fs);
+  ckBlu.classList.toggle('act',fs);
 });
 
-/* ── Skip ─────────────────────────────────────────────────── */
+/* ── Skip ────────────────────────────────────────────────── */
 function skip(s){
   if(!isFinite(video.duration))return;
   video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+s));
-  const el=s<0?skipL:skipR;
-  el.classList.add('on');setTimeout(()=>el.classList.remove('on'),600);
+  const el=s<0?skipL:skipR;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),600);
 }
 
-/* ── Tab switch ───────────────────────────────────────────── */
+/* ── Tab switch ──────────────────────────────────────────── */
 function switchTab(tab){
   activeTab=tab;
-  // Update segmented bar
-  document.querySelectorAll('.seg-btn').forEach((b,i)=>{
-    b.classList.toggle('on',b.dataset.tab===tab);
-    b.tabIndex=b.dataset.tab===tab?0:-1;
+  QA('.seg-btn').forEach(b=>{
+    const on=b.dataset.tab===tab;
+    b.classList.toggle('on',on);
+    b.tabIndex=on?0:-1;
   });
   const isChTab=tab==='all'||tab==='favs';
-  $('searchWrap').style.display =isChTab?'':'none';
-  groupsBar.style.display       =isChTab?'':'none';
-  tileVP.style.display          =isChTab?'':'none';
-  $('panelPl').classList.toggle('on',  tab==='pl');
-  $('panelCfg').classList.toggle('on', tab==='cfg');
-  if(isChTab){applyFilter();}
-  if(tab==='pl')renderPlList();
+  $('srchRow').style.display   =isChTab?'':'none';
+  catsBar.style.display        =isChTab?'':'none';
+  tvp.style.display            =isChTab?'':'none';
+  $('panelPl').classList.toggle('on',tab==='pl');
+  $('panelCfg').classList.toggle('on',tab==='cfg');
+  if(isChTab)applyFilter();
+  if(tab==='pl')renderSrcList();
 }
-document.querySelectorAll('.seg-btn').forEach(b=>
-  b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+QA('.seg-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 
-/* ── Playlist list ────────────────────────────────────────── */
-function renderPlList(){
-  const box=$('plList');
+/* ── Source list ─────────────────────────────────────────── */
+function renderSrcList(){
+  const box=$('srcList');
   if(!pls.length){
     box.innerHTML='<p style="color:var(--t3);font-size:var(--f-sm);text-align:center;padding:20px">No sources added</p>';
     return;
   }
   box.innerHTML=pls.map((p,i)=>`
-    <div class="pl-card" tabindex="0" data-i="${i}">
-      <div class="pl-dot"></div>
-      <div class="pl-info">
-        <div class="pl-nm">${esc(p.name)}</div>
-        <div class="pl-url">${esc(p.url)}</div>
-      </div>
-      <button class="pl-del" data-del="${i}">🗑</button>
+    <div class="src-card" tabindex="0" data-i="${i}">
+      <div class="src-dot"></div>
+      <div class="src-info"><div class="src-nm">${esc(p.name)}</div><div class="src-url">${esc(p.url)}</div></div>
+      <button class="src-del" data-del="${i}">🗑</button>
     </div>`).join('');
-  box.querySelectorAll('.pl-card').forEach(el=>{
+  box.querySelectorAll('.src-card').forEach(el=>{
     el.addEventListener('click',e=>{
       if(e.target.closest('[data-del]'))return;
       loadPl(pls[+el.dataset.i].url);switchTab('all');
@@ -1606,37 +1428,31 @@ function renderPlList(){
   });
   box.querySelectorAll('[data-del]').forEach(btn=>{
     btn.addEventListener('click',e=>{
-      e.stopPropagation();
-      pls.splice(+btn.dataset.del,1);
-      savePls();renderPlList();
+      e.stopPropagation();pls.splice(+btn.dataset.del,1);savePls();renderSrcList();
     });
   });
 }
 
-/* ── Modals ───────────────────────────────────────────────── */
-function openM(el) {el.classList.add('on');}
+/* ── Modals ──────────────────────────────────────────────── */
+function openM(el){el.classList.add('on');}
 function closeM(el){el.classList.remove('on');}
-
-$('addPlBtn').addEventListener('click',()=>openM(mPl));
-$('mPlClose').addEventListener('click',()=>closeM(mPl));
-$('cancelPlBtn').addEventListener('click',()=>closeM(mPl));
-$('savePlBtn').addEventListener('click',()=>{
-  const name=$('plName').value.trim();
-  const url =$('plUrl').value.trim();
+$('addSrcBtn').addEventListener('click',()=>openM(mPl));
+$('mPlCls').addEventListener('click',()=>closeM(mPl));
+$('plCancel').addEventListener('click',()=>closeM(mPl));
+$('plSave').addEventListener('click',()=>{
+  const name=$('plName').value.trim(),url=$('plUrl').value.trim();
   if(!name||!url){toast('Enter name and URL','error');return;}
   if(pls.some(p=>p.url===url)){toast('Already added','error');return;}
   pls.push({name,url});savePls();closeM(mPl);
   $('plName').value='';$('plUrl').value='';
   loadPl(url);switchTab('all');
 });
-$('reloadBtn').addEventListener('click',()=>{
-  AppCache.clearAllM3U();allChs=[];
-  toast('Refreshing all sources…','info');
-  loadAll(true);
+$('refreshBtn').addEventListener('click',()=>{
+  AppCache.clearAllM3U();allChs=[];toast('Refreshing…','info');loadAll(true);
 });
-$('openDialerBtn').addEventListener('click',()=>openM(mDial));
-$('mDialClose').addEventListener('click',()=>closeM(mDial));
-document.querySelectorAll('.dk').forEach(b=>b.addEventListener('click',()=>dialPush(b.dataset.d)));
+$('dialerBtn').addEventListener('click',()=>openM(mDial));
+$('mDialCls').addEventListener('click',()=>closeM(mDial));
+QA('.dk').forEach(b=>b.addEventListener('click',()=>dialPush(b.dataset.d)));
 
 function dialPush(d){
   if(d==='clr')dialStr=dialStr.slice(0,-1);
@@ -1647,17 +1463,14 @@ function dialPush(d){
   if(dialStr.length>=3)dialTimer=setTimeout(dialGo,1400);
 }
 function dialGo(){
-  const n=parseInt(dialStr,10);dialStr='';dnum.textContent='—';
-  closeM(mDial);
+  const n=parseInt(dialStr,10);dialStr='';dnum.textContent='—';closeM(mDial);
   if(!isNaN(n)&&n>=1&&n<=viewChs.length)selAndPlay(n-1);
   else toast('Channel not found','error');
 }
 
-/* ── Remote number dialer ─────────────────────────────────── */
+/* ── Remote digit dialer ─────────────────────────────────── */
 function remoteDigit(d){
-  rDialStr+=d;
-  clearTimeout(rDialTimer);
-  setSt('CH: '+rDialStr+'…');
+  rDialStr+=d;clearTimeout(rDialTimer);setSt('CH: '+rDialStr+'…');
   rDialTimer=setTimeout(()=>{
     const n=parseInt(rDialStr,10);rDialStr='';
     if(!isNaN(n)&&n>=1&&n<=viewChs.length)selAndPlay(n-1);
@@ -1665,83 +1478,74 @@ function remoteDigit(d){
   },1200);
 }
 
-/* ── Settings wiring ──────────────────────────────────────── */
-$('sSmartScroll').onchange=function(){cfg.smartScroll=this.checked;saveCfg();};
-$('sForceHQ').onchange    =function(){cfg.forceHQ   =this.checked;saveCfg();recfgPlayer();};
-$('sMute').onchange       =function(){cfg.muteSwitch =this.checked;saveCfg();};
-$('sBuf').onchange        =function(){cfg.buf        =+this.value; saveCfg();recfgPlayer();};
-$('sOsdHide').onchange    =function(){cfg.osdHide    =this.checked;saveCfg();};
-$('sFill').onchange       =function(){
-  cfg.fill=this.checked;saveCfg();
-  video.classList.toggle('fill',cfg.fill);
-  ncFill.classList.toggle('act',cfg.fill);
+/* ── Settings wiring ─────────────────────────────────────── */
+$('cfgSmart').onchange=function(){cfg.smart=this.checked;saveCfg();};
+$('cfgHQ').onchange   =function(){cfg.hq   =this.checked;saveCfg();recfgPlayer();};
+$('cfgMute').onchange =function(){cfg.muteSwitch=this.checked;saveCfg();};
+$('cfgBuf').onchange  =function(){cfg.buf  =+this.value; saveCfg();recfgPlayer();};
+$('cfgOsd').onchange  =function(){cfg.osd  =this.checked;saveCfg();};
+$('cfgFill').onchange =function(){
+  cfg.fill=this.checked;saveCfg();isFill=cfg.fill;
+  video.classList.toggle('fill',isFill);
+  ncAspect.classList.toggle('act',isFill);ckYel.classList.toggle('act',isFill);
 };
-$('clearCacheBtn').onclick=()=>{AppCache.clearAllM3U();toast('Cache cleared','success');};
+$('clearBtn2').onclick=()=>{AppCache.clearAllM3U();toast('Cache cleared','success');};
 
-/* ── Control bar buttons ──────────────────────────────────── */
+/* ── Control buttons ─────────────────────────────────────── */
 ncMute.addEventListener('click',()=>{
   isMuted=!isMuted;video.muted=isMuted;
   ncMute.classList.toggle('act',isMuted);
-  const svg=$('icoMute');
-  if(isMuted) svg.innerHTML='<path d="M16.5 12A4.5 4.5 0 0 0 14 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18V19.9c1.17-.29 2.25-.86 3.15-1.64l2.16 2.16L21 19l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>';
-  else svg.innerHTML='<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
+  $('icoMute').innerHTML=isMuted
+    ?'<path d="M16.5 12A4.5 4.5 0 0014 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18V19.9c1.17-.29 2.25-.86 3.15-1.64l2.16 2.16L21 19l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>'
+    :'<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
 });
-ncFill.addEventListener('click',()=>{
-  cfg.fill=!cfg.fill;saveCfg();
-  video.classList.toggle('fill',cfg.fill);
-  ncFill.classList.toggle('act',cfg.fill);
-  $('sFill').checked=cfg.fill;
-});
+ncAspect.addEventListener('click',toggleAspect);
 ncFav.addEventListener('click',toggleFav);
 ncFS.addEventListener('click',()=>document.fullscreenElement?exitFS():enterFS());
 $('vwrap').addEventListener('dblclick',()=>document.fullscreenElement?exitFS():enterFS());
 $('vwrap').addEventListener('click',showOSD);
 
-/* ── Search ───────────────────────────────────────────────── */
-searchIn.addEventListener('input',()=>{
-  searchQ=searchIn.value.trim();
-  clearBtn.style.display=searchQ?'block':'none';
-  sIco.style.display=searchQ?'none':'block';
+/* Colour key bar clicks */
+ckRed.addEventListener('click',toggleFav);
+ckGrn.addEventListener('click',()=>{switchTab('all');setTimeout(()=>srchIn.focus(),50);});
+ckYel.addEventListener('click',toggleAspect);
+ckBlu.addEventListener('click',()=>document.fullscreenElement?exitFS():enterFS());
+
+/* ── Search ──────────────────────────────────────────────── */
+srchIn.addEventListener('input',()=>{
+  searchQ=srchIn.value.trim();
+  srchClear.style.display=searchQ?'block':'none';
+  srchIco.style.display=searchQ?'none':'block';
   applyFilter();
 });
-clearBtn.addEventListener('click',()=>{
-  searchIn.value='';searchQ='';
-  clearBtn.style.display='none';sIco.style.display='block';
+srchClear.addEventListener('click',()=>{
+  srchIn.value='';searchQ='';srchClear.style.display='none';srchIco.style.display='block';
   applyFilter();
 });
 
-/* ── Clock ────────────────────────────────────────────────── */
-function tick(){
-  clockEl.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});
-}
+/* ── Clock ───────────────────────────────────────────────── */
+function tick(){clkEl.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});}
 tick();setInterval(tick,30000);
 
-/* ── Network stats ────────────────────────────────────────── */
+/* ── Network ─────────────────────────────────────────────── */
 setInterval(()=>{
   if(!player||!isPlaying)return;
   try{
-    const bw=player.getStats().estimatedBandwidth||0;
-    const mb=bw/1e6;
+    const bw=player.getStats().estimatedBandwidth||0,mb=bw/1e6;
     if(mb>=4){sdot.className='sdot g';bwTxt.textContent=mb.toFixed(1)+'M';}
     else if(mb>=1){sdot.className='sdot a';bwTxt.textContent=mb.toFixed(1)+'M';}
     else if(mb>0){sdot.className='sdot r';bwTxt.textContent=(bw/1e3).toFixed(0)+'K';}
   }catch(e){}
 },3000);
 
-/* ── Loading overlay ──────────────────────────────────────── */
-function hideLd(){
-  $('loading').classList.add('off');
-  setTimeout(()=>{$('loading').style.display='none';},400);
-}
+function hideLd(){$('loading').classList.add('off');setTimeout(()=>{$('loading').style.display='none';},400);}
 
 /* ══════════════════════════════════════════════════════════
-   REMOTE KEYMAP — Tizen OS 9 / BN59-01199F
-   All keys wired. Focus zones:
-   Sidebar (seg tabs / search / groups / tileVP) ↔ Player controls
+   REMOTE KEYMAP — Tizen OS 9 BN59-01199F full map
+   Zone-aware: handles focus correctly in every panel.
 ════════════════════════════════════════════════════════════ */
 const KC={
-  UP:38,DOWN:40,LEFT:37,RIGHT:39,  // standard DOM
-  // Tizen-specific
+  UP:38,DOWN:40,LEFT:37,RIGHT:39,
   TUP:48888,TDOWN:48889,TLEFT:48886,TRIGHT:48887,
   ENTER:13,BACK:10009,
   PLAY:415,PAUSE:19,PP:10252,STOP:413,
@@ -1750,33 +1554,27 @@ const KC={
   CHUP:427,CHDOWN:428,MUTE:449,
 };
 
-function isNavUp(kc,k)   {return kc===KC.UP  ||kc===KC.TUP  ||k==='ArrowUp';}
-function isNavDown(kc,k) {return kc===KC.DOWN||kc===KC.TDOWN||k==='ArrowDown';}
-function isNavLeft(kc,k) {return kc===KC.LEFT||kc===KC.TLEFT||k==='ArrowLeft';}
-function isNavRight(kc,k){return kc===KC.RIGHT||kc===KC.TRIGHT||k==='ArrowRight';}
-function isOK(kc,k)      {return kc===KC.ENTER||k==='Enter';}
-function isBack(kc,k)    {return kc===KC.BACK||k==='Escape'||k==='Backspace';}
-function isDigit(e){
-  const kc=e.keyCode;
-  return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||
-    (e.key&&e.key.length===1&&e.key>='0'&&e.key<='9');
-}
-function getDigit(e){
-  if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;
-  if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);
-  return String(e.keyCode-48);
-}
+function isUp(kc,k)   {return kc===KC.UP   ||kc===KC.TUP  ||k==='ArrowUp';}
+function isDn(kc,k)   {return kc===KC.DOWN ||kc===KC.TDOWN||k==='ArrowDown';}
+function isLt(kc,k)   {return kc===KC.LEFT ||kc===KC.TLEFT||k==='ArrowLeft';}
+function isRt(kc,k)   {return kc===KC.RIGHT||kc===KC.TRIGHT||k==='ArrowRight';}
+function isOK(kc,k)   {return kc===KC.ENTER||k==='Enter';}
+function isBack(kc,k) {return kc===KC.BACK||k==='Escape'||k==='Backspace';}
+function isDigit(e)   {const kc=e.keyCode;return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9');}
+function getDigit(e)  {if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);return String(e.keyCode-48);}
 
 window.addEventListener('keydown',e=>{
   const kc=e.keyCode,k=e.key;
-  const inSearch=document.activeElement===searchIn;
+  const active=document.activeElement;
+  const inSearch=active===srchIn;
   if(inSearch&&!['Escape','Tab'].includes(k))return;
 
-  // Modal intercepts
+  /* Modal intercepts */
   if(mDial.classList.contains('on')){
     if(isDigit(e)){e.preventDefault();dialPush(getDigit(e));return;}
     if(isBack(kc,k)){e.preventDefault();closeM(mDial);return;}
     if(isOK(kc,k)){e.preventDefault();dialGo();return;}
+    if(isUp(kc,k)||isDn(kc,k)){e.preventDefault();/* let modal focus move naturally */return;}
     return;
   }
   if(mPl.classList.contains('on')){
@@ -1784,77 +1582,76 @@ window.addEventListener('keydown',e=>{
     return;
   }
 
-  // Main keymap
-  if(isNavUp(kc,k)){e.preventDefault();navUp();return;}
-  if(isNavDown(kc,k)){e.preventDefault();navDown();return;}
-  if(isNavLeft(kc,k)){e.preventDefault();navLeft();return;}
-  if(isNavRight(kc,k)){e.preventDefault();navRight();return;}
+  /* Arrow navigation in tile grid — primary flow */
+  if(isUp(kc,k)){e.preventDefault();nav(-COLS);return;}
+  if(isDn(kc,k)){e.preventDefault();nav(+COLS);return;}
+  if(isLt(kc,k)){e.preventDefault();nav(-1);return;}
+  if(isRt(kc,k)){e.preventDefault();nav(+1);return;}
 
+  /* OK: immediate play + fullscreen */
   if(isOK(kc,k)){
     e.preventDefault();
-    // Cancel pending scroll-idle play, fire immediately
     immediatePlay(selIdx);
     if(!document.fullscreenElement)enterFS();
     return;
   }
 
+  /* Back: exit fs → clear search → exit */
   if(isBack(kc,k)){
-    if(document.fullscreenElement){e.preventDefault();exitFS();}
-    else if(searchQ){e.preventDefault();clearBtn.click();}
+    if(document.fullscreenElement){e.preventDefault();exitFS();return;}
+    if(searchQ){e.preventDefault();srchClear.click();return;}
     return;
   }
 
   switch(true){
-    case(k==='f'||k==='F'||kc===KC.RED):
-      e.preventDefault();toggleFav();break;
-    case(kc===KC.PLAY):
-      e.preventDefault();video.play().catch(()=>{});break;
-    case(kc===KC.PAUSE):
-      e.preventDefault();video.pause();break;
-    case(kc===KC.PP):
-      e.preventDefault();video.paused?video.play().catch(()=>{}):video.pause();break;
+    /* Colour keys */
+    case(kc===KC.RED):    e.preventDefault();toggleFav();break;
+    case(kc===KC.GREEN):  e.preventDefault();ckGrn.click();break;
+    case(kc===KC.YELLOW): e.preventDefault();toggleAspect();break;
+    case(kc===KC.BLUE):   e.preventDefault();document.fullscreenElement?exitFS():enterFS();break;
+
+    /* Fav shortcut (F key) */
+    case(k==='f'||k==='F'):e.preventDefault();toggleFav();break;
+
+    /* Media keys */
+    case(kc===KC.PLAY):  e.preventDefault();video.play().catch(()=>{});break;
+    case(kc===KC.PAUSE): e.preventDefault();video.pause();break;
+    case(kc===KC.PP):    e.preventDefault();video.paused?video.play().catch(()=>{}):video.pause();break;
     case(kc===KC.STOP):
       e.preventDefault();
       if(player){player.unload();isPlaying=false;curUrl='';setSt('Stopped');}
       break;
-    case(kc===KC.FF):
-      e.preventDefault();skip(30);break;
-    case(kc===KC.REW):
-      e.preventDefault();skip(-30);break;
-    case(kc===KC.CHUP||k==='PageUp'):
-      e.preventDefault();navUp();break;
-    case(kc===KC.CHDOWN||k==='PageDown'):
-      e.preventDefault();navDown();break;
-    case(kc===KC.MUTE||k==='m'||k==='M'):
-      e.preventDefault();ncMute.click();break;
-    case(k==='F11'||kc===KC.BLUE):
-      e.preventDefault();document.fullscreenElement?exitFS():enterFS();break;
-    case(kc===KC.GREEN):
-      e.preventDefault();
-      AppCache.clearAllM3U();allChs=[];loadAll(true);break;
-    case(k===' '):
-      e.preventDefault();showOSD();break;
-    case(k==='d'||k==='D'):
-      e.preventDefault();openM(mDial);break;
-    case(k==='s'||k==='S'):
-      e.preventDefault();searchIn.focus();break;
-    case isDigit(e):
-      e.preventDefault();remoteDigit(getDigit(e));break;
+    case(kc===KC.FF):    e.preventDefault();skip(30);break;
+    case(kc===KC.REW):   e.preventDefault();skip(-30);break;
+    case(kc===KC.CHUP  ||k==='PageUp'):   e.preventDefault();nav(-COLS);break;
+    case(kc===KC.CHDOWN||k==='PageDown'): e.preventDefault();nav(+COLS);break;
+    case(kc===KC.MUTE||k==='m'||k==='M'):e.preventDefault();ncMute.click();break;
+
+    /* Keyboard shortcuts */
+    case(k==='F11'):        e.preventDefault();document.fullscreenElement?exitFS():enterFS();break;
+    case(k===' '):          e.preventDefault();showOSD();break;
+    case(k==='d'||k==='D'):e.preventDefault();openM(mDial);break;
+    case(k==='s'||k==='S'):e.preventDefault();switchTab('all');setTimeout(()=>srchIn.focus(),50);break;
+    case(k==='1'&&e.altKey):e.preventDefault();switchTab('all');break;
+    case(k==='2'&&e.altKey):e.preventDefault();switchTab('favs');break;
+
+    /* Number keys → remote dialer */
+    case isDigit(e):e.preventDefault();remoteDigit(getDigit(e));break;
   }
 });
 
-/* ── ResizeObserver ───────────────────────────────────────── */
+/* ResizeObserver */
 if(window.ResizeObserver){
-  new ResizeObserver(()=>{vsInvalidate();scrollToSel();}).observe(tileVP);
+  new ResizeObserver(()=>{vsInvalidate();scrollToSel();}).observe(tvp);
 }
 
-/* ── Boot ─────────────────────────────────────────────────── */
+/* ── Boot ────────────────────────────────────────────────── */
 (async function boot(){
   loadStore();
   ldMsg.textContent='Initialising Shaka Player…';
   await initPlayer();
   ldMsg.textContent='Loading channels…';
-  buildGroups();
+  buildCats();
   await loadAll(false);
   hideLd();
 })();
