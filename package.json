@@ -1,12 +1,9 @@
 {
-  "name": "tizen",
-  "version": "1.0.0",
-  "description": "IPTV player Samsung TV",
+  "name": "saga-iptv",
+  "version": "25.0.0",
+  "description": "SAGA IPTV — Enterprise IPTV Player for Samsung Tizen OS 9 (55-inch TV)",
   "license": "MIT",
-  "private": false,
-  "publishConfig": {
-    "access": "public"
-  },
+  "private": true,
   "files": [
     "app",
     "service.js",
@@ -14,16 +11,11 @@
     "package.json"
   ],
   "keywords": [
-    "tizen",
-    "tizenbrew",
-    "iptv",
-    "m3u",
-    "hls",
-    "samsung",
-    "tv"
+    "tizen", "tizenbrew", "iptv", "m3u", "hls", "dash",
+    "samsung", "tv", "shaka-player", "enterprise"
   ],
   "packageType": "app",
-  "appName": "IPTV",
+  "appName": "SAGA IPTV",
   "appPath": "app/index.html",
   "keys": [
     "MediaPlay",
@@ -32,10 +24,18 @@
     "MediaStop",
     "MediaFastForward",
     "MediaRewind",
+    "MediaTrackPrevious",
+    "MediaTrackNext",
+    "ChannelUp",
+    "ChannelDown",
+    "VolumeUp",
+    "VolumeDown",
+    "VolumeMute",
     "ColorF0Red",
     "ColorF1Green",
     "ColorF2Yellow",
-    "ColorF3Blue"
+    "ColorF3Blue",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"
   ],
   "serviceFile": "service.js",
   "evaluateScriptOnDocumentStart": false
