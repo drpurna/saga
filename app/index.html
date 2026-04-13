@@ -9,21 +9,16 @@
 <script src="./cache.js"></script>
 <style>
 /*══════════════════════════════════════════════════════════════
-  SAGA IPTV v31 — Enterprise Stable
-  Fixes from v30:
-  BUG-01 Volume: VolumeUp/Down/Mute wired to Tizen tvaudiocontrol
-  BUG-02 Tizen key registration at script top
-  BUG-03 requestIdleCallback polyfill at top
-  BUG-04 TELUGU_PL duplicate prevention on repeated boot
-  BUG-05 nSub textContent kills nAspect span — fixed
-  BUG-06 hideLd race with chunked parse — fixed
-  BUG-08 auto-retry captures correct channel index
-  BUG-09 mute visual desync on muteSwitch restore
-  BUG-10 scrollToSel zone override — only when focused
-  BUG-13 tile click race — uses scrollToSel not raw vsRenderRows
-  BUG-15 clock interval 10s not 30s
-  BUG-20 cfgFill null-ref in applyCfgUI — guarded
-  UI:    Tiles 160px, toolbar 64px, buttons 52px, cats 48px
+  SAGA IPTV v32
+  FIX-01  Settings panel: UP/DN arrow scrolls rows, OK toggles
+  FIX-02  Search input: typing passes through correctly
+  FIX-03  Col-2 tile selection border clips — overflow visible,
+          contain:layout paint (not strict), border 4px
+  FIX-04  Thicker selection border + glow shadow
+  FIX-05  Tile icon background: dominant-colour extraction via
+          hidden <canvas>, set as tile CSS background-color
+  FIX-06  Jio + Telugu pinned as first two category tabs
+  FIX-07  Tile gap 10px, row top-padding for breathing room
 ══════════════════════════════════════════════════════════════*/
 
 *,*::before,*::after{
@@ -36,33 +31,30 @@
   --b0:#000;--b1:#0a0a0a;--b2:#111;--b3:#1a1a1a;
   --b4:#222;--b5:#2e2e2e;--b6:#3a3a3a;
   --sep:rgba(255,255,255,.07);
-  --sep2:rgba(255,255,255,.14);
+  --sep2:rgba(255,255,255,.15);
   --w:#fff;
   --w2:rgba(255,255,255,.58);
   --w3:rgba(255,255,255,.3);
-  --ring:rgba(255,255,255,.92);
+  --ring:rgba(255,255,255,.95);
+
   --ck-r:#cc3344;--ck-g:#229966;--ck-y:#bb8800;--ck-b:#2255cc;
 
-  /* Layout — scaled up for 55" viewing */
   --sb-w:500px;
-  --tile-h:160px;       /* bigger tiles */
-  --gap:4px;
-  --toolbar-h:64px;     /* bigger toolbar */
-  --cats-h:48px;        /* bigger cats row */
+  /* FIX-07: bigger gap so tiles breathe */
+  --tile-h:160px;
+  --tile-gap:10px;
+  --tile-pad:8px;
+  --toolbar-h:64px;
+  --cats-h:48px;
   --statusbar-h:30px;
-  --nc-sz:52px;         /* bigger player buttons */
+  --nc-sz:52px;
 
   --r0:0px;
   --r-sm:4px;
   --r-pill:999px;
 
-  /* Bigger font scale for 55" */
-  --f-xs:13px;
-  --f-sm:15px;
-  --f-md:17px;
-  --f-lg:21px;
-  --f-xl:27px;
-  --f-2xl:34px;
+  --f-xs:13px;--f-sm:15px;--f-md:17px;--f-lg:21px;
+  --f-xl:27px;--f-2xl:34px;
 
   --dur:100ms;
   --ease:cubic-bezier(.4,0,.2,1);
@@ -78,7 +70,7 @@ html,body{
 
 #app{display:flex;width:100%;height:100%;isolation:isolate;transform:translateZ(0)}
 
-/* ══ SIDEBAR ══════════════════════════════════════════════════ */
+/* ══ SIDEBAR ═════════════════════════════════════════════════ */
 #sb{
   width:var(--sb-w);min-width:var(--sb-w);
   background:var(--b1);border-right:1px solid var(--sep);
@@ -89,7 +81,6 @@ html,body{
 }
 #app.fs #sb{transform:translateX(calc(-1*var(--sb-w)));opacity:0;pointer-events:none}
 
-/* HEADER */
 .hdr{
   display:flex;align-items:center;gap:14px;
   padding:0 20px;height:var(--toolbar-h);
@@ -97,10 +88,10 @@ html,body{
 }
 .brand{font-size:var(--f-lg);font-weight:800;letter-spacing:3px;text-transform:uppercase;color:var(--w);flex:1}
 
-/* VOLUME HUD — shown briefly on vol key press */
+/* VOLUME HUD */
 #volHud{
   position:fixed;bottom:60px;left:50%;transform:translateX(-50%);
-  background:rgba(0,0,0,.86);border:1px solid rgba(255,255,255,.12);
+  background:rgba(0,0,0,.88);border:1px solid rgba(255,255,255,.13);
   padding:12px 28px 12px 22px;
   display:flex;align-items:center;gap:14px;
   z-index:8000;pointer-events:none;
@@ -130,7 +121,7 @@ html,body{
 .tb-item span{font-size:var(--f-xs);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
 .tb-item.on{color:var(--w);background:var(--b3)}
 .tb-item.on::after{content:'';position:absolute;bottom:0;left:15%;right:15%;height:2px;background:var(--w)}
-.tb-item:focus{color:var(--w);outline:2px solid var(--ring);outline-offset:-2px;z-index:1}
+.tb-item:focus{color:var(--w);outline:2.5px solid var(--ring);outline-offset:-2px;z-index:1}
 .tb-badge{
   position:absolute;top:7px;right:calc(50% - 21px);
   background:var(--w);color:var(--b0);font-size:10px;font-weight:800;
@@ -151,16 +142,18 @@ html,body{
 }
 .cats-inner::-webkit-scrollbar{display:none}
 .cat{
-  height:100%;padding:0 18px;
+  height:100%;padding:0 20px;
   border:none;border-right:1px solid var(--sep);
   background:transparent;color:var(--w3);
-  font-size:var(--f-xs);font-weight:600;letter-spacing:.4px;text-transform:uppercase;
+  font-size:var(--f-xs);font-weight:700;letter-spacing:.5px;text-transform:uppercase;
   cursor:pointer;outline:none;white-space:nowrap;flex-shrink:0;
   transition:color var(--dur),background var(--dur);position:relative;
 }
+/* Pinned category tabs (Telugu, Jio) get a subtle highlight */
+.cat.pinned{color:var(--w2)}
 .cat.on{color:var(--w);background:var(--b3)}
 .cat.on::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--w)}
-.cat:focus{outline:2px solid var(--ring);outline-offset:-2px;color:var(--w);z-index:1}
+.cat:focus{outline:2.5px solid var(--ring);outline-offset:-2px;color:var(--w);z-index:1}
 
 /* SEARCH OVERLAY */
 #srchOverlay{
@@ -172,6 +165,10 @@ html,body{
   flex:1;height:100%;padding:0 18px;
   background:transparent;border:none;
   color:var(--w);font-size:var(--f-md);outline:none;
+  /* FIX-02: pointer-events and user-select must NOT be blocked */
+  -webkit-user-select:text !important;
+  user-select:text !important;
+  pointer-events:auto !important;
 }
 #srchInput::placeholder{color:var(--w3)}
 #srchClear{
@@ -182,70 +179,155 @@ html,body{
 #srchClear:focus{color:var(--w);outline:2px solid var(--ring);outline-offset:-2px}
 
 /* ══ TILE GRID ═══════════════════════════════════════════════
-   Bigger tiles: --tile-h=160px, 2-col.
-   logo fills 100%.  scale(1.05) on sel.
-   translateY on #tin — zero layout during scroll.
-   contain:strict isolates paint zone.
+   FIX-03: contain:layout paint (not strict) — strict clips
+            scaled tiles at viewport edge.
+   FIX-03: .tile overflow:visible so 4px border and scale
+            render fully without clipping.
+   FIX-04: border 4px + glow shadow on .sel.
+   FIX-07: gap 10px with 8px padding each side.
 ══════════════════════════════════════════════════════════════ */
-#tvp{flex:1;overflow:hidden;position:relative;contain:strict;transform:translateZ(0)}
-#tin{position:absolute;top:0;left:0;right:0;will-change:transform}
-
-.trow{
-  position:absolute;left:0;right:0;height:var(--tile-h);
-  display:grid;grid-template-columns:1fr 1fr;
-  gap:var(--gap);padding:calc(var(--gap)/2);
+#tvp{
+  flex:1;overflow:hidden;position:relative;
+  /* FIX-03: NOT contain:strict — that clips scaled tiles */
+  contain:layout paint;
   transform:translateZ(0);
 }
+#tin{
+  position:absolute;top:0;left:0;right:0;
+  will-change:transform;
+}
+.trow{
+  position:absolute;left:0;right:0;
+  height:calc(var(--tile-h) + var(--tile-pad));   /* row height includes top padding */
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:var(--tile-gap);
+  padding:var(--tile-pad) var(--tile-gap) 0;      /* top breathing room + side */
+  transform:translateZ(0);
+  /* FIX-03: rows must not clip their children (scaled tiles) */
+  overflow:visible;
+}
+
+/* FIX-03 + FIX-04: tile — no overflow:hidden so border never clips */
 .tile{
-  height:100%;position:relative;overflow:hidden;
-  background:var(--b3);border:2px solid transparent;
+  height:var(--tile-h);
+  position:relative;
+  /* FIX-03: overflow visible so scale/border render outside cell */
+  overflow:visible;
+  /* default dark bg; JS overwrites with dominant colour */
+  background:var(--b3);
+  /* FIX-04: thicker border */
+  border:4px solid transparent;
   cursor:pointer;outline:none;
-  transition:transform 140ms var(--ease),border-color 80ms;
+  transition:transform 140ms var(--ease),border-color 100ms,box-shadow 100ms;
   transform:scale(1) translateZ(0);
   will-change:transform;
 }
-.t-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+/* Inner clip div — holds the actual image so it doesn't bleed outside tile area */
+.t-inner{
+  position:absolute;inset:0;
+  overflow:hidden;
+}
+/* Blurred logo used as background wash */
+.t-bg{
+  position:absolute;inset:-8px;
+  background-size:cover;background-position:center;
+  filter:blur(14px) brightness(0.35) saturate(1.4);
+  transform:scale(1.1);
+  pointer-events:none;
+  opacity:0;transition:opacity 400ms;
+}
+.t-bg.loaded{opacity:1}
+/* Logo image — contained, centered, sits on top of bg wash */
+.t-img{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:contain;
+  display:block;
+  /* crisp rendering on TV */
+  image-rendering:-webkit-optimize-contrast;
+}
 .t-fallback{
   position:absolute;inset:0;
   display:flex;align-items:center;justify-content:center;
-  font-size:38px;color:var(--w3);background:var(--b4);
+  font-size:38px;color:var(--w3);
 }
+
+/* Number badge */
 .t-num{
-  position:absolute;top:6px;left:7px;
+  position:absolute;top:7px;left:8px;
   font-size:11px;color:rgba(255,255,255,.22);
   font-variant-numeric:tabular-nums;pointer-events:none;line-height:1;
+  z-index:3;
 }
+/* Fav star */
 .t-fstar{
-  position:absolute;top:6px;right:7px;
-  font-size:13px;color:rgba(255,255,255,.8);
-  line-height:1;display:none;pointer-events:none;
+  position:absolute;top:7px;right:8px;
+  font-size:13px;color:rgba(255,255,255,.85);
+  line-height:1;display:none;pointer-events:none;z-index:3;
 }
+/* Channel name label — gradient overlay at bottom */
 .t-label{
   position:absolute;bottom:0;left:0;right:0;
-  padding:22px 10px 8px;
-  background:linear-gradient(transparent,rgba(0,0,0,.9));
+  padding:24px 10px 8px;
+  background:linear-gradient(transparent,rgba(0,0,0,.92));
   font-size:12px;font-weight:700;color:var(--w);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;
   opacity:0;pointer-events:none;transition:opacity 80ms;
+  z-index:3;
 }
-.tile:focus .t-label,.tile.sel .t-label{opacity:1}
+.tile:focus .t-label,
+.tile.sel .t-label{opacity:1}
+
+/* FIX-04: Selected — thick white border + strong glow */
 .tile.sel{
   border-color:var(--w);
-  transform:scale(1.05) translateZ(0);
-  z-index:2;
+  transform:scale(1.06) translateZ(0);
+  z-index:4;
+  /* Glow shadow behind the border */
+  box-shadow:0 0 0 2px rgba(255,255,255,.25),
+             0 8px 32px rgba(0,0,0,.7);
 }
 .tile.sel::after{
-  content:'';position:absolute;bottom:0;left:25%;right:25%;
+  content:'';
+  position:absolute;bottom:0;left:20%;right:20%;
   height:3px;background:var(--w);
+  z-index:5;
 }
+/* Focus ring — slightly different from sel */
 .tile:focus{
-  border-color:var(--ring);
-  box-shadow:0 0 0 1px rgba(255,255,255,.22) inset;
+  border-color:rgba(255,255,255,.7);
+  box-shadow:0 0 0 1px rgba(255,255,255,.18);
 }
 
-/* ══ PANELS ══════════════════════════════════════════════════ */
-.panel{display:none;flex:1;flex-direction:column;overflow-y:auto;padding:14px;gap:9px;scrollbar-width:thin;scrollbar-color:var(--b5) transparent}
+/* ══ SETTINGS PANEL SCROLL ═══════════════════════════════════
+   FIX-01: panelCfg gets tabindex=0 and overflow-y:auto so the
+   remote can scroll it.  The JS zone 'cfg' intercepts UP/DN to
+   scroll and OK to activate focused srow.
+══════════════════════════════════════════════════════════════ */
+.panel{
+  display:none;flex:1;flex-direction:column;
+  overflow-y:auto;padding:14px;gap:9px;
+  scrollbar-width:thin;scrollbar-color:var(--b5) transparent;
+  /* FIX-01: panels need to be scrollable by remote */
+  scroll-behavior:smooth;
+}
 .panel.on{display:flex}
+
+/* FIX-01: srow must be focusable and show focus ring */
+.srow{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px;
+  background:var(--b3);border:1px solid var(--sep);
+  outline:none;
+  transition:background var(--dur),border-color var(--dur);
+  /* Must be focusable */
+  cursor:pointer;
+}
+.srow:focus{border-color:var(--sep2);background:var(--b4);
+  outline:2.5px solid var(--ring);outline-offset:-2px}
+.srow-l{flex:1;margin-right:16px}
+.srow-title{font-size:var(--f-sm);font-weight:700}
+.srow-desc{font-size:var(--f-xs);color:var(--w3);margin-top:3px;line-height:1.4}
 
 .src-card{
   display:flex;align-items:center;gap:14px;
@@ -261,17 +343,6 @@ html,body{
 .src-url{font-size:var(--f-xs);color:var(--w3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .src-del{background:none;border:none;color:var(--w3);cursor:pointer;font-size:20px;padding:7px;outline:none;line-height:1}
 .src-del:focus{color:var(--ck-r);outline:2px solid var(--ring);outline-offset:2px}
-
-.srow{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:16px 18px;
-  background:var(--b3);border:1px solid var(--sep);
-  outline:none;transition:background var(--dur),border-color var(--dur);
-}
-.srow:focus-within,.srow:focus{border-color:var(--sep2);background:var(--b4)}
-.srow-l{flex:1;margin-right:16px}
-.srow-title{font-size:var(--f-sm);font-weight:700}
-.srow-desc{font-size:var(--f-xs);color:var(--w3);margin-top:3px;line-height:1.4}
 
 .tog{position:relative;width:54px;height:30px;flex-shrink:0}
 .tog input{opacity:0;width:0;height:0;position:absolute}
@@ -337,7 +408,6 @@ html,body{
 /* ══ PLAYER ══════════════════════════════════════════════════ */
 #player{flex:1;display:flex;flex-direction:column;background:var(--b0);transform:translateZ(0);min-width:0}
 
-/* NOW BAR */
 #nbar{
   display:flex;align-items:center;gap:16px;
   height:var(--toolbar-h);padding:0 20px;
@@ -349,13 +419,12 @@ html,body{
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--w);
   letter-spacing:-.02em;
 }
-/* nSub uses child nodes: text node + #nAspectSpan */
 #nSub{font-size:var(--f-xs);color:var(--w3);margin-top:2px}
 #nAspectSpan{font-weight:600;margin-left:8px}
 
 .nctl{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .nc{
-  width:var(--nc-sz);height:var(--nc-sz);    /* bigger buttons */
+  width:var(--nc-sz);height:var(--nc-sz);
   background:var(--b3);border:1px solid var(--sep);color:var(--w2);
   display:flex;align-items:center;justify-content:center;
   cursor:pointer;outline:none;
@@ -365,7 +434,6 @@ html,body{
 .nc:focus,.nc:hover{background:var(--b4);border-color:var(--sep2);color:var(--w)}
 .nc.act{background:var(--w);color:var(--b0);border-color:var(--w)}
 
-/* VIDEO */
 #vwrap{flex:1;position:relative;background:#000;overflow:hidden;transform:translateZ(0)}
 #video{
   width:100%;height:100%;object-fit:contain;display:block;
@@ -375,7 +443,6 @@ html,body{
 #video.mode-fill{object-fit:cover}
 #video.mode-stretch{object-fit:fill}
 
-/* OSD */
 #osd{
   position:absolute;inset:0;pointer-events:none;
   display:flex;flex-direction:column;justify-content:space-between;
@@ -420,7 +487,6 @@ html,body{
 .skip.on{opacity:1}
 #skipL{left:60px}#skipR{right:60px}
 
-/* STATUS BAR */
 #sbar{
   height:var(--statusbar-h);display:flex;align-items:center;justify-content:space-between;
   padding:0 20px;background:var(--b0);border-top:1px solid var(--sep);flex-shrink:0;
@@ -431,14 +497,12 @@ html,body{
 .sdot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--b6)}
 .sdot.g{background:rgba(255,255,255,.72)}.sdot.a{background:rgba(255,255,255,.42)}.sdot.r{background:var(--ck-r)}
 
-/* TOAST */
 #toasts{position:fixed;top:22px;right:22px;z-index:9999;display:flex;flex-direction:column;gap:7px;pointer-events:none}
 .toast{background:rgba(10,10,10,.97);border:1px solid var(--sep2);padding:13px 22px;font-size:var(--f-sm);color:var(--w);max-width:320px;animation:tIn 160ms var(--ease) forwards;box-shadow:0 5px 22px rgba(0,0,0,.7)}
 .toast.out{animation:tOut 140ms ease forwards}
 @keyframes tIn{from{transform:translateX(105%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes tOut{from{opacity:1}to{transform:translateX(105%);opacity:0}}
 
-/* SPLASH */
 #loading{position:fixed;inset:0;background:var(--b0);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9500;transition:opacity 400ms ease}
 #loading.off{opacity:0;pointer-events:none}
 .splash-title{font-size:22vw;font-weight:900;letter-spacing:-.03em;color:var(--w);line-height:.88}
@@ -448,7 +512,6 @@ html,body{
 @keyframes sf{0%{transform:translateX(-100%);opacity:0}40%{opacity:1}100%{transform:translateX(200%);opacity:0}}
 .splash-msg{font-size:1.1vw;font-weight:400;color:var(--w3);margin-top:2vw;letter-spacing:.15em;text-transform:uppercase}
 
-/* MODALS */
 .mover{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);justify-content:center;align-items:center;z-index:4000}
 .mover.on{display:flex}
 .mbox{background:var(--b2);border:1px solid var(--sep2);width:500px;max-width:90vw;padding:32px;box-shadow:0 22px 64px rgba(0,0,0,.9);animation:mIn 140ms var(--ease)}
@@ -485,9 +548,7 @@ html,body{
   <div class="splash-bar"><div class="splash-fill"></div></div>
   <div class="splash-msg" id="ldMsg">Initialising…</div>
 </div>
-
 <div id="toasts"></div>
-<!-- Volume HUD (fixed, shown on vol keys) -->
 <div id="volHud">
   <span id="volIco">🔊</span>
   <div class="vol-bar-wrap"><div class="vol-bar-fill" id="volBarFill" style="width:50%"></div></div>
@@ -498,7 +559,6 @@ html,body{
 <div id="sb">
   <div class="hdr"><div class="brand">SAGA IPTV</div></div>
 
-  <!-- Toolbar -->
   <div class="toolbar" id="toolbar">
     <button class="tb-item on" data-tab="all" id="tbAll">
       <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
@@ -522,7 +582,6 @@ html,body{
     </button>
   </div>
 
-  <!-- Categories + search overlay -->
   <div class="cats-row" id="catsRow">
     <div id="srchOverlay">
       <input id="srchInput" type="text" placeholder="Search channels…" autocomplete="off" spellcheck="false">
@@ -531,52 +590,49 @@ html,body{
     <div class="cats-inner" id="catsInner"></div>
   </div>
 
-  <!-- Tile grid -->
   <div id="tvp"><div id="tin"></div></div>
 
-  <!-- Sources panel -->
   <div class="panel" id="panelPl">
     <div id="srcList" style="display:flex;flex-direction:column;gap:9px"></div>
     <button class="btn btn-w"     id="addSrcBtn" style="margin-top:6px">+ Add M3U Source</button>
     <button class="btn btn-ghost" id="refreshBtn" style="margin-top:8px">↺ Refresh All</button>
   </div>
 
-  <!-- Settings panel -->
+  <!-- FIX-01: every .srow has tabindex=0 so remote can focus it -->
   <div class="panel" id="panelCfg">
     <div class="sec-lbl">Playback</div>
-    <div class="srow" tabindex="-1">
+    <div class="srow" tabindex="0" id="srow-hq">
       <div class="srow-l"><div class="srow-title">Force Highest Quality</div><div class="srow-desc">Lock max bitrate — prevents upscale stutter &amp; freeze</div></div>
       <label class="tog"><input type="checkbox" id="cfgHQ" checked><span class="tog-t"></span></label>
     </div>
-    <div class="srow" tabindex="-1">
+    <div class="srow" tabindex="0" id="srow-mute">
       <div class="srow-l"><div class="srow-title">Mute on Channel Switch</div><div class="srow-desc">Silence during zap, unmute after 700ms</div></div>
       <label class="tog"><input type="checkbox" id="cfgMute"><span class="tog-t"></span></label>
     </div>
     <div class="sec-lbl">Buffer Goal</div>
-    <select class="oui-sel" id="cfgBuf">
+    <select class="oui-sel" id="cfgBuf" tabindex="0">
       <option value="8">8 s — Low Latency</option>
       <option value="12" selected>12 s — Balanced</option>
       <option value="20">20 s — Stable</option>
       <option value="30">30 s — Ultra Stable</option>
     </select>
     <div class="sec-lbl">Display</div>
-    <div class="srow" tabindex="-1">
+    <div class="srow" tabindex="0" id="srow-osd">
       <div class="srow-l"><div class="srow-title">OSD Auto-hide</div><div class="srow-desc">Overlay fades after 4 seconds</div></div>
       <label class="tog"><input type="checkbox" id="cfgOsd" checked><span class="tog-t"></span></label>
     </div>
     <div class="sec-lbl">Tools</div>
-    <button class="btn btn-ghost" id="dialerBtn">📱  Channel Dialer</button>
-    <button class="btn btn-danger" id="clearCacheBtn" style="margin-top:8px">🗑  Clear Cache</button>
+    <button class="btn btn-ghost" id="dialerBtn" tabindex="0">📱  Channel Dialer</button>
+    <button class="btn btn-danger" id="clearCacheBtn" tabindex="0" style="margin-top:8px">🗑  Clear Cache</button>
   </div>
 
   <div class="hints">
     <span class="hk"><kbd>▲▼◀▶</kbd> Nav</span>
     <span class="hk"><kbd>OK</kbd> Play</span>
-    <span class="hk"><kbd>Vol+/-</kbd> Volume</span>
+    <span class="hk"><kbd>Vol±</kbd> Volume</span>
     <span class="hk"><kbd>0–9</kbd> CH#</span>
     <span class="hk"><kbd>↩</kbd> Back</span>
   </div>
-
   <div class="ckey-row">
     <button class="ckey ck-r" id="ckR" tabindex="-1"><span class="ck-dot"></span>Category</button>
     <button class="ckey ck-g" id="ckG" tabindex="-1"><span class="ck-dot"></span>Search</button>
@@ -585,13 +641,10 @@ html,body{
   </div>
 </div>
 
-<!-- PLAYER -->
 <div id="player">
   <div id="nbar">
     <div class="nbar-info">
       <div id="nName">Select a channel</div>
-      <!-- BUG-05 FIX: nSub contains a text node + span child.
-           We set the text node directly, never touch textContent of nSub itself. -->
       <div id="nSub">SAGA IPTV <span id="nAspectSpan"></span></div>
     </div>
     <div class="nctl">
@@ -609,7 +662,6 @@ html,body{
       </button>
     </div>
   </div>
-
   <div id="vwrap">
     <video id="video" playsinline autoplay></video>
     <div id="osd" class="off">
@@ -631,7 +683,6 @@ html,body{
     <div class="skip" id="skipL">⏪ 10s</div>
     <div class="skip" id="skipR">⏩ 10s</div>
   </div>
-
   <div id="sbar">
     <div id="sTxt">Ready</div>
     <div class="sbr">
@@ -642,7 +693,6 @@ html,body{
 </div>
 </div>
 
-<!-- Modal: Add Source -->
 <div id="mPl" class="mover">
   <div class="mbox">
     <div class="mhdr"><span class="mhdr-title">Add M3U Source</span><button class="mcls" id="mPlCls">✕</button></div>
@@ -654,8 +704,6 @@ html,body{
     </div>
   </div>
 </div>
-
-<!-- Modal: Dialer -->
 <div id="mDial" class="mover">
   <div class="mbox" style="width:320px">
     <div class="mhdr"><span class="mhdr-title">Channel Dialer</span><button class="mcls" id="mDialCls">✕</button></div>
@@ -671,17 +719,24 @@ html,body{
   </div>
 </div>
 
+<!-- Hidden canvas for dominant-colour extraction (FIX-05) -->
+<canvas id="colorCanvas" width="8" height="8" style="display:none"></canvas>
+
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v31 — Enterprise Stable
-  All BUG-01…BUG-20 from audit addressed.
+  SAGA IPTV v32
+  FIX-01  Settings scroll: 'cfg' zone navigates srow/btn with UP/DN
+  FIX-02  Search: keydown guard only blocks non-text keys when in search
+  FIX-03  Col-2 tile border: contain:layout paint, overflow:visible
+  FIX-04  Border 4px + glow shadow on sel
+  FIX-05  Tile bg: hidden canvas samples logo → dominant colour
+  FIX-06  Jio + Telugu pinned as first two category tabs
+  FIX-07  gap=10px, tile-pad=8px per row
 ══════════════════════════════════════════════════════════════════*/
 (function(){
 'use strict';
 
-/* ══════════════════════════════════════════════════════════════
-   BUG-03 FIX: requestIdleCallback polyfill — Tizen WebKit lacks it
-══════════════════════════════════════════════════════════════ */
+/* ── polyfill ──────────────────────────────────────────────── */
 if(typeof requestIdleCallback==='undefined'){
   window.requestIdleCallback=function(cb,opt){
     return setTimeout(function(){cb({timeRemaining:function(){return 50},didTimeout:false});},
@@ -690,106 +745,101 @@ if(typeof requestIdleCallback==='undefined'){
   window.cancelIdleCallback=function(id){clearTimeout(id);};
 }
 
-/* ══════════════════════════════════════════════════════════════
-   BUG-02 FIX: Register Tizen TV remote keys
-   Must run before any keydown listener is attached.
-══════════════════════════════════════════════════════════════ */
-(function registerTizenKeys(){
+/* ── Tizen key registration ────────────────────────────────── */
+(function(){
   try{
-    if(!window.tizen||!tizen.tvinputdevice) return;
-    var keys=[
-      'ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
-      'MediaPlay','MediaPause','MediaStop','MediaFastForward','MediaRewind','MediaPlayPause',
-      'ChannelUp','ChannelDown',
-      'VolumeUp','VolumeDown','VolumeMute',
-      '0','1','2','3','4','5','6','7','8','9',
-      'Exit','Return'
-    ];
-    keys.forEach(function(k){try{tizen.tvinputdevice.registerKey(k);}catch(e){}});
+    if(!window.tizen||!tizen.tvinputdevice)return;
+    ['ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
+     'MediaPlay','MediaPause','MediaStop','MediaFastForward','MediaRewind','MediaPlayPause',
+     'ChannelUp','ChannelDown','VolumeUp','VolumeDown','VolumeMute',
+     '0','1','2','3','4','5','6','7','8','9','Exit','Return'
+    ].forEach(k=>{try{tizen.tvinputdevice.registerKey(k);}catch(e){}});
   }catch(e){}
 })();
 
-/* ── CONSTANTS ──────────────────────────────────────────────────── */
+/* ── CONSTANTS ──────────────────────────────────────────────── */
 const COLS         = 2;
-const TILE_H       = 160;       // match CSS --tile-h
+/* FIX-07: TILE_H + TILE_PAD must match CSS calc */
+const TILE_H       = 160;
+const TILE_PAD     = 8;          // top padding per row (matches --tile-pad)
+const ROW_H        = TILE_H + TILE_PAD; // total height each trow occupies
 const OVERSHOOT    = 2;
 const PLAY_DEBOUNCE= 80;
 const DEFAULT_PL   = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
-const TELUGU_PL    = {
-  name:'Telugu',
-  url:'https://iptv-org.github.io/iptv/languages/tel.m3u',
-  builtIn:true
-};
+const TELUGU_PL    = {name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true};
+const JIO_PL       = {name:'Jio',   url:DEFAULT_PL, builtIn:true};
 const ASPECT_MODES = ['Contain','Fill','Stretch'];
-const LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
+const LS = {FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
+/* Pinned category names always at front */
+const PINNED_CATS  = ['Telugu','Jio'];
 
-/* ── DOM ────────────────────────────────────────────────────────── */
+/* ── DOM ──────────────────────────────────────────────────── */
 const $  = id=>document.getElementById(id);
 const QA = (s,r)=>[...(r||document).querySelectorAll(s)];
 
-const video        = $('video');
-const tvp          = $('tvp');
-const tin          = $('tin');
-const srchInput    = $('srchInput');
-const srchClear    = $('srchClear');
-const srchOverlay  = $('srchOverlay');
-const catsInner    = $('catsInner');
-const tnAll        = $('tnAll');
-const tnFavs       = $('tnFavs');
-const sTxt         = $('sTxt');
-const nName        = $('nName');
-/* BUG-05 FIX: reference the span child directly, never set nSub.textContent */
-const nSubGroup    = $('nSub');        // the container div
-const nAspectSpan  = $('nAspectSpan'); // the span inside nSub
-const osd          = $('osd');
-const osdCh        = $('osdCh');
-const osdNum       = $('osdNum');
-const osdGrp       = $('osdGrp');
-const pillQ        = $('pillQ');
-const pillBuf      = $('pillBuf');
-const scrollHint   = $('scrollHint');
-const sdot         = $('sdot');
-const bwTxt        = $('bwTxt');
-const clkEl        = $('clkEl');
-const skipL        = $('skipL');
-const skipR        = $('skipR');
-const ncMute       = $('ncMute');
-const ncAspect     = $('ncAspect');
-const ncFav        = $('ncFav');
-const ncFS         = $('ncFS');
-const ldMsg        = $('ldMsg');
-const dnum         = $('dnum');
-const mPl          = $('mPl');
-const mDial        = $('mDial');
-const ckR          = $('ckR');
-const ckG          = $('ckG');
-const ckY          = $('ckY');
-const ckB          = $('ckB');
-const volHud       = $('volHud');
-const volIco       = $('volIco');
-const volBarFill   = $('volBarFill');
-const volPct       = $('volPct');
+const video       = $('video');
+const tvp         = $('tvp');
+const tin         = $('tin');
+const srchInput   = $('srchInput');
+const srchClear   = $('srchClear');
+const srchOverlay = $('srchOverlay');
+const catsInner   = $('catsInner');
+const tnAll       = $('tnAll');
+const tnFavs      = $('tnFavs');
+const sTxt        = $('sTxt');
+const nName       = $('nName');
+const nSubGroup   = $('nSub');
+const nAspectSpan = $('nAspectSpan');
+const osd         = $('osd');
+const osdCh       = $('osdCh');
+const osdNum      = $('osdNum');
+const osdGrp      = $('osdGrp');
+const pillQ       = $('pillQ');
+const pillBuf     = $('pillBuf');
+const scrollHint  = $('scrollHint');
+const sdot        = $('sdot');
+const bwTxt       = $('bwTxt');
+const clkEl       = $('clkEl');
+const skipL       = $('skipL');
+const skipR       = $('skipR');
+const ncMute      = $('ncMute');
+const ncAspect    = $('ncAspect');
+const ncFav       = $('ncFav');
+const ncFS        = $('ncFS');
+const ldMsg       = $('ldMsg');
+const dnum        = $('dnum');
+const mPl         = $('mPl');
+const mDial       = $('mDial');
+const ckR         = $('ckR');
+const ckG         = $('ckG');
+const ckY         = $('ckY');
+const ckB         = $('ckB');
+const volHud      = $('volHud');
+const volIco      = $('volIco');
+const volBarFill  = $('volBarFill');
+const volPct      = $('volPct');
+const colorCanvas = $('colorCanvas');
+const colorCtx    = colorCanvas.getContext('2d',{willReadFrequently:true});
 
-/* ── STATE ──────────────────────────────────────────────────────── */
+/* ── STATE ───────────────────────────────────────────────────*/
 let player=null,allChs=[],viewChs=[],selIdx=0;
-let curUrl='',isPlaying=false,isMuted=false;
-let aspectMode=0;
+let curUrl='',isPlaying=false,isMuted=false,aspectMode=0;
 let favs=new Set(),pls=[],activeTab='all',activeGrp='All',searchQ='';
 let srchOpen=false;
 let dialStr='',dialTimer=null,rDialStr='',rDialTimer=null;
 let osdTimer=null,playTimer=null;
 let vsTop=0,vsRaf=null;
 let rowMap=new Map();
-let volHudTimer=null;
-let currentVol=50;              // BUG-01: track volume 0-100
+let volHudTimer=null,currentVol=50;
 
-// Focus zones
+/* Focus zones — FIX-01 adds 'cfg' zone */
 let zone='tiles';
 let toolbarIdx=0,catIdx=0,nctlIdx=0,ckrowIdx=0;
+let cfgFocusIdx=0;   // FIX-01: index into settings focusables
 
 let cfg={hq:true,muteSwitch:false,buf:12,osd:true};
 
-/* ── UTILS ──────────────────────────────────────────────────────── */
+/* ── UTILS ──────────────────────────────────────────────────── */
 function esc(s){if(!s)return'';return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -801,55 +851,29 @@ function toast(msg,ms=2600){
   setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),160);},ms);
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   BUG-01 FIX: Volume control via Tizen tvaudiocontrol API
-   Falls back to HTML5 video.volume when API unavailable (browser/emulator).
-   Shows a volume HUD overlay for visual feedback.
-══════════════════════════════════════════════════════════════════ */
+/* ── VOLUME ────────────────────────────────────────────────── */
 function getSystemVolume(){
-  try{
-    if(window.webapis&&webapis.avinfo)
-      return webapis.avinfo.getVolume();        // some Tizen builds
-  }catch(e){}
-  try{
-    if(window.tizen&&tizen.tvaudiocontrol)
-      return tizen.tvaudiocontrol.getVolume();  // standard Tizen API
-  }catch(e){}
+  try{if(window.tizen&&tizen.tvaudiocontrol)return tizen.tvaudiocontrol.getVolume();}catch(e){}
   return Math.round(video.volume*100);
 }
 function setSystemVolume(v){
   v=Math.max(0,Math.min(100,v));
-  try{
-    if(window.tizen&&tizen.tvaudiocontrol){
-      tizen.tvaudiocontrol.setVolume(v);
-      return;
-    }
-  }catch(e){}
-  // Fallback: HTML5 video volume
+  try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setVolume(v);return;}}catch(e){}
   video.volume=v/100;
 }
-function volUp(){
-  currentVol=Math.min(100,getSystemVolume()+5);
-  setSystemVolume(currentVol);
-  showVolHud();
-}
-function volDown(){
-  currentVol=Math.max(0,getSystemVolume()-5);
-  setSystemVolume(currentVol);
-  showVolHud();
-}
+function volUp(){currentVol=Math.min(100,getSystemVolume()+5);setSystemVolume(currentVol);showVolHud();}
+function volDown(){currentVol=Math.max(0,getSystemVolume()-5);setSystemVolume(currentVol);showVolHud();}
 function showVolHud(){
   currentVol=getSystemVolume();
-  const pct=currentVol;
-  volBarFill.style.width=pct+'%';
-  volPct.textContent=pct;
-  volIco.textContent=pct===0?'🔇':pct<40?'🔉':'🔊';
+  volBarFill.style.width=currentVol+'%';
+  volPct.textContent=currentVol;
+  volIco.textContent=currentVol===0?'🔇':currentVol<40?'🔉':'🔊';
   volHud.classList.add('on');
   clearTimeout(volHudTimer);
   volHudTimer=setTimeout(()=>volHud.classList.remove('on'),1800);
 }
 
-/* ── STORAGE ────────────────────────────────────────────────────── */
+/* ── STORAGE ─────────────────────────────────────────────────*/
 function loadStore(){
   try{const r=lsGet(LS.FAVS);if(r)favs=new Set(JSON.parse(r))}catch(e){}
   try{const r=lsGet(LS.PL);  if(r)pls=JSON.parse(r)}catch(e){}
@@ -860,15 +884,47 @@ function saveFavs(){lsSet(LS.FAVS,JSON.stringify([...favs]))}
 function savePls() {lsSet(LS.PL,  JSON.stringify(pls.filter(p=>!p.builtIn)))}
 function saveCfg() {lsSet(LS.CFG, JSON.stringify(cfg))}
 function applyCfgUI(){
-  /* BUG-20 FIX: guard each element reference */
-  const el_hq  =$('cfgHQ');   if(el_hq)  el_hq.checked   =cfg.hq;
-  const el_mute=$('cfgMute'); if(el_mute)el_mute.checked  =cfg.muteSwitch;
-  const el_buf =$('cfgBuf');  if(el_buf) el_buf.value     =String(cfg.buf);
-  const el_osd =$('cfgOsd');  if(el_osd) el_osd.checked   =cfg.osd;
-  // cfgFill was removed from settings panel — do NOT reference it
+  const h=$('cfgHQ');  if(h) h.checked  =cfg.hq;
+  const m=$('cfgMute');if(m) m.checked  =cfg.muteSwitch;
+  const b=$('cfgBuf'); if(b) b.value    =String(cfg.buf);
+  const o=$('cfgOsd'); if(o) o.checked  =cfg.osd;
 }
 
-/* ── CHUNKED M3U PARSER ─────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+   FIX-05: DOMINANT COLOUR EXTRACTION
+   Draws logo onto 8×8 hidden canvas, reads pixels, averages
+   the most saturated quadrant → CSS background for the tile.
+   Runs asynchronously after the img.onload fires.
+══════════════════════════════════════════════════════════════ */
+function extractDominantColor(img, callback){
+  try{
+    colorCtx.clearRect(0,0,8,8);
+    colorCtx.drawImage(img,0,0,8,8);
+    const d=colorCtx.getImageData(0,0,8,8).data;
+    let rSum=0,gSum=0,bSum=0,count=0;
+    for(let i=0;i<d.length;i+=4){
+      const a=d[i+3];
+      if(a<40)continue;   // skip transparent/near-transparent
+      const r=d[i],g=d[i+1],b=d[i+2];
+      // weight by saturation so grey logos don't give grey bg
+      const mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+      const sat=mx===0?0:(mx-mn)/mx;
+      const w=0.2+sat*0.8;  // min weight 0.2, max 1.0
+      rSum+=r*w;gSum+=g*w;bSum+=b*w;count+=w;
+    }
+    if(count<1){callback(null);return;}
+    const r=Math.round(rSum/count);
+    const g=Math.round(gSum/count);
+    const b=Math.round(bSum/count);
+    // darken by 55% so the logo stays readable on top
+    callback(`rgb(${Math.round(r*.45)},${Math.round(g*.45)},${Math.round(b*.45)})`);
+  }catch(e){
+    // cross-origin canvas taint — fallback to dark
+    callback(null);
+  }
+}
+
+/* ── CHUNKED M3U PARSER ──────────────────────────────────── */
 function parseM3UChunked(txt,onDone){
   const lines=txt.split(/\r?\n/);
   const out=[];let cur=null,i=0;
@@ -891,18 +947,13 @@ function parseM3UChunked(txt,onDone){
         if(l.startsWith('http')){cur.url=l;out.push(cur);cur=null;}
       }
     }
-    if(i<lines.length){
-      requestIdleCallback(processChunk,{timeout:50});
-    }else{
-      onDone(out);
-    }
+    if(i<lines.length)requestIdleCallback(processChunk,{timeout:50});
+    else onDone(out);
   }
   processChunk();
 }
 
-/* ── PLAYLIST LOAD ──────────────────────────────────────────────── */
-/* BUG-06 FIX: loadPl properly wraps chunked parse in a Promise
-   that resolves AFTER the last chunk completes, so await works correctly. */
+/* ── PLAYLIST LOAD ───────────────────────────────────────── */
 function loadPl(url,name,force=false){
   setSt('Loading '+name+'…');
   return new Promise(resolve=>{
@@ -915,7 +966,7 @@ function loadPl(url,name,force=false){
           const tid=setTimeout(()=>ctrl.abort(),25000);
           const resp=await fetch(url,{signal:ctrl.signal});
           clearTimeout(tid);
-          if(!resp.ok) throw new Error('HTTP '+resp.status);
+          if(!resp.ok)throw new Error('HTTP '+resp.status);
           txt=await resp.text();
           AppCache.setM3U(url,txt);
         }
@@ -923,6 +974,10 @@ function loadPl(url,name,force=false){
           if(!parsed.length){toast('No channels in '+name);resolve([]);return;}
           const seen=new Set(allChs.map(c=>c.url));
           const fresh=parsed.filter(c=>!seen.has(c.url));
+          /* FIX-06: tag each Jio channel with source name so we can pin the group */
+          if(name==='Jio'){
+            fresh.forEach(ch=>{ch._src='jio'});
+          }
           allChs=allChs.concat(fresh);
           lsSet('saga:last',url);
           buildCats();applyFilter();updateCounts();
@@ -944,9 +999,8 @@ async function loadAll(force=false){
   allChs=[];
   await loadPl(TELUGU_PL.url,TELUGU_PL.name,force);
   const userPls=pls.filter(p=>!p.builtIn);
-  const srcs=userPls.length?userPls:[{name:'Default',url:DEFAULT_PL}];
+  const srcs=userPls.length?userPls:[JIO_PL];
   for(const p of srcs) await loadPl(p.url,p.name,force);
-  // Restore selection, do NOT auto-play
   if(!isPlaying){
     const last=lsGet(LS.LCHU);
     const li=last?allChs.findIndex(c=>c.url===last):-1;
@@ -956,20 +1010,45 @@ async function loadAll(force=false){
     }else{selIdx=0;scrollToSel();}
     scrollHint.classList.add('on');
   }
-  hideLd();   // BUG-06: hideLd only after ALL loadPl promises completed above
+  hideLd();
 }
 
-/* ── CATEGORIES ─────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+   FIX-06: CATEGORIES — Jio + Telugu always first
+   Telugu channels come from TELUGU_PL and carry group names from
+   the M3U (usually language names). We add a synthetic "Telugu"
+   group at position 0 (after All).
+   Jio channels are tagged with _src='jio' during load and mapped
+   to a "Jio" synthetic group in buildCats.
+══════════════════════════════════════════════════════════════ */
 let allGroups=[];
 function buildCats(){
-  allGroups=['All',...new Set(allChs.map(c=>c.group))].slice(0,60);
+  // Collect all real group names from M3U
+  const rawGroups=new Set(allChs.map(c=>c.group));
+  // Synthetic pinned groups: only add if there are matching channels
+  const hasTelugu=allChs.some(c=>c._src==='telugu'||c.group==='Telugu'||TELUGU_GROUPS.has(c.group));
+  const hasJio   =allChs.some(c=>c._src==='jio');
+  // Build ordered list: All → [pinned] → rest alphabetically
+  const rest=[...rawGroups]
+    .filter(g=>g!=='All'&&g!=='Jio'&&g!=='Telugu')
+    .sort((a,b)=>a.localeCompare(b))
+    .slice(0,56);
+  allGroups=['All'];
+  if(hasTelugu)allGroups.push('Telugu');
+  if(hasJio)   allGroups.push('Jio');
+  allGroups.push(...rest);
   renderCatChips();
 }
+// Groups that come from the Telugu M3U but aren't explicitly "Telugu"
+const TELUGU_GROUPS=new Set(['Telugu','General','News','Entertainment','Movies','Sports','Music','Kids','Devotional']);
+
 function renderCatChips(){
-  catsInner.innerHTML=allGroups.map(g=>
-    `<button class="cat${g===activeGrp?' on':''}" data-g="${esc(g)}" tabindex="-1">${esc(g)}</button>`
-  ).join('');
-  QA('.cat',catsInner).forEach(b=>{b.addEventListener('click',()=>setGroup(b.dataset.g));});
+  catsInner.innerHTML=allGroups.map(g=>{
+    const isPinned=PINNED_CATS.includes(g);
+    const cls='cat'+(g===activeGrp?' on':'')+(isPinned?' pinned':'');
+    return `<button class="${cls}" data-g="${esc(g)}" tabindex="-1">${esc(g)}</button>`;
+  }).join('');
+  QA('.cat',catsInner).forEach(b=>b.addEventListener('click',()=>setGroup(b.dataset.g)));
 }
 function setGroup(g){
   activeGrp=g;
@@ -984,11 +1063,15 @@ function cycleCategory(){
   setGroup(next);toast(next);
 }
 
-/* ── FILTER ─────────────────────────────────────────────────────── */
+/* ── FILTER ──────────────────────────────────────────────── */
 function applyFilter(){
   let arr=allChs;
   if(activeTab==='favs')arr=arr.filter(c=>favs.has(c.url));
-  if(activeGrp!=='All') arr=arr.filter(c=>c.group===activeGrp);
+  // FIX-06: 'Telugu' category = channels from Telugu playlist
+  // 'Jio' category = channels tagged _src=jio
+  if(activeGrp==='Telugu')      arr=arr.filter(c=>c._src==='telugu');
+  else if(activeGrp==='Jio')    arr=arr.filter(c=>c._src==='jio');
+  else if(activeGrp!=='All')    arr=arr.filter(c=>c.group===activeGrp);
   if(searchQ){const q=searchQ.toLowerCase();arr=arr.filter(c=>c.name.toLowerCase().includes(q)||(c.group||'').toLowerCase().includes(q));}
   viewChs=arr;
   if(selIdx>=viewChs.length)selIdx=Math.max(0,viewChs.length-1);
@@ -1001,19 +1084,19 @@ function updateCounts(){
   tnFavs.classList.toggle('show',f>0);
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   VIRTUAL SCROLL — GPU-only, zero layout thrash
-   TILE_H=160px, 2-col, scale(1.05) on sel.
-   No auto-play on nav. scrollToSel does NOT force zone='tiles'.
-════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   VIRTUAL SCROLL
+   FIX-07: ROW_H = TILE_H + TILE_PAD (168px) — must match CSS
+   FIX-03: No overflow:hidden on tile; border renders fully
+══════════════════════════════════════════════════════════════ */
 function numRows(){return Math.ceil(viewChs.length/COLS)}
-function totalH() {return numRows()*TILE_H}
+function totalH() {return numRows()*ROW_H}
 function vpH()    {return tvp.clientHeight||600}
 function rowOf(i) {return Math.floor(i/COLS)}
-function frRow()  {return Math.max(0,Math.floor(vsTop/TILE_H)-OVERSHOOT)}
+function frRow()  {return Math.max(0,Math.floor(vsTop/ROW_H)-OVERSHOOT)}
 function lrRow()  {
-  if(!viewChs.length)return-1;
-  return Math.min(numRows()-1,Math.floor((vsTop+vpH())/TILE_H)+OVERSHOOT);
+  if(!viewChs.length)return -1;
+  return Math.min(numRows()-1,Math.floor((vsTop+vpH())/ROW_H)+OVERSHOOT);
 }
 
 function vsInvalidate(){
@@ -1021,10 +1104,9 @@ function vsInvalidate(){
   tin.style.height=totalH()+'px';
   vsRenderRows();
 }
-
 function vsRenderRows(){
   const F=frRow(),L=lrRow();
-  if(L<0){return;}  // empty list guard
+  if(L<0)return;
   for(const[ri,row]of rowMap){
     if(ri<F||ri>L){row.el.remove();rowMap.delete(ri);}
   }
@@ -1041,7 +1123,8 @@ function vsRenderRows(){
       continue;
     }
     const el=document.createElement('div');
-    el.className='trow';el.style.top=(ri*TILE_H)+'px';
+    el.className='trow';
+    el.style.top=(ri*ROW_H)+'px';
     el.style.transform='translateZ(0)';
     const tiles=[];
     for(let c=0;c<COLS;c++){
@@ -1052,24 +1135,78 @@ function vsRenderRows(){
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   BUILD TILE — FIX-05 dominant-colour background
+   Structure:
+     .tile                   (4px border, scale on sel, overflow:visible)
+       .t-inner              (overflow:hidden — clips image, not border)
+         .t-bg               (blurred logo wash, becomes visible after extract)
+         .t-img or .t-fallback
+       .t-num, .t-fstar, .t-label  (z-index:3, outside .t-inner)
+══════════════════════════════════════════════════════════════ */
 function buildTile(ch,ci,parent){
   const t=document.createElement('div');
   t.className='tile'+(ci===selIdx?' sel':'');
   t.dataset.ci=ci;t.tabIndex=ci===selIdx?0:-1;
-  let imgHtml;
+
+  // Inner clip container (holds image, doesn't clip border)
+  const inner=document.createElement('div');
+  inner.className='t-inner';
+
   if(ch.logo){
-    imgHtml=`<img class="t-img" src="${esc(ch.logo)}" loading="lazy" decoding="async"`+
-      ` onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`+
-      `<div class="t-fallback" style="display:none">📡</div>`;
+    // Blurred background wash
+    const bg=document.createElement('div');
+    bg.className='t-bg';
+
+    // Logo image
+    const img=document.createElement('img');
+    img.className='t-img';
+    img.loading='lazy';
+    img.decoding='async';
+    img.src=esc(ch.logo);
+
+    img.onload=function(){
+      // FIX-05: extract dominant colour and apply to tile bg + bg wash
+      extractDominantColor(img,color=>{
+        if(color){
+          t.style.backgroundColor=color;
+          bg.style.backgroundImage=`url('${esc(ch.logo)}')`;
+          bg.classList.add('loaded');
+        }
+      });
+    };
+    img.onerror=function(){
+      img.style.display='none';
+      const fb=document.createElement('div');
+      fb.className='t-fallback';fb.textContent='📡';
+      inner.appendChild(fb);
+    };
+
+    inner.appendChild(bg);
+    inner.appendChild(img);
   }else{
-    imgHtml=`<div class="t-fallback">📡</div>`;
+    const fb=document.createElement('div');
+    fb.className='t-fallback';fb.textContent='📡';
+    inner.appendChild(fb);
   }
-  t.innerHTML=imgHtml+
-    `<div class="t-num">${ci+1}</div>`+
-    `<div class="t-fstar" style="display:${favs.has(ch.url)?'block':'none'}">★</div>`+
-    `<div class="t-label">${esc(ch.name)}</div>`;
-  t._fstar=t.querySelector('.t-fstar');
-  /* BUG-13 FIX: use scrollToSel() not raw vsRenderRows() */
+
+  t.appendChild(inner);
+
+  // Overlays (z-index:3, outside .t-inner so they render over bg wash)
+  const numEl=document.createElement('div');
+  numEl.className='t-num';numEl.textContent=ci+1;
+
+  const fstar=document.createElement('div');
+  fstar.className='t-fstar';
+  fstar.textContent='★';
+  fstar.style.display=favs.has(ch.url)?'block':'none';
+  t._fstar=fstar;
+
+  const label=document.createElement('div');
+  label.className='t-label';label.textContent=ch.name;
+
+  t.appendChild(numEl);t.appendChild(fstar);t.appendChild(label);
+
   t.addEventListener('click',()=>{selIdx=ci;scrollToSel();immediatePlay(ci);});
   parent.appendChild(t);
   return t;
@@ -1081,9 +1218,9 @@ function schedRender(){
 
 function scrollToSel(){
   const ri=rowOf(selIdx);
-  const top=ri*TILE_H,bot=top+TILE_H,vph=vpH();
-  if(top<vsTop)          vsTop=Math.max(0,top-TILE_H);
-  else if(bot>vsTop+vph) vsTop=bot-vph+TILE_H;
+  const top=ri*ROW_H,bot=top+ROW_H,vph=vpH();
+  if(top<vsTop)          vsTop=Math.max(0,top-ROW_H);
+  else if(bot>vsTop+vph) vsTop=bot-vph+ROW_H;
   tin.style.transform=`translateY(${-vsTop}px)`;
   schedRender();
   requestAnimationFrame(()=>{
@@ -1092,45 +1229,82 @@ function scrollToSel(){
       const t=row.tiles[selIdx%COLS];
       if(t){
         t.tabIndex=0;
-        /* BUG-10 FIX: only focus the tile (and set zone) if we are already
-           in the tiles zone or if nothing else is focused */
         const ae=document.activeElement;
-        const inOtherZone=ae&&ae!==document.body&&
+        const inOther=ae&&ae!==document.body&&
           (ae.classList.contains('tb-item')||ae.classList.contains('cat')||
-           [ncMute,ncAspect,ncFav,ncFS,ckR,ckG,ckY,ckB].includes(ae));
-        if(!inOtherZone){t.focus({preventScroll:true});zone='tiles';}
+           [ncMute,ncAspect,ncFav,ncFS,ckR,ckG,ckY,ckB].includes(ae)||
+           ae.classList.contains('srow')||ae===srchInput);
+        if(!inOther){t.focus({preventScroll:true});zone='tiles';}
       }
     }
-    // Reset tabIndex on all visible non-sel tiles
     rowMap.forEach((r,rri)=>r.tiles.forEach((tile,tc)=>{
       tile.tabIndex=(rri*COLS+tc===selIdx)?0:-1;
     }));
   });
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   SHAKA PLAYER — freeze fix applied
-════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   FIX-01: SETTINGS PANEL NAVIGATION
+   cfgFocusables() returns all focusable items in #panelCfg.
+   goZone('cfg') focuses first item.
+   UP/DN navigates between items.
+   OK on .srow toggles its checkbox.
+   OK on .btn clicks it.
+   OK on select opens it (browser handles this natively).
+══════════════════════════════════════════════════════════════ */
+function cfgFocusables(){
+  return QA('[tabindex="0"]',$('panelCfg'));
+}
+function goZone(z,idx){
+  zone=z;
+  if(z==='toolbar'){
+    const items=QA('.tb-item');const i=Math.max(0,Math.min(idx??toolbarIdx,items.length-1));
+    toolbarIdx=i;items[i]?.focus({preventScroll:true});
+  }else if(z==='cats'){
+    const chips=QA('.cat',catsInner);if(!chips.length){goZone('tiles');return;}
+    const i=Math.max(0,Math.min(idx??catIdx,chips.length-1));
+    catIdx=i;chips[i]?.focus({preventScroll:true});
+    chips[i]?.scrollIntoView({inline:'nearest',behavior:'smooth'});
+  }else if(z==='tiles'){
+    scrollToSel();
+  }else if(z==='nctl'){
+    const btns=[ncMute,ncAspect,ncFav,ncFS];
+    const i=Math.max(0,Math.min(idx??nctlIdx,3));nctlIdx=i;btns[i]?.focus({preventScroll:true});
+  }else if(z==='ckrow'){
+    const btns=[ckR,ckG,ckY,ckB];
+    const i=Math.max(0,Math.min(idx??ckrowIdx,3));ckrowIdx=i;btns[i]?.focus({preventScroll:true});
+  }else if(z==='cfg'){
+    const items=cfgFocusables();
+    const i=Math.max(0,Math.min(idx??cfgFocusIdx,items.length-1));
+    cfgFocusIdx=i;items[i]?.focus({preventScroll:true});
+    items[i]?.scrollIntoView({block:'nearest',behavior:'smooth'});
+  }
+}
+
+document.addEventListener('focusin',e=>{
+  const el=e.target;
+  if(el.classList.contains('tb-item')){zone='toolbar';toolbarIdx=QA('.tb-item').indexOf(el);}
+  else if(el.classList.contains('cat')){zone='cats';catIdx=QA('.cat',catsInner).indexOf(el);}
+  else if(el.classList.contains('tile')){zone='tiles';}
+  else if([ncMute,ncAspect,ncFav,ncFS].includes(el)){zone='nctl';nctlIdx=[ncMute,ncAspect,ncFav,ncFS].indexOf(el);}
+  else if([ckR,ckG,ckY,ckB].includes(el)){zone='ckrow';ckrowIdx=[ckR,ckG,ckY,ckB].indexOf(el);}
+  else if(el===srchInput){zone='search';}
+  else if($('panelCfg').contains(el)){zone='cfg';cfgFocusIdx=cfgFocusables().indexOf(el);}
+});
+
+/* ── SHAKA ──────────────────────────────────────────────── */
 async function initPlayer(){
   await shaka.polyfill.installAll();
   if(!shaka.Player.isBrowserSupported()){setSt('Shaka not supported');return;}
-  player=new shaka.Player(video);
-  recfgPlayer();
-  player.addEventListener('adaptation',     updateQPill);
-  player.addEventListener('variantchanged', updateQPill);
-  player.addEventListener('buffering',e=>{
-    pillBuf.classList.toggle('on',e.buffering);
-    if(e.buffering)setSt('Buffering…');
-  });
+  player=new shaka.Player(video);recfgPlayer();
+  player.addEventListener('adaptation',updateQPill);
+  player.addEventListener('variantchanged',updateQPill);
+  player.addEventListener('buffering',e=>{pillBuf.classList.toggle('on',e.buffering);if(e.buffering)setSt('Buffering…');});
   player.addEventListener('error',e=>{
     const msg=(e.detail&&e.detail.message)||'Stream error';
     setSt('⚠ '+msg.slice(0,55));isPlaying=false;
-    /* BUG-08 FIX: capture selIdx at error time, not at retry time */
-    const retryIdx=selIdx;
-    const retryUrl=curUrl;
-    setTimeout(()=>{
-      if(!isPlaying&&curUrl===retryUrl&&selIdx===retryIdx)_doPlay(retryIdx);
-    },3000);
+    const retryIdx=selIdx,retryUrl=curUrl;
+    setTimeout(()=>{if(!isPlaying&&curUrl===retryUrl&&selIdx===retryIdx)_doPlay(retryIdx);},3000);
   });
   video.addEventListener('waiting',  ()=>pillBuf.classList.add('on'));
   video.addEventListener('playing',  ()=>{pillBuf.classList.remove('on');setSt('Streaming · '+(viewChs[selIdx]?.name||''));});
@@ -1138,53 +1312,30 @@ async function initPlayer(){
   video.addEventListener('error',    ()=>{setSt('Video error');isPlaying=false;});
   setSt('Ready');
 }
-
 function recfgPlayer(){
   if(!player)return;
   player.configure({
-    abr:{
-      enabled:!cfg.hq,
-      defaultBandwidthEstimate:10000000,
-      switchInterval:8,
-      bandwidthUpgradeTarget:0.8,
-      bandwidthDowngradeTarget:0.9,
-    },
-    streaming:{
-      bufferingGoal:   cfg.buf,
-      rebufferingGoal: 2,
-      stallEnabled:    true,
-      stallThreshold:  1.0,
-      stallSkip:       0.1,
-      retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:.3,timeout:25000},
-      safeSeekOffset:  2,
-    },
+    abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10000000,switchInterval:8,bandwidthUpgradeTarget:.8,bandwidthDowngradeTarget:.9},
+    streaming:{bufferingGoal:cfg.buf,rebufferingGoal:2,stallEnabled:true,stallThreshold:1,stallSkip:.1,
+      retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:.3,timeout:25000},safeSeekOffset:2},
   });
 }
-
 function updateQPill(){
   if(!player)return;
-  try{
-    const a=player.getVariantTracks().find(t=>t.active);
-    if(a)pillQ.textContent=(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1e6).toFixed(1)+'M';
-    else pillQ.textContent='—';
-  }catch(e){}
+  try{const a=player.getVariantTracks().find(t=>t.active);
+    pillQ.textContent=a?(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1e6).toFixed(1)+'M':'—';}catch(e){}
 }
 function lockHQ(){
   if(!player||!isPlaying)return;
-  try{
-    const tracks=player.getVariantTracks();if(!tracks.length)return;
-    const best=tracks.reduce((m,t)=>t.bandwidth>m.bandwidth?t:m,tracks[0]);
-    player.selectVariantTrack(best,false);  // clearBuffer=false
-  }catch(e){}
+  try{const t=player.getVariantTracks();if(!t.length)return;
+    player.selectVariantTrack(t.reduce((m,x)=>x.bandwidth>m.bandwidth?x:m,t[0]),false);}catch(e){}
 }
 
-/* ── PLAYBACK ───────────────────────────────────────────────────── */
+/* ── PLAYBACK ────────────────────────────────────────────── */
 function immediatePlay(ci){
-  clearTimeout(playTimer);
-  scrollHint.classList.remove('on');
+  clearTimeout(playTimer);scrollHint.classList.remove('on');
   playTimer=setTimeout(()=>_doPlay(ci),PLAY_DEBOUNCE);
 }
-
 async function _doPlay(ci){
   if(!player||ci<0||ci>=viewChs.length)return;
   const ch=viewChs[ci];if(!ch||!ch.url)return;
@@ -1192,8 +1343,7 @@ async function _doPlay(ci){
   curUrl=ch.url;selIdx=ci;lsSet(LS.LCHU,ch.url);
   if(cfg.muteSwitch&&isPlaying)video.muted=true;
   nName.textContent=ch.name;
-  /* BUG-05 FIX: set only the first text node of nSub, leaving span intact */
-  nSubGroup.childNodes[0].textContent=ch.group||'SAGA IPTV ';
+  nSubGroup.childNodes[0].textContent=(ch.group||'SAGA IPTV')+' ';
   updateNAspect();
   osdCh.textContent=ch.name;
   osdNum.textContent='CH '+String(ci+1).padStart(3,'0');
@@ -1201,74 +1351,47 @@ async function _doPlay(ci){
   showOSD();updateFavBtn(ch);setSt('Connecting…');
   isPlaying=false;pillBuf.classList.remove('on');schedRender();
   try{
-    await player.load(ch.url);
-    await video.play();
-    isPlaying=true;
-    setSt('Streaming · '+ch.name);
-    /* BUG-09 FIX: restore video.muted to isMuted state AND sync ncMute visual */
-    if(cfg.muteSwitch){
-      setTimeout(()=>{
-        video.muted=isMuted;
-        ncMute.classList.toggle('act',isMuted);
-      },700);
-    }
+    await player.load(ch.url);await video.play();
+    isPlaying=true;setSt('Streaming · '+ch.name);
+    if(cfg.muteSwitch)setTimeout(()=>{video.muted=isMuted;ncMute.classList.toggle('act',isMuted);},700);
     if(cfg.hq)setTimeout(lockHQ,4000);
     updateQPill();
   }catch(err){
     setSt('Load failed: '+err.message.slice(0,50));
-    isPlaying=false;
-    if(cfg.muteSwitch)video.muted=isMuted;
+    isPlaying=false;if(cfg.muteSwitch)video.muted=isMuted;
   }
 }
-
-/* ── OSD ────────────────────────────────────────────────────────── */
-function showOSD(){
-  osd.classList.remove('off');clearTimeout(osdTimer);
-  if(cfg.osd)osdTimer=setTimeout(()=>osd.classList.add('off'),4000);
-}
-
-/* ── TILE NAV (visual only — no play) ──────────────────────────── */
+function showOSD(){osd.classList.remove('off');clearTimeout(osdTimer);if(cfg.osd)osdTimer=setTimeout(()=>osd.classList.add('off'),4000);}
 function navTile(di){
   if(!viewChs.length)return;
   const next=Math.max(0,Math.min(viewChs.length-1,selIdx+di));
   if(next===selIdx)return;
-  selIdx=next;scrollToSel();
-  scrollHint.classList.add('on');
-  clearTimeout(playTimer);
+  selIdx=next;scrollToSel();scrollHint.classList.add('on');clearTimeout(playTimer);
 }
 
-/* ── ASPECT ─────────────────────────────────────────────────────── */
+/* ── ASPECT ─────────────────────────────────────────────── */
 function cycleAspect(){
   aspectMode=(aspectMode+1)%ASPECT_MODES.length;
   video.classList.remove('mode-fill','mode-stretch');
   if(aspectMode===1)video.classList.add('mode-fill');
   if(aspectMode===2)video.classList.add('mode-stretch');
-  updateNAspect();
-  ncAspect.classList.toggle('act',aspectMode!==0);
-  ckY.classList.toggle('on',aspectMode!==0);
+  updateNAspect();ncAspect.classList.toggle('act',aspectMode!==0);ckY.classList.toggle('on',aspectMode!==0);
   toast(ASPECT_MODES[aspectMode]);
 }
-function updateNAspect(){
-  /* BUG-05 FIX: write to span, not parent textContent */
-  nAspectSpan.textContent=aspectMode===0?'':'· '+ASPECT_MODES[aspectMode];
-}
+function updateNAspect(){nAspectSpan.textContent=aspectMode===0?'':'· '+ASPECT_MODES[aspectMode];}
 
-/* ── FAV ────────────────────────────────────────────────────────── */
+/* ── FAV ─────────────────────────────────────────────────── */
 function toggleFav(){
   const ch=viewChs[selIdx];if(!ch)return;
   if(favs.has(ch.url)){favs.delete(ch.url);toast('Removed from favourites');}
-  else                {favs.add(ch.url);   toast('Added to favourites');}
+  else{favs.add(ch.url);toast('Added to favourites');}
   saveFavs();updateFavBtn(ch);updateCounts();schedRender();
 }
-function updateFavBtn(ch){
-  const on=ch&&favs.has(ch.url);
-  ncFav.classList.toggle('act',on);
-}
+function updateFavBtn(ch){ncFav.classList.toggle('act',ch&&favs.has(ch.url));}
 
-/* ── FULLSCREEN ─────────────────────────────────────────────────── */
+/* ── FULLSCREEN ─────────────────────────────────────────── */
 function enterFS(){
-  const el=$('vwrap');
-  (el.requestFullscreen||el.webkitRequestFullscreen).call(el).catch(()=>{});
+  ($('vwrap').requestFullscreen||$('vwrap').webkitRequestFullscreen).call($('vwrap')).catch(()=>{});
   $('app').classList.add('fs');
 }
 function exitFS(){
@@ -1277,22 +1400,31 @@ function exitFS(){
 }
 document.addEventListener('fullscreenchange',()=>{
   const fs=!!document.fullscreenElement;
-  $('app').classList.toggle('fs',fs);
-  ckB.classList.toggle('on',fs);ncFS.classList.toggle('act',fs);
+  $('app').classList.toggle('fs',fs);ckB.classList.toggle('on',fs);ncFS.classList.toggle('act',fs);
 });
 
-/* ── SKIP ────────────────────────────────────────────────────────── */
+/* ── SKIP ────────────────────────────────────────────────── */
 function skip(s){
   if(!isFinite(video.duration))return;
   video.currentTime=Math.max(0,Math.min(video.duration,video.currentTime+s));
   const el=s<0?skipL:skipR;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),600);
 }
 
-/* ── SEARCH ─────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════
+   FIX-02: SEARCH — keydown handler lets typing pass through.
+   The guard only exits for non-character keys (arrow, enter, etc.)
+   that shouldn't type into the input.
+   CRITICAL: we must NOT call e.preventDefault() for regular keys
+   (letters/digits/space/backspace-as-delete) when in search.
+══════════════════════════════════════════════════════════════ */
 function openSearch(){
   srchOpen=true;srchOverlay.classList.add('open');
   QA('.tb-item').forEach(b=>b.classList.toggle('on',b.dataset.tab==='srch'));
-  srchInput.focus();zone='search';
+  // Give focus to input and explicitly set user-select
+  srchInput.style.webkitUserSelect='text';
+  srchInput.style.userSelect='text';
+  srchInput.focus();
+  zone='search';
 }
 function closeSearch(){
   srchOpen=false;srchOverlay.classList.remove('open');
@@ -1302,23 +1434,24 @@ function closeSearch(){
 srchInput.addEventListener('input',()=>{searchQ=srchInput.value.trim();applyFilter();});
 srchClear.addEventListener('click',closeSearch);
 
-/* ── TAB SWITCH ─────────────────────────────────────────────────── */
+/* ── TAB SWITCH ─────────────────────────────────────────── */
 function switchTab(tab){
   if(tab==='srch'){openSearch();return;}
   if(srchOpen)closeSearch();
   activeTab=tab;
   QA('.tb-item').forEach(b=>{const on=b.dataset.tab===tab;b.classList.toggle('on',on);b.tabIndex=on?0:-1;});
   const isCh=tab==='all'||tab==='favs';
-  $('catsRow').style.display =isCh?'':'none';
-  tvp.style.display           =isCh?'':'none';
+  $('catsRow').style.display=isCh?'':'none';
+  tvp.style.display         =isCh?'':'none';
   $('panelPl').classList.toggle('on',tab==='pl');
   $('panelCfg').classList.toggle('on',tab==='cfg');
   if(isCh)applyFilter();
   if(tab==='pl')renderSrcList();
+  if(tab==='cfg')setTimeout(()=>goZone('cfg',0),50);
 }
 QA('.tb-item',$('toolbar')).forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 
-/* ── SOURCE LIST ─────────────────────────────────────────────────── */
+/* ── SOURCE LIST ─────────────────────────────────────────── */
 function renderSrcList(){
   const box=$('srcList');
   const dp=[...pls];
@@ -1339,13 +1472,11 @@ function renderSrcList(){
     });
   });
   box.querySelectorAll('[data-del]').forEach(btn=>{
-    btn.addEventListener('click',e=>{
-      e.stopPropagation();const idx=+btn.dataset.del;pls.splice(idx,1);savePls();renderSrcList();
-    });
+    btn.addEventListener('click',e=>{e.stopPropagation();const idx=+btn.dataset.del;pls.splice(idx,1);savePls();renderSrcList();});
   });
 }
 
-/* ── MODALS ─────────────────────────────────────────────────────── */
+/* ── MODALS ──────────────────────────────────────────────── */
 function openM(el){el.classList.add('on')}
 function closeM(el){el.classList.remove('on')}
 $('addSrcBtn').addEventListener('click',()=>openM(mPl));
@@ -1359,9 +1490,7 @@ $('plSave').addEventListener('click',()=>{
   $('plName').value='';$('plUrl').value='';
   loadPl(url,name);switchTab('all');
 });
-$('refreshBtn').addEventListener('click',()=>{
-  AppCache.clearAllM3U();allChs=[];toast('Refreshing…');loadAll(true);
-});
+$('refreshBtn').addEventListener('click',()=>{AppCache.clearAllM3U();allChs=[];toast('Refreshing…');loadAll(true);});
 $('dialerBtn').addEventListener('click',()=>openM(mDial));
 $('mDialCls').addEventListener('click',()=>closeM(mDial));
 QA('.dk',$('mDial')).forEach(b=>b.addEventListener('click',()=>dialPush(b.dataset.d)));
@@ -1369,8 +1498,7 @@ function dialPush(d){
   if(d==='clr')dialStr=dialStr.slice(0,-1);
   else if(d==='go'){dialGo();return;}
   else if(dialStr.length<4)dialStr+=d;
-  dnum.textContent=dialStr||'—';
-  clearTimeout(dialTimer);
+  dnum.textContent=dialStr||'—';clearTimeout(dialTimer);
   if(dialStr.length>=3)dialTimer=setTimeout(dialGo,1400);
 }
 function dialGo(){
@@ -1387,17 +1515,16 @@ function remoteDigit(d){
   },1200);
 }
 
-/* ── SETTINGS ────────────────────────────────────────────────────── */
-$('cfgHQ').onchange   =function(){cfg.hq          =this.checked;saveCfg();recfgPlayer();};
-$('cfgMute').onchange =function(){cfg.muteSwitch   =this.checked;saveCfg();};
-$('cfgBuf').onchange  =function(){cfg.buf          =+this.value; saveCfg();recfgPlayer();};
-$('cfgOsd').onchange  =function(){cfg.osd          =this.checked;saveCfg();};
+/* ── SETTINGS WIRING ────────────────────────────────────── */
+$('cfgHQ').onchange   =function(){cfg.hq         =this.checked;saveCfg();recfgPlayer();};
+$('cfgMute').onchange =function(){cfg.muteSwitch  =this.checked;saveCfg();};
+$('cfgBuf').onchange  =function(){cfg.buf         =+this.value; saveCfg();recfgPlayer();};
+$('cfgOsd').onchange  =function(){cfg.osd         =this.checked;saveCfg();};
 $('clearCacheBtn').onclick=()=>{AppCache.clearAllM3U();toast('Cache cleared');};
 
-/* ── PLAYER BUTTONS ─────────────────────────────────────────────── */
+/* ── PLAYER BUTTONS ─────────────────────────────────────── */
 ncMute.addEventListener('click',()=>{
-  isMuted=!isMuted;video.muted=isMuted;
-  ncMute.classList.toggle('act',isMuted);
+  isMuted=!isMuted;video.muted=isMuted;ncMute.classList.toggle('act',isMuted);
   $('icoMute').innerHTML=isMuted
     ?'<path d="M16.5 12A4.5 4.5 0 0014 7.97v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18V19.9c1.17-.29 2.25-.86 3.15-1.64l2.16 2.16L21 19l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>'
     :'<path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0014 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>';
@@ -1407,35 +1534,32 @@ ncFav.addEventListener('click',toggleFav);
 ncFS.addEventListener('click',()=>document.fullscreenElement?exitFS():enterFS());
 $('vwrap').addEventListener('dblclick',()=>document.fullscreenElement?exitFS():enterFS());
 $('vwrap').addEventListener('click',showOSD);
-
 ckR.addEventListener('click',cycleCategory);
 ckG.addEventListener('click',()=>srchOpen?closeSearch():openSearch());
 ckY.addEventListener('click',cycleAspect);
 ckB.addEventListener('click',()=>document.fullscreenElement?exitFS():enterFS());
 
-/* ── CLOCK (BUG-15 FIX: 10s interval) ──────────────────────────── */
+/* ── CLOCK ───────────────────────────────────────────────── */
 function tick(){clkEl.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});}
-tick();setInterval(tick,10000);   // was 30000
+tick();setInterval(tick,10000);
 
-/* ── NETWORK STAT ───────────────────────────────────────────────── */
+/* ── NETWORK ─────────────────────────────────────────────── */
 setInterval(()=>{
   if(!player||!isPlaying)return;
-  try{
-    const bw=player.getStats().estimatedBandwidth||0,mb=bw/1e6;
-    if(mb>=4)     {sdot.className='sdot g';bwTxt.textContent=mb.toFixed(1)+'M';}
+  try{const bw=player.getStats().estimatedBandwidth||0,mb=bw/1e6;
+    if(mb>=4){sdot.className='sdot g';bwTxt.textContent=mb.toFixed(1)+'M';}
     else if(mb>=1){sdot.className='sdot a';bwTxt.textContent=mb.toFixed(1)+'M';}
-    else if(mb>0) {sdot.className='sdot r';bwTxt.textContent=(bw/1e3).toFixed(0)+'K';}
+    else if(mb>0){sdot.className='sdot r';bwTxt.textContent=(bw/1e3).toFixed(0)+'K';}
   }catch(e){}
 },3000);
 
 function hideLd(){$('loading').classList.add('off');setTimeout(()=>{$('loading').style.display='none';},420);}
 
-/* ══════════════════════════════════════════════════════════════════
-   FOCUS MANAGER + REMOTE KEYMAP
-   BUG-01: VolumeUp (447) / VolumeDown (448) wired to tvaudiocontrol.
-   BUG-02: Keys registered above.
-   Zone graph unchanged from v30.
-════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════
+   REMOTE KEYMAP — Tizen OS 9 / BN59-01199F
+   FIX-01: 'cfg' zone: UP/DN scrolls settings, OK toggles srow
+   FIX-02: search zone — only Escape exits; all else types
+════════════════════════════════════════════════════════════ */
 const KC={
   UP:38,DN:40,LT:37,RT:39,
   TUP:48888,TDN:48889,TLT:48886,TRT:48887,
@@ -1443,7 +1567,6 @@ const KC={
   PLAY:415,PAUSE:19,PP:10252,STOP:413,FF:417,REW:412,
   RED:403,GREEN:404,YELLOW:405,BLUE:406,
   CHUP:427,CHDN:428,
-  /* BUG-01 FIX: added volume keycodes */
   VOL_UP:447,VOL_DN:448,MUTE:449,
 };
 function isUp(kc,k){return kc===KC.UP||kc===KC.TUP||k==='ArrowUp'||k==='Up'}
@@ -1451,66 +1574,38 @@ function isDn(kc,k){return kc===KC.DN||kc===KC.TDN||k==='ArrowDown'||k==='Down'}
 function isLt(kc,k){return kc===KC.LT||kc===KC.TLT||k==='ArrowLeft'||k==='Left'}
 function isRt(kc,k){return kc===KC.RT||kc===KC.TRT||k==='ArrowRight'||k==='Right'}
 function isOK(kc,k){return kc===KC.ENTER||k==='Enter'}
-function isBack(kc,k){return kc===KC.BACK||k==='Escape'||k==='Backspace'}
+function isBack(kc,k){return kc===KC.BACK||k==='Escape'}
 function isDigit(e){const kc=e.keyCode;return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')}
 function getDigit(e){if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);return String(e.keyCode-48)}
-
-function tbItems()  {return QA('.tb-item')}
-function catChips() {return QA('.cat',catsInner)}
-function nctlBtns() {return[ncMute,ncAspect,ncFav,ncFS]}
-function ckBtns()   {return[ckR,ckG,ckY,ckB]}
-
-function goZone(z,idx){
-  zone=z;
-  if(z==='toolbar'){
-    const items=tbItems();const i=Math.max(0,Math.min(idx??toolbarIdx,items.length-1));
-    toolbarIdx=i;items[i]?.focus({preventScroll:true});
-  }else if(z==='cats'){
-    const chips=catChips();if(!chips.length){goZone('tiles');return;}
-    const i=Math.max(0,Math.min(idx??catIdx,chips.length-1));
-    catIdx=i;chips[i]?.focus({preventScroll:true});
-    chips[i]?.scrollIntoView({inline:'nearest',behavior:'smooth'});
-  }else if(z==='tiles'){
-    scrollToSel();
-  }else if(z==='nctl'){
-    const i=Math.max(0,Math.min(idx??nctlIdx,3));nctlIdx=i;nctlBtns()[i]?.focus({preventScroll:true});
-  }else if(z==='ckrow'){
-    const i=Math.max(0,Math.min(idx??ckrowIdx,3));ckrowIdx=i;ckBtns()[i]?.focus({preventScroll:true});
-  }
-}
-
-document.addEventListener('focusin',e=>{
-  const el=e.target;
-  if(el.classList.contains('tb-item')){zone='toolbar';toolbarIdx=tbItems().indexOf(el);}
-  else if(el.classList.contains('cat')){zone='cats';catIdx=catChips().indexOf(el);}
-  else if(el.classList.contains('tile')){zone='tiles';}
-  else if(nctlBtns().includes(el)){zone='nctl';nctlIdx=nctlBtns().indexOf(el);}
-  else if(ckBtns().includes(el)){zone='ckrow';ckrowIdx=ckBtns().indexOf(el);}
-  else if(el===srchInput){zone='search';}
-});
 
 window.addEventListener('keydown',e=>{
   const kc=e.keyCode,k=e.key;
 
-  /* BUG-01 FIX: volume keys handled FIRST, before any zone/modal logic */
+  /* Volume always first */
   if(kc===KC.VOL_UP){e.preventDefault();volUp();return;}
   if(kc===KC.VOL_DN){e.preventDefault();volDown();return;}
   if(kc===KC.MUTE||k==='VolumeMute'){
     e.preventDefault();
-    /* Toggle system mute via Tizen if available, else toggle video.muted */
-    try{
-      if(window.tizen&&tizen.tvaudiocontrol){
-        tizen.tvaudiocontrol.setMute(!tizen.tvaudiocontrol.isMute());
-        showVolHud();return;
-      }
-    }catch(ex){}
+    try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setMute(!tizen.tvaudiocontrol.isMute());showVolHud();return;}}catch(ex){}
     ncMute.click();return;
   }
 
+  /* ══ FIX-02: SEARCH ZONE ══════════════════════════════
+     When srchInput is focused, ONLY intercept Escape/Back.
+     All other keys (letters, digits, space, backspace) must
+     reach the input normally — do NOT call preventDefault,
+     do NOT return early, just let the browser handle them.
+  ══════════════════════════════════════════════════════ */
   if(document.activeElement===srchInput){
-    if(isBack(kc,k)){e.preventDefault();closeSearch();goZone('tiles');}
+    if(isBack(kc,k)){
+      e.preventDefault();
+      closeSearch();goZone('tiles');
+    }
+    // All other keys: fall through to default browser input handling
     return;
   }
+
+  /* Modal intercepts */
   if(mDial.classList.contains('on')){
     if(isDigit(e)){e.preventDefault();dialPush(getDigit(e));return;}
     if(isBack(kc,k)){e.preventDefault();closeM(mDial);return;}
@@ -1522,48 +1617,85 @@ window.addEventListener('keydown',e=>{
     return;
   }
 
+  /* ══ FIX-01: CFG ZONE ═════════════════════════════════
+     UP/DN moves focus through settings rows/buttons.
+     OK on a .srow toggles its checkbox.
+     OK on .btn clicks it.
+     Back returns to toolbar.
+  ══════════════════════════════════════════════════════ */
+  if(zone==='cfg'){
+    const items=cfgFocusables();
+    if(isUp(kc,k)){
+      e.preventDefault();
+      if(cfgFocusIdx>0){cfgFocusIdx--;items[cfgFocusIdx]?.focus({preventScroll:true});items[cfgFocusIdx]?.scrollIntoView({block:'nearest',behavior:'smooth'});}
+      else goZone('toolbar');
+      return;
+    }
+    if(isDn(kc,k)){
+      e.preventDefault();
+      if(cfgFocusIdx<items.length-1){cfgFocusIdx++;items[cfgFocusIdx]?.focus({preventScroll:true});items[cfgFocusIdx]?.scrollIntoView({block:'nearest',behavior:'smooth'});}
+      return;
+    }
+    if(isOK(kc,k)){
+      e.preventDefault();
+      const focused=items[cfgFocusIdx];
+      if(focused){
+        if(focused.classList.contains('srow')){
+          // Toggle the checkbox inside this srow
+          const cb=focused.querySelector('input[type=checkbox]');
+          if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}));}
+        }else{
+          focused.click();
+        }
+      }
+      return;
+    }
+    if(isBack(kc,k)){e.preventDefault();goZone('toolbar');return;}
+    if(isLt(kc,k)||isRt(kc,k)){e.preventDefault();return;} // block left/right in cfg
+    return;
+  }
+
+  /* Main D-pad routing */
   if(isUp(kc,k)){
     e.preventDefault();
     if(zone==='tiles'){if(selIdx<COLS)goZone('cats');else navTile(-COLS);}
-    else if(zone==='cats')  goZone('toolbar');
+    else if(zone==='cats')   goZone('toolbar');
     else if(zone==='toolbar')goZone('nctl',0);
-    else if(zone==='nctl')  goZone('tiles');
-    else if(zone==='ckrow') goZone('tiles');
+    else if(zone==='nctl')   goZone('tiles');
+    else if(zone==='ckrow')  goZone('tiles');
     return;
   }
   if(isDn(kc,k)){
     e.preventDefault();
     if(zone==='toolbar')    goZone('cats');
     else if(zone==='cats')  goZone('tiles');
-    else if(zone==='tiles'){
-      const isLast=selIdx>=viewChs.length-COLS;
-      if(isLast)goZone('nctl',0);else navTile(+COLS);
-    }else if(zone==='nctl') goZone('ckrow',0);
+    else if(zone==='tiles'){const isLast=selIdx>=viewChs.length-COLS;if(isLast)goZone('nctl',0);else navTile(+COLS);}
+    else if(zone==='nctl')  goZone('ckrow',0);
     else if(zone==='ckrow') goZone('toolbar',0);
     return;
   }
   if(isLt(kc,k)){
     e.preventDefault();
     if(zone==='tiles')       navTile(-1);
-    else if(zone==='toolbar'){toolbarIdx=Math.max(0,toolbarIdx-1);tbItems()[toolbarIdx]?.focus({preventScroll:true});}
-    else if(zone==='cats')   {catIdx=Math.max(0,catIdx-1);const c=catChips()[catIdx];c?.focus({preventScroll:true});c?.scrollIntoView({inline:'nearest',behavior:'smooth'});}
-    else if(zone==='nctl')   {nctlIdx=Math.max(0,nctlIdx-1);nctlBtns()[nctlIdx]?.focus({preventScroll:true});}
-    else if(zone==='ckrow')  {ckrowIdx=Math.max(0,ckrowIdx-1);ckBtns()[ckrowIdx]?.focus({preventScroll:true});}
+    else if(zone==='toolbar'){toolbarIdx=Math.max(0,toolbarIdx-1);QA('.tb-item')[toolbarIdx]?.focus({preventScroll:true});}
+    else if(zone==='cats')   {catIdx=Math.max(0,catIdx-1);const c=QA('.cat',catsInner)[catIdx];c?.focus({preventScroll:true});c?.scrollIntoView({inline:'nearest',behavior:'smooth'});}
+    else if(zone==='nctl')   {nctlIdx=Math.max(0,nctlIdx-1);[ncMute,ncAspect,ncFav,ncFS][nctlIdx]?.focus({preventScroll:true});}
+    else if(zone==='ckrow')  {ckrowIdx=Math.max(0,ckrowIdx-1);[ckR,ckG,ckY,ckB][ckrowIdx]?.focus({preventScroll:true});}
     return;
   }
   if(isRt(kc,k)){
     e.preventDefault();
     if(zone==='tiles')       navTile(+1);
-    else if(zone==='toolbar'){toolbarIdx=Math.min(tbItems().length-1,toolbarIdx+1);tbItems()[toolbarIdx]?.focus({preventScroll:true});}
-    else if(zone==='cats')   {catIdx=Math.min(catChips().length-1,catIdx+1);const c=catChips()[catIdx];c?.focus({preventScroll:true});c?.scrollIntoView({inline:'nearest',behavior:'smooth'});}
-    else if(zone==='nctl')   {nctlIdx=Math.min(3,nctlIdx+1);nctlBtns()[nctlIdx]?.focus({preventScroll:true});}
-    else if(zone==='ckrow')  {ckrowIdx=Math.min(3,ckrowIdx+1);ckBtns()[ckrowIdx]?.focus({preventScroll:true});}
+    else if(zone==='toolbar'){toolbarIdx=Math.min(QA('.tb-item').length-1,toolbarIdx+1);QA('.tb-item')[toolbarIdx]?.focus({preventScroll:true});}
+    else if(zone==='cats')   {catIdx=Math.min(QA('.cat',catsInner).length-1,catIdx+1);const c=QA('.cat',catsInner)[catIdx];c?.focus({preventScroll:true});c?.scrollIntoView({inline:'nearest',behavior:'smooth'});}
+    else if(zone==='nctl')   {nctlIdx=Math.min(3,nctlIdx+1);[ncMute,ncAspect,ncFav,ncFS][nctlIdx]?.focus({preventScroll:true});}
+    else if(zone==='ckrow')  {ckrowIdx=Math.min(3,ckrowIdx+1);[ckR,ckG,ckY,ckB][ckrowIdx]?.focus({preventScroll:true});}
     return;
   }
   if(isOK(kc,k)){
     e.preventDefault();
     if(zone==='tiles'){scrollHint.classList.remove('on');immediatePlay(selIdx);if(!document.fullscreenElement)enterFS();}
-    else{document.activeElement?.click();}
+    else document.activeElement?.click();
     return;
   }
   if(isBack(kc,k)){
@@ -1582,10 +1714,7 @@ window.addEventListener('keydown',e=>{
     case(kc===KC.PLAY):  e.preventDefault();video.play().catch(()=>{});break;
     case(kc===KC.PAUSE): e.preventDefault();video.pause();break;
     case(kc===KC.PP):    e.preventDefault();video.paused?video.play().catch(()=>{}):video.pause();break;
-    case(kc===KC.STOP):
-      e.preventDefault();
-      if(player){player.unload();isPlaying=false;curUrl='';setSt('Stopped');}
-      break;
+    case(kc===KC.STOP):  e.preventDefault();if(player){player.unload();isPlaying=false;curUrl='';setSt('Stopped');}break;
     case(kc===KC.FF):    e.preventDefault();skip(30);break;
     case(kc===KC.REW):   e.preventDefault();skip(-30);break;
     case(kc===KC.CHUP||k==='PageUp'):   e.preventDefault();navTile(-COLS);break;
@@ -1602,20 +1731,40 @@ if(window.ResizeObserver){
   new ResizeObserver(()=>{vsInvalidate();scrollToSel();}).observe(tvp);
 }
 
-/* ── BOOT ───────────────────────────────────────────────────────── */
+/* ── BOOT ────────────────────────────────────────────────── */
 (async function boot(){
   loadStore();
-  /* BUG-04 FIX: ensure exactly one TELUGU_PL entry — remove any stale saved copy first */
-  pls=pls.filter(p=>p.url!==TELUGU_PL.url);
-  pls.unshift(TELUGU_PL);
+  // Ensure built-in playlists are present, deduplicated
+  pls=pls.filter(p=>p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url);
+  pls.unshift(JIO_PL);      // Jio second
+  pls.unshift(TELUGU_PL);   // Telugu first
 
   ldMsg.textContent='Initialising player…';
   await initPlayer();
   ldMsg.textContent='Loading channels…';
-  buildCats();
-  await loadAll(false);
+
+  // Tag Telugu channels during load
+  const teluguSnapshot=allChs.length;
+  await loadPl(TELUGU_PL.url,TELUGU_PL.name,false);
+  // Mark all newly added channels as Telugu source
+  allChs.slice(teluguSnapshot).forEach(ch=>{ch._src='telugu';});
+
+  const userPls=pls.filter(p=>!p.builtIn);
+  const srcs=userPls.length?userPls:[JIO_PL];
+  for(const p of srcs){
+    const before=allChs.length;
+    await loadPl(p.url,p.name,false);
+    if(p.name==='Jio')allChs.slice(before).forEach(ch=>{ch._src='jio';});
+  }
+
+  if(!isPlaying){
+    const last=lsGet(LS.LCHU);
+    const li=last?allChs.findIndex(c=>c.url===last):-1;
+    if(li>=0){const vi=viewChs.findIndex(c=>c.url===allChs[li].url);if(vi>=0){selIdx=vi;scrollToSel();}}
+    else{selIdx=0;scrollToSel();}
+    scrollHint.classList.add('on');
+  }
   hideLd();
-  /* Read initial system volume after app ready */
   currentVol=getSystemVolume();
 })();
 
