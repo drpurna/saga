@@ -3,10 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>IPTV Smarters Pro | Monochrome</title>
-  <!-- Shaka Player CDN (hardware acceleration) -->
+  <title>IPTV Smarters Pro | SAGA Edition</title>
+  <!-- Shaka Player CDN (hardware accelerated) -->
   <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.0/dist/shaka-player.compiled.js"></script>
   <style>
+    /* ============================================================
+       EXACT IPTV SMARTERS PRO INTERFACE – MONOCHROME THEME
+       Left: categories + search + playlist selector
+       Right: top bar (time), mini player, 2‑col channel grid, EPG bar
+       Hardware acceleration: translateZ(0), will-change, Shaka MSE
+    ============================================================ */
     * {
       margin: 0;
       padding: 0;
@@ -15,7 +21,6 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    /* MONOCHROME DARK THEME – exactly like reference */
     :root {
       --bg-primary: #0a0a0a;
       --bg-sidebar: #0f0f0f;
@@ -39,7 +44,7 @@
     }
 
     /* hardware acceleration base */
-    #app, .category-list, .channels-grid, .video-container {
+    .app-container, .sidebar, .channels-grid, .video-container {
       transform: translateZ(0);
       will-change: transform;
       backface-visibility: hidden;
@@ -51,7 +56,7 @@
       width: 100%;
     }
 
-    /* ========= LEFT SIDEBAR (categories with counts) ========= */
+    /* ========= LEFT SIDEBAR (exactly like Smarters Pro) ========= */
     .sidebar {
       width: 320px;
       background: var(--bg-sidebar);
@@ -74,11 +79,30 @@
       letter-spacing: -0.5px;
       color: white;
       margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .playlist-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: white;
+      padding: 10px 12px;
+      border-radius: 8px;
+      width: 100%;
+      font-size: 13px;
+      margin-bottom: 16px;
+      cursor: pointer;
+      outline: none;
+    }
+    .playlist-select:focus {
+      border-color: var(--accent);
     }
 
     .search-box {
       position: relative;
-      margin-top: 8px;
+      margin-top: 4px;
     }
 
     #searchInput {
@@ -149,7 +173,7 @@
       border-radius: 20px;
     }
 
-    /* ========= RIGHT PANEL (channels + player) ========= */
+    /* ========= RIGHT PANEL ========= */
     .main-panel {
       flex: 1;
       display: flex;
@@ -158,7 +182,6 @@
       background: var(--bg-primary);
     }
 
-    /* top bar: time & status */
     .top-bar {
       display: flex;
       justify-content: space-between;
@@ -180,7 +203,7 @@
       font-family: monospace;
     }
 
-    /* video player area (mini player) */
+    /* mini player area (like Smarters Pro) */
     .video-area {
       background: #000000;
       aspect-ratio: 16 / 9;
@@ -216,7 +239,8 @@
       transition: opacity 0.2s;
       pointer-events: none;
     }
-    .video-area:hover .player-controls {
+    .video-area:hover .player-controls,
+    .video-area:focus-within .player-controls {
       opacity: 1;
       pointer-events: auto;
     }
@@ -233,7 +257,7 @@
       outline: 1px solid white;
     }
 
-    /* channel grid (exactly two columns like image) */
+    /* two-column channel grid (exact replica) */
     .channels-wrapper {
       flex: 1;
       overflow-y: auto;
@@ -287,7 +311,7 @@
       font-size: 12px;
     }
 
-    /* EPG info bar (minimal) */
+    /* EPG bar (bottom) */
     .epg-bar {
       background: var(--bg-sidebar);
       border-top: 1px solid var(--border);
@@ -332,50 +356,51 @@
   </style>
 </head>
 <body>
-<div id="app">
-  <div class="app-container">
-    <!-- LEFT SIDEBAR: categories with counts (exactly as image) -->
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">IPTV SMARTERS PRO</div>
-        <div class="search-box">
-          <input type="text" id="searchInput" placeholder="🔍 Search in categories..." autocomplete="off">
-        </div>
+<div class="app-container">
+  <!-- LEFT SIDEBAR: categories with counts, search, playlist selector -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        IPTV SMARTERS PRO
       </div>
-      <div class="category-list" id="categoryList"></div>
-      <div class="epg-bar" style="border-top:1px solid var(--border); padding:12px">
-        <span>⭐ Favourites: <span id="favCount">0</span></span>
-        <span>📡 <span id="channelTotal">0</span> channels</span>
+      <select id="playlistSelect" class="playlist-select"></select>
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="🔍 Search in categories..." autocomplete="off">
+      </div>
+    </div>
+    <div class="category-list" id="categoryList"></div>
+    <div class="epg-bar" style="border-top:1px solid var(--border); padding:12px; flex-direction:column; gap:6px;">
+      <span>⭐ Favourites: <span id="favCount">0</span></span>
+      <span>📡 Channels: <span id="channelTotal">0</span></span>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: top bar + player + 2‑col grid + EPG -->
+  <div class="main-panel">
+    <div class="top-bar">
+      <div class="current-category" id="currentCategoryTitle">ALL CHANNELS</div>
+      <div class="time-display" id="liveTime"></div>
+    </div>
+
+    <!-- hardware accelerated video player (Shaka) -->
+    <div class="video-area" id="videoArea">
+      <video id="videoPlayer" playsinline autoplay></video>
+      <div class="player-controls">
+        <button class="ctrl-btn" id="playPauseBtn">⏯</button>
+        <button class="ctrl-btn" id="muteBtn">🔊</button>
+        <button class="ctrl-btn" id="fullscreenBtn">⛶</button>
+        <button class="ctrl-btn" id="favChannelBtn">⭐</button>
       </div>
     </div>
 
-    <!-- RIGHT PANEL: channels grid + video player -->
-    <div class="main-panel">
-      <div class="top-bar">
-        <div class="current-category" id="currentCategoryTitle">ALL CHANNELS</div>
-        <div class="time-display" id="liveTime"></div>
-      </div>
+    <!-- two‑column channel grid (exact Smarters Pro style) -->
+    <div class="channels-wrapper">
+      <div class="channels-grid" id="channelsGrid"></div>
+    </div>
 
-      <!-- hardware accelerated video player (Shaka) -->
-      <div class="video-area" id="videoArea">
-        <video id="videoPlayer" playsinline autoplay></video>
-        <div class="player-controls">
-          <button class="ctrl-btn" id="playPauseBtn">⏯</button>
-          <button class="ctrl-btn" id="muteBtn">🔊</button>
-          <button class="ctrl-btn" id="fullscreenBtn">⛶</button>
-          <button class="ctrl-btn" id="favChannelBtn">⭐</button>
-        </div>
-      </div>
-
-      <!-- channel grid (two columns, like reference image) -->
-      <div class="channels-wrapper">
-        <div class="channels-grid" id="channelsGrid"></div>
-      </div>
-
-      <!-- bottom EPG info line -->
-      <div class="epg-bar">
-        <div class="epg-now" id="epgNowText">📺 Select a channel to see program info</div>
-      </div>
+    <!-- EPG info line -->
+    <div class="epg-bar">
+      <div class="epg-now" id="epgNowText">📺 Select a channel to see program info</div>
     </div>
   </div>
 </div>
@@ -383,383 +408,407 @@
 
 <script>
   /* ============================================================
-     FULL IPTV APP – EXACT UI AS IMAGE
-     Categories with counts, two‑column channels, Shaka Player,
-     hardware acceleration, caching (cache.js embedded), remote keys
+     HEAVY SOLID IPTV SMARTERS PRO REPLICA
+     - Uses Telugu & Jio playlists from earlier index.html
+     - Full category counts, search, favourites, Shaka HW accel
+     - Remote control keys (arrows, Enter, F, colour keys)
+     - Persistent cache via AppCache (embedded)
   ============================================================ */
-  (function(){
-    // ---------- EMBEDDED CACHE.JS (from user's file, simplified but full) ----------
-    const AppCache = (function () {
-      var M3U_TTL = 30 * 60 * 1000;
-      var LS_QUOTA_WARN = 4.5 * 1024 * 1024;
-      var _memCache = new Map();
-      var MEM_MAX = 80;
 
-      function memSet(key, value, ts) {
-        if (_memCache.has(key)) _memCache.delete(key);
-        if (_memCache.size >= MEM_MAX) {
-          var oldest = _memCache.keys().next().value;
-          _memCache.delete(oldest);
-        }
-        _memCache.set(key, { value: value, ts: ts || Date.now() });
+  // ---------- EMBEDDED CACHE (from user's cache.js) ----------
+  const AppCache = (function () {
+    var M3U_TTL = 30 * 60 * 1000;
+    function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } }
+    function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
+    function lsRemove(k) { try { localStorage.removeItem(k); } catch(e) {} }
+    function getM3U(url) {
+      var ck = 'plCache:' + url, ctk = 'plTime:' + url;
+      var ts = parseInt(lsGet(ctk) || '0', 10);
+      if (Date.now() - ts <= M3U_TTL) {
+        var data = lsGet(ck);
+        if (data && data.length > 100) return Promise.resolve(data);
       }
-      function memGet(key) {
-        if (!_memCache.has(key)) return null;
-        var rec = _memCache.get(key);
-        _memCache.delete(key);
-        _memCache.set(key, rec);
-        return rec;
-      }
-      function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch(e) { return false; } }
-      function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return null; } }
-      function lsRemove(k) { try { localStorage.removeItem(k); } catch(e) {} }
-
-      function getM3U(url) {
-        var ck = 'plCache:' + url, ctk = 'plTime:' + url;
-        var ts = parseInt(lsGet(ctk) || '0', 10);
-        if (Date.now() - ts <= M3U_TTL) {
-          var data = lsGet(ck);
-          if (data && data.length > 100) return Promise.resolve(data);
-        }
-        return Promise.resolve(null);
-      }
-      function setM3U(url, text) {
-        var ck = 'plCache:' + url, ctk = 'plTime:' + url;
-        lsSet(ctk, String(Date.now()));
-        if (!lsSet(ck, text)) { lsRemove(ck); lsRemove(ctk); return Promise.resolve(false); }
-        return Promise.resolve(true);
-      }
-      function clearAllM3U() {
-        try {
-          var keys = [];
-          for (var i = 0; i < localStorage.length; i++) {
-            var k = localStorage.key(i);
-            if (k && (k.startsWith('plCache:') || k.startsWith('plTime:'))) keys.push(k);
-          }
-          keys.forEach(function (k) { localStorage.removeItem(k); });
-        } catch(e) {}
-        return Promise.resolve();
-      }
-      return { getM3U, setM3U, clearAllM3U };
-    })();
-
-    // ---------- GLOBALS ----------
-    let allChannels = [];        // { name, url, logo, group }
-    let categoriesMap = new Map(); // groupName -> count
-    let activeCategory = "All";
-    let filteredChannels = [];
-    let selectedChannelIndex = 0;
-    let shakaPlayer = null;
-    let videoEl = document.getElementById('videoPlayer');
-    let isPlaying = false;
-    let currentUrl = '';
-    let favourites = new Set();
-    let searchQuery = '';
-
-    // DOM elements
-    const categoryContainer = document.getElementById('categoryList');
-    const channelsGrid = document.getElementById('channelsGrid');
-    const currentCategoryTitle = document.getElementById('currentCategoryTitle');
-    const searchInput = document.getElementById('searchInput');
-    const liveTimeSpan = document.getElementById('liveTime');
-    const channelTotalSpan = document.getElementById('channelTotal');
-    const favCountSpan = document.getElementById('favCount');
-    const epgNowText = document.getElementById('epgNowText');
-    const videoArea = document.getElementById('videoArea');
-    const toastDiv = document.getElementById('toastMsg');
-
-    // helper: toast
-    function toast(msg, duration = 2000) {
-      toastDiv.textContent = msg;
-      toastDiv.style.display = 'block';
-      setTimeout(() => { toastDiv.style.display = 'none'; }, duration);
+      return Promise.resolve(null);
     }
-
-    // time updater
-    function updateTime() {
-      const now = new Date();
-      liveTimeSpan.innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' • ' + now.toLocaleDateString();
+    function setM3U(url, text) {
+      var ck = 'plCache:' + url, ctk = 'plTime:' + url;
+      lsSet(ctk, String(Date.now()));
+      if (!lsSet(ck, text)) { lsRemove(ck); lsRemove(ctk); return Promise.resolve(false); }
+      return Promise.resolve(true);
     }
-    setInterval(updateTime, 1000);
-    updateTime();
-
-    // favourites storage
-    function loadFavs() {
-      try { const f = localStorage.getItem('mono_favs'); if(f) favourites = new Set(JSON.parse(f)); } catch(e) {}
-      updateFavUI();
-    }
-    function saveFavs() { localStorage.setItem('mono_favs', JSON.stringify([...favourites])); updateFavUI(); }
-    function updateFavUI() {
-      const totalFavs = [...favourites].filter(url => allChannels.some(c => c.url === url)).length;
-      favCountSpan.innerText = totalFavs;
-    }
-    function toggleFav(channel) {
-      if(favourites.has(channel.url)) favourites.delete(channel.url);
-      else favourites.add(channel.url);
-      saveFavs();
-      renderChannelGrid();
-      toast(favourites.has(channel.url) ? '⭐ Added to favourites' : '☆ Removed');
-    }
-
-    // ---------- M3U PARSER (chunked, respects groups & counts) ----------
-    function parseM3U(text, onDone) {
-      const lines = text.split(/\r?\n/);
-      let channels = [];
-      let cur = null;
-      let i = 0;
-      const chunk = 600;
-      function processChunk() {
-        const end = Math.min(i + chunk, lines.length);
-        for (; i < end; i++) {
-          const l = lines[i].trim();
-          if (l.startsWith('#EXTINF')) {
-            const nameMatch = l.match(/tvg-name="([^"]*)"/i) || l.match(/,([^,]+)$/);
-            let name = nameMatch ? (nameMatch[1] || nameMatch[2]) : 'Channel';
-            if (name.includes(',')) name = name.split(',').pop();
-            name = name.trim() || 'Channel';
-            const logo = (l.match(/tvg-logo="([^"]*)"/i) || [])[1] || '';
-            const group = (l.match(/group-title="([^"]*)"/i) || [])[1] || 'General';
-            cur = { name, logo, group, url: '' };
-          } else if (l && !l.startsWith('#') && cur) {
-            if (l.startsWith('http')) {
-              cur.url = l;
-              channels.push(cur);
-              cur = null;
-            }
-          }
-        }
-        if (i < lines.length) requestIdleCallback(processChunk, { timeout: 40 });
-        else onDone(channels);
-      }
-      processChunk();
-    }
-
-    // load playlist from URL (cached via AppCache)
-    async function loadPlaylist(url, playlistName = "default") {
-      toast(`Loading ${playlistName}...`);
-      try {
-        let cached = await AppCache.getM3U(url);
-        let m3u = cached;
-        if (!m3u) {
-          const resp = await fetch(url, { signal: AbortSignal.timeout(20000) });
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-          m3u = await resp.text();
-          await AppCache.setM3U(url, m3u);
-        }
-        parseM3U(m3u, (channels) => {
-          allChannels = channels;
-          rebuildCategories();
-          applyFilterAndRender();
-          toast(`✅ ${allChannels.length} channels loaded`);
-          if (allChannels.length > 0 && !isPlaying) {
-            selectedChannelIndex = 0;
-            playChannelByIndex(0);
-          }
-        });
-      } catch(e) {
-        toast(`Playlist error: ${e.message}`);
-        console.error(e);
-      }
-    }
-
-    // rebuild categories with counts (exactly like image: "USA SPORTS 111")
-    function rebuildCategories() {
-      const groupCount = new Map();
-      allChannels.forEach(ch => {
-        const grp = ch.group || 'General';
-        groupCount.set(grp, (groupCount.get(grp) || 0) + 1);
-      });
-      categoriesMap = groupCount;
-      renderCategoryList();
-    }
-
-    function renderCategoryList() {
-      let cats = [['All', allChannels.length], ...Array.from(categoriesMap.entries()).sort((a,b)=>a[0].localeCompare(b[0]))];
-      categoryContainer.innerHTML = cats.map(([cat, cnt]) => `
-        <button class="category-item ${activeCategory === cat ? 'active' : ''}" data-category="${escapeHtml(cat)}">
-          <span class="category-name">${escapeHtml(cat)}</span>
-          <span class="category-count">${cnt}</span>
-        </button>
-      `).join('');
-      document.querySelectorAll('.category-item').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const cat = btn.dataset.category;
-          setActiveCategory(cat);
-        });
-      });
-    }
-
-    function setActiveCategory(cat) {
-      activeCategory = cat;
-      renderCategoryList();
-      applyFilterAndRender();
-      currentCategoryTitle.innerText = cat === 'All' ? 'ALL CHANNELS' : cat.toUpperCase();
-    }
-
-    function applyFilterAndRender() {
-      let filtered = [...allChannels];
-      if (activeCategory !== 'All') {
-        filtered = filtered.filter(ch => (ch.group || 'General') === activeCategory);
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        filtered = filtered.filter(ch => ch.name.toLowerCase().includes(q));
-      }
-      filteredChannels = filtered;
-      channelTotalSpan.innerText = filteredChannels.length;
-      if (selectedChannelIndex >= filteredChannels.length) selectedChannelIndex = Math.max(0, filteredChannels.length-1);
-      renderChannelGrid();
-      if (filteredChannels.length && !isPlaying && !currentUrl) {
-        // auto play first if nothing playing
-        playChannelByIndex(selectedChannelIndex);
-      }
-    }
-
-    function renderChannelGrid() {
-      channelsGrid.innerHTML = filteredChannels.map((ch, idx) => {
-        const isFav = favourites.has(ch.url);
-        const selectedClass = (idx === selectedChannelIndex) ? 'selected' : '';
-        return `
-          <div class="channel-item ${selectedClass}" data-index="${idx}" tabindex="0">
-            ${ch.logo ? `<img class="channel-logo" src="${escapeHtml(ch.logo)}" loading="lazy" onerror="this.style.display='none'">` : '<div style="width:36px; text-align:center;">📺</div>'}
-            <span class="channel-name">${escapeHtml(ch.name)}</span>
-            <span class="fav-star">${isFav ? '⭐' : ''}</span>
-          </div>
-        `;
-      }).join('');
-      // attach click events
-      document.querySelectorAll('.channel-item').forEach(el => {
-        el.addEventListener('click', (e) => {
-          const idx = parseInt(el.dataset.index);
-          if (!isNaN(idx)) playChannelByIndex(idx);
-        });
-      });
-      scrollToSelected();
-    }
-
-    function scrollToSelected() {
-      const tiles = document.querySelectorAll('.channel-item');
-      if (tiles[selectedChannelIndex]) {
-        tiles[selectedChannelIndex].focus({preventScroll: false});
-        tiles[selectedChannelIndex].scrollIntoView({block: 'nearest', behavior: 'smooth'});
-      }
-    }
-
-    // Shaka player init with hardware acceleration
-    async function initShaka() {
-      await shaka.polyfill.installAll();
-      if (shaka.Player.isBrowserSupported()) {
-        shakaPlayer = new shaka.Player(videoEl);
-        shakaPlayer.configure({
-          abr: { enabled: true, defaultBandwidthEstimate: 8000000 },
-          streaming: { bufferingGoal: 12, rebufferingGoal: 2, stallEnabled: true },
-          drm: { retryParameters: { maxAttempts: 3 } }
-        });
-        shakaPlayer.addEventListener('error', (e) => toast(`Stream error: ${e.detail.message}`));
-        videoEl.addEventListener('playing', () => { isPlaying = true; document.getElementById('playPauseBtn').innerHTML = '⏸'; });
-        videoEl.addEventListener('pause', () => { isPlaying = false; document.getElementById('playPauseBtn').innerHTML = '▶'; });
-        return true;
-      } else {
-        toast('Shaka not supported');
-        return false;
-      }
-    }
-
-    async function playChannelByIndex(idx) {
-      if (!filteredChannels.length) return;
-      selectedChannelIndex = idx;
-      renderChannelGrid();
-      const channel = filteredChannels[selectedChannelIndex];
-      if (!channel || !channel.url) return;
-      if (shakaPlayer && currentUrl === channel.url && isPlaying) return;
-      currentUrl = channel.url;
-      try {
-        if (!shakaPlayer) await initShaka();
-        videoArea.classList.add('active');
-        await shakaPlayer.load(channel.url);
-        await videoEl.play();
-        isPlaying = true;
-        // update EPG info (mock)
-        epgNowText.innerText = `📺 NOW PLAYING: ${channel.name}  •  ${channel.group || 'Live'}`;
-        toast(`Now: ${channel.name}`);
-      } catch (err) {
-        toast(`Playback error: ${err.message.slice(0,60)}`);
-        isPlaying = false;
-      }
-    }
-
-    // Player controls
-    document.getElementById('playPauseBtn').addEventListener('click', () => {
-      if (!shakaPlayer) return;
-      if (videoEl.paused) videoEl.play();
-      else videoEl.pause();
-    });
-    document.getElementById('muteBtn').addEventListener('click', () => {
-      videoEl.muted = !videoEl.muted;
-      document.getElementById('muteBtn').innerHTML = videoEl.muted ? '🔇' : '🔊';
-    });
-    document.getElementById('fullscreenBtn').addEventListener('click', () => {
-      const container = document.querySelector('.video-area');
-      if (!document.fullscreenElement) container.requestFullscreen().catch(e=>{});
-      else document.exitFullscreen();
-    });
-    document.getElementById('favChannelBtn').addEventListener('click', () => {
-      if (filteredChannels[selectedChannelIndex]) toggleFav(filteredChannels[selectedChannelIndex]);
-    });
-
-    // Search functionality
-    searchInput.addEventListener('input', (e) => {
-      searchQuery = e.target.value;
-      applyFilterAndRender();
-    });
-
-    // Remote / keyboard navigation (full D-pad support)
-    window.addEventListener('keydown', (e) => {
-      const key = e.key;
-      // navigation in channel grid
-      if (key === 'ArrowDown') {
-        e.preventDefault();
-        if (selectedChannelIndex < filteredChannels.length-1) { selectedChannelIndex++; renderChannelGrid(); scrollToSelected(); if(filteredChannels[selectedChannelIndex]) epgNowText.innerText = `▶ ${filteredChannels[selectedChannelIndex].name}`; }
-      } else if (key === 'ArrowUp') {
-        e.preventDefault();
-        if (selectedChannelIndex > 0) { selectedChannelIndex--; renderChannelGrid(); scrollToSelected(); if(filteredChannels[selectedChannelIndex]) epgNowText.innerText = `▶ ${filteredChannels[selectedChannelIndex].name}`; }
-      } else if (key === 'ArrowLeft') {
-        e.preventDefault();
-        let newIdx = selectedChannelIndex - 1;
-        if (newIdx >= 0) { selectedChannelIndex = newIdx; renderChannelGrid(); scrollToSelected(); }
-      } else if (key === 'ArrowRight') {
-        e.preventDefault();
-        let newIdx = selectedChannelIndex + 1;
-        if (newIdx < filteredChannels.length) { selectedChannelIndex = newIdx; renderChannelGrid(); scrollToSelected(); }
-      } else if (key === 'Enter' || key === ' ') {
-        e.preventDefault();
-        playChannelByIndex(selectedChannelIndex);
-      } else if (key === 'f' || key === 'F') {
-        if (filteredChannels[selectedChannelIndex]) toggleFav(filteredChannels[selectedChannelIndex]);
-      } else if (key === 'Escape') {
-        if (document.fullscreenElement) document.exitFullscreen();
-      }
-    });
-
-    // category focus support with left/right? but fine.
-    function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
-
-    // DEFAULT PLAYLIST: a public sports-rich M3U that includes many USA groups (for demo)
-    // Replace with any URL, but we use a reliable test playlist with many categories.
-    const DEFAULT_M3U = 'https://iptv-org.github.io/iptv/categories/sports.m3u';
-    // fallback: also try a more comprehensive one? but this gives sports categories.
-    // to match image's "USA SPORTS 111" we need a real M3U with many US groups.
-    // user can add their own later, but we provide a default.
-    async function boot() {
-      loadFavs();
-      await initShaka();
-      await loadPlaylist(DEFAULT_M3U, 'Sports IPTV');
-      // If playlist fails to load huge categories, user can provide custom URL via console: but UI already shows.
-      // Additional: allow user to change playlist via a button? we add simple hidden feature: double-click on logo.
-      console.log('Ready — use arrow keys, Enter to play, F to favourite');
-    }
-    boot();
+    return { getM3U, setM3U };
   })();
+
+  // ---------- GLOBALS ----------
+  let allChannels = [];        // { name, url, logo, group, srcId }
+  let categoriesMap = new Map();
+  let activeCategory = "All";
+  let filteredChannels = [];
+  let selectedChannelIndex = 0;
+  let shakaPlayer = null;
+  let videoEl = document.getElementById('videoPlayer');
+  let isPlaying = false;
+  let currentUrl = '';
+  let favourites = new Set();
+  let searchQuery = '';
+
+  // DOM elements
+  const categoryContainer = document.getElementById('categoryList');
+  const channelsGrid = document.getElementById('channelsGrid');
+  const currentCategoryTitle = document.getElementById('currentCategoryTitle');
+  const searchInput = document.getElementById('searchInput');
+  const liveTimeSpan = document.getElementById('liveTime');
+  const channelTotalSpan = document.getElementById('channelTotal');
+  const favCountSpan = document.getElementById('favCount');
+  const epgNowText = document.getElementById('epgNowText');
+  const videoArea = document.getElementById('videoArea');
+  const toastDiv = document.getElementById('toastMsg');
+  const playlistSelect = document.getElementById('playlistSelect');
+
+  // Playlist definitions (exactly from earlier index.html)
+  const PLAYLISTS = {
+    telugu: { name: 'Telugu (IPTV-org)', url: 'https://iptv-org.github.io/iptv/languages/tel.m3u', srcId: 'telugu' },
+    jio: { name: 'Jio Playlist', url: 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u', srcId: 'jio' }
+  };
+  let currentPlaylistId = 'telugu';
+
+  // Helper functions
+  function toast(msg, duration = 2000) {
+    toastDiv.textContent = msg;
+    toastDiv.style.display = 'block';
+    setTimeout(() => { toastDiv.style.display = 'none'; }, duration);
+  }
+
+  function updateTime() {
+    const now = new Date();
+    liveTimeSpan.innerText = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' • ' + now.toLocaleDateString();
+  }
+  setInterval(updateTime, 1000);
+  updateTime();
+
+  // Favourites
+  function loadFavs() {
+    try { const f = localStorage.getItem('saga_favs'); if(f) favourites = new Set(JSON.parse(f)); } catch(e) {}
+    updateFavUI();
+  }
+  function saveFavs() { localStorage.setItem('saga_favs', JSON.stringify([...favourites])); updateFavUI(); }
+  function updateFavUI() {
+    const totalFavs = [...favourites].filter(url => allChannels.some(c => c.url === url)).length;
+    favCountSpan.innerText = totalFavs;
+  }
+  function toggleFav(channel) {
+    if(favourites.has(channel.url)) favourites.delete(channel.url);
+    else favourites.add(channel.url);
+    saveFavs();
+    renderChannelGrid();
+    toast(favourites.has(channel.url) ? '⭐ Added to favourites' : '☆ Removed');
+  }
+
+  // M3U parser (chunked for large playlists)
+  function parseM3U(text, srcId, onDone) {
+    const lines = text.split(/\r?\n/);
+    let channels = [];
+    let cur = null;
+    let i = 0;
+    const chunk = 600;
+    function processChunk() {
+      const end = Math.min(i + chunk, lines.length);
+      for (; i < end; i++) {
+        const l = lines[i].trim();
+        if (l.startsWith('#EXTINF')) {
+          const nameMatch = l.match(/tvg-name="([^"]*)"/i) || l.match(/,([^,]+)$/);
+          let name = nameMatch ? (nameMatch[1] || nameMatch[2]) : 'Channel';
+          if (name.includes(',')) name = name.split(',').pop();
+          name = name.trim() || 'Channel';
+          const logo = (l.match(/tvg-logo="([^"]*)"/i) || [])[1] || '';
+          const group = (l.match(/group-title="([^"]*)"/i) || [])[1] || 'General';
+          cur = { name, logo, group, url: '', srcId };
+        } else if (l && !l.startsWith('#') && cur) {
+          if (l.startsWith('http')) {
+            cur.url = l;
+            channels.push(cur);
+            cur = null;
+          }
+        }
+      }
+      if (i < lines.length) requestIdleCallback(processChunk, { timeout: 40 });
+      else onDone(channels);
+    }
+    processChunk();
+  }
+
+  // Load playlist (with caching)
+  async function loadPlaylist(playlistId) {
+    const pl = PLAYLISTS[playlistId];
+    if (!pl) return;
+    currentPlaylistId = playlistId;
+    toast(`Loading ${pl.name}...`);
+    try {
+      let cached = await AppCache.getM3U(pl.url);
+      let m3u = cached;
+      if (!m3u) {
+        const resp = await fetch(pl.url, { signal: AbortSignal.timeout(20000) });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        m3u = await resp.text();
+        await AppCache.setM3U(pl.url, m3u);
+      }
+      parseM3U(m3u, pl.srcId, (channels) => {
+        allChannels = channels;
+        rebuildCategories();
+        applyFilterAndRender();
+        toast(`✅ ${allChannels.length} channels from ${pl.name}`);
+        if (allChannels.length > 0 && !isPlaying) {
+          selectedChannelIndex = 0;
+          playChannelByIndex(0);
+        }
+      });
+    } catch(e) {
+      toast(`Failed: ${e.message}`);
+    }
+  }
+
+  // rebuild categories with counts (exactly like image)
+  function rebuildCategories() {
+    const groupCount = new Map();
+    allChannels.forEach(ch => {
+      const grp = ch.group || 'General';
+      groupCount.set(grp, (groupCount.get(grp) || 0) + 1);
+    });
+    categoriesMap = groupCount;
+    renderCategoryList();
+  }
+
+  function renderCategoryList() {
+    let cats = [['All', allChannels.length], ...Array.from(categoriesMap.entries()).sort((a,b)=>a[0].localeCompare(b[0]))];
+    categoryContainer.innerHTML = cats.map(([cat, cnt]) => `
+      <button class="category-item ${activeCategory === cat ? 'active' : ''}" data-category="${escapeHtml(cat)}">
+        <span class="category-name">${escapeHtml(cat)}</span>
+        <span class="category-count">${cnt}</span>
+      </button>
+    `).join('');
+    document.querySelectorAll('.category-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const cat = btn.dataset.category;
+        setActiveCategory(cat);
+      });
+    });
+  }
+
+  function setActiveCategory(cat) {
+    activeCategory = cat;
+    renderCategoryList();
+    applyFilterAndRender();
+    currentCategoryTitle.innerText = cat === 'All' ? 'ALL CHANNELS' : cat.toUpperCase();
+  }
+
+  function applyFilterAndRender() {
+    let filtered = [...allChannels];
+    if (activeCategory !== 'All') {
+      filtered = filtered.filter(ch => (ch.group || 'General') === activeCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(ch => ch.name.toLowerCase().includes(q));
+    }
+    filteredChannels = filtered;
+    channelTotalSpan.innerText = filteredChannels.length;
+    if (selectedChannelIndex >= filteredChannels.length) selectedChannelIndex = Math.max(0, filteredChannels.length-1);
+    renderChannelGrid();
+    if (filteredChannels.length && !isPlaying && !currentUrl) {
+      playChannelByIndex(selectedChannelIndex);
+    }
+  }
+
+  function renderChannelGrid() {
+    channelsGrid.innerHTML = filteredChannels.map((ch, idx) => {
+      const isFav = favourites.has(ch.url);
+      const selectedClass = (idx === selectedChannelIndex) ? 'selected' : '';
+      return `
+        <div class="channel-item ${selectedClass}" data-index="${idx}" tabindex="0">
+          ${ch.logo ? `<img class="channel-logo" src="${escapeHtml(ch.logo)}" loading="lazy" onerror="this.style.display='none'">` : '<div style="width:36px; text-align:center;">📺</div>'}
+          <span class="channel-name">${escapeHtml(ch.name)}</span>
+          <span class="fav-star">${isFav ? '⭐' : ''}</span>
+        </div>
+      `;
+    }).join('');
+    document.querySelectorAll('.channel-item').forEach(el => {
+      el.addEventListener('click', (e) => {
+        const idx = parseInt(el.dataset.index);
+        if (!isNaN(idx)) playChannelByIndex(idx);
+      });
+    });
+    scrollToSelected();
+  }
+
+  function scrollToSelected() {
+    const tiles = document.querySelectorAll('.channel-item');
+    if (tiles[selectedChannelIndex]) {
+      tiles[selectedChannelIndex].focus({preventScroll: false});
+      tiles[selectedChannelIndex].scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    }
+  }
+
+  // Shaka Player with hardware acceleration
+  async function initShaka() {
+    await shaka.polyfill.installAll();
+    if (shaka.Player.isBrowserSupported()) {
+      shakaPlayer = new shaka.Player(videoEl);
+      shakaPlayer.configure({
+        abr: { enabled: true, defaultBandwidthEstimate: 8000000 },
+        streaming: { bufferingGoal: 12, rebufferingGoal: 2, stallEnabled: true },
+        drm: { retryParameters: { maxAttempts: 3 } }
+      });
+      shakaPlayer.addEventListener('error', (e) => toast(`Stream error: ${e.detail.message}`));
+      videoEl.addEventListener('playing', () => { isPlaying = true; document.getElementById('playPauseBtn').innerHTML = '⏸'; });
+      videoEl.addEventListener('pause', () => { isPlaying = false; document.getElementById('playPauseBtn').innerHTML = '▶'; });
+      return true;
+    } else {
+      toast('Shaka not supported');
+      return false;
+    }
+  }
+
+  async function playChannelByIndex(idx) {
+    if (!filteredChannels.length) return;
+    selectedChannelIndex = idx;
+    renderChannelGrid();
+    const channel = filteredChannels[selectedChannelIndex];
+    if (!channel || !channel.url) return;
+    if (shakaPlayer && currentUrl === channel.url && isPlaying) return;
+    currentUrl = channel.url;
+    try {
+      if (!shakaPlayer) await initShaka();
+      videoArea.classList.add('active');
+      await shakaPlayer.load(channel.url);
+      await videoEl.play();
+      isPlaying = true;
+      epgNowText.innerText = `📺 NOW PLAYING: ${channel.name}  •  ${channel.group || 'Live'}`;
+      toast(`Now: ${channel.name}`);
+    } catch (err) {
+      toast(`Playback error: ${err.message.slice(0,60)}`);
+      isPlaying = false;
+    }
+  }
+
+  // Player controls
+  document.getElementById('playPauseBtn').addEventListener('click', () => {
+    if (!shakaPlayer) return;
+    if (videoEl.paused) videoEl.play();
+    else videoEl.pause();
+  });
+  document.getElementById('muteBtn').addEventListener('click', () => {
+    videoEl.muted = !videoEl.muted;
+    document.getElementById('muteBtn').innerHTML = videoEl.muted ? '🔇' : '🔊';
+  });
+  document.getElementById('fullscreenBtn').addEventListener('click', () => {
+    const container = document.querySelector('.video-area');
+    if (!document.fullscreenElement) container.requestFullscreen().catch(e=>{});
+    else document.exitFullscreen();
+  });
+  document.getElementById('favChannelBtn').addEventListener('click', () => {
+    if (filteredChannels[selectedChannelIndex]) toggleFav(filteredChannels[selectedChannelIndex]);
+  });
+
+  // Search
+  searchInput.addEventListener('input', (e) => {
+    searchQuery = e.target.value;
+    applyFilterAndRender();
+  });
+
+  // Playlist selector
+  function populatePlaylistSelect() {
+    playlistSelect.innerHTML = '';
+    for (const [id, pl] of Object.entries(PLAYLISTS)) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = pl.name;
+      if (id === currentPlaylistId) opt.selected = true;
+      playlistSelect.appendChild(opt);
+    }
+    playlistSelect.addEventListener('change', (e) => {
+      const newId = e.target.value;
+      if (newId !== currentPlaylistId) {
+        allChannels = [];
+        filteredChannels = [];
+        selectedChannelIndex = 0;
+        isPlaying = false;
+        currentUrl = '';
+        if (shakaPlayer) shakaPlayer.unload();
+        loadPlaylist(newId);
+      }
+    });
+  }
+
+  // Full remote control / keyboard navigation
+  window.addEventListener('keydown', (e) => {
+    const key = e.key;
+    // Colour keys (Red/Green/Yellow/Blue) – typical Smarters functions
+    if (key === 'F1' || key === 'Red' || e.keyCode === 403) {
+      e.preventDefault();
+      // Cycle category (red)
+      const cats = ['All', ...Array.from(categoriesMap.keys()).sort()];
+      let idx = cats.indexOf(activeCategory);
+      let next = cats[(idx+1) % cats.length];
+      setActiveCategory(next);
+      toast(`Category: ${next}`);
+      return;
+    }
+    if (key === 'F2' || key === 'Green' || e.keyCode === 404) {
+      e.preventDefault();
+      searchInput.focus();
+      toast('Search mode');
+      return;
+    }
+    if (key === 'F3' || key === 'Yellow' || e.keyCode === 405) {
+      e.preventDefault();
+      // aspect ratio cycle
+      const modes = ['contain', 'fill', 'cover'];
+      let cur = videoEl.style.objectFit || 'contain';
+      let nextIdx = (modes.indexOf(cur)+1) % modes.length;
+      videoEl.style.objectFit = modes[nextIdx];
+      toast(`Aspect: ${modes[nextIdx]}`);
+      return;
+    }
+    if (key === 'F4' || key === 'Blue' || e.keyCode === 406) {
+      e.preventDefault();
+      document.querySelector('.video-area').requestFullscreen().catch(e=>{});
+      return;
+    }
+    // D-pad navigation
+    if (key === 'ArrowDown') {
+      e.preventDefault();
+      if (selectedChannelIndex < filteredChannels.length-1) { selectedChannelIndex++; renderChannelGrid(); scrollToSelected(); if(filteredChannels[selectedChannelIndex]) epgNowText.innerText = `▶ ${filteredChannels[selectedChannelIndex].name}`; }
+    } else if (key === 'ArrowUp') {
+      e.preventDefault();
+      if (selectedChannelIndex > 0) { selectedChannelIndex--; renderChannelGrid(); scrollToSelected(); if(filteredChannels[selectedChannelIndex]) epgNowText.innerText = `▶ ${filteredChannels[selectedChannelIndex].name}`; }
+    } else if (key === 'ArrowLeft') {
+      e.preventDefault();
+      let newIdx = selectedChannelIndex - 1;
+      if (newIdx >= 0) { selectedChannelIndex = newIdx; renderChannelGrid(); scrollToSelected(); }
+    } else if (key === 'ArrowRight') {
+      e.preventDefault();
+      let newIdx = selectedChannelIndex + 1;
+      if (newIdx < filteredChannels.length) { selectedChannelIndex = newIdx; renderChannelGrid(); scrollToSelected(); }
+    } else if (key === 'Enter' || key === ' ') {
+      e.preventDefault();
+      playChannelByIndex(selectedChannelIndex);
+    } else if (key === 'f' || key === 'F') {
+      if (filteredChannels[selectedChannelIndex]) toggleFav(filteredChannels[selectedChannelIndex]);
+    } else if (key === 'Escape') {
+      if (document.fullscreenElement) document.exitFullscreen();
+    }
+  });
+
+  function escapeHtml(str) { if(!str) return ''; return String(str).replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+  // Boot the app
+  async function boot() {
+    loadFavs();
+    await initShaka();
+    populatePlaylistSelect();
+    await loadPlaylist('telugu');   // start with Telugu playlist as requested
+  }
+  boot();
 </script>
 </body>
 </html>
