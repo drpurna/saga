@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://yourdomain.com/SAGAiptv"
+        id="http://sagaiptv.app/SAGAiptv"
         version="1.0.0"
         viewmodes="fullscreen">
 
-  <!-- ═══ Application identity ═══════════════════════════════════ -->
+  <!-- ═══ Application Identity ═══════════════════════════════════ -->
   <tizen:application id="SAGAiptv.App"
                      package="SAGAiptv"
                      required_version="6.0"
@@ -14,14 +14,13 @@
   <name>SAGA IPTV</name>
   <icon src="icon.png"/>
   <content src="index.html"/>
+  <description>Enterprise IPTV Player — Shaka Player, M3U, HLS/DASH, 55-inch TV</description>
 
   <!-- ═══ Content Security Policy ════════════════════════════════
-       Allows:
-       • inline scripts  (unsafe-inline)  — your JS is inline
-       • inline styles   (unsafe-inline)  — your CSS is inline
-       • Shaka Player CDN (fallback if local shaka.js fails)
-       • All HTTPS media sources (M3U playlists + HLS/DASH streams)
-       • blob: and data: for Shaka's media-source segments
+       Inline scripts + styles (entire app is inline in index.html)
+       All streaming origins via connect-src: *
+       Media blobs for Shaka MSE segments
+       All image origins for channel logos
   ═══════════════════════════════════════════════════════════════ -->
   <tizen:content-security-policy>
     default-src 'self';
@@ -29,48 +28,55 @@
                 https://cdn.jsdelivr.net
                 https://cdnjs.cloudflare.com;
     style-src   'self' 'unsafe-inline';
-    media-src   *     blob: data:;
-    img-src     *     data: blob:;
+    media-src   * blob: data:;
+    img-src     * data: blob:;
     connect-src *;
     font-src    'self' data:;
     worker-src  blob:;
     object-src  'none';
   </tizen:content-security-policy>
 
-  <tizen:content-security-policy-report-only>
-  </tizen:content-security-policy-report-only>
-
   <!-- ═══ Features (hardware access declarations) ═════════════════ -->
   <feature name="http://tizen.org/feature/network.internet"/>
+  <feature name="http://tizen.org/feature/tv.display"/>
 
-  <!-- ═══ Privileges (API access) ════════════════════════════════ -->
+  <!-- ═══ Privileges ═════════════════════════════════════════════ -->
+  <!-- Network access for fetching M3U playlists and streaming     -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
+  <!-- Fullscreen video rendering                                  -->
   <tizen:privilege name="http://tizen.org/privilege/fullscreen"/>
+  <!-- TV remote input device key registration                     -->
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+  <!-- System volume control via tvaudiocontrol API                -->
   <tizen:privilege name="http://tizen.org/privilege/volume.set"/>
+  <!-- Audio / video capture (required by some Shaka builds)       -->
   <tizen:privilege name="http://tizen.org/privilege/mediacapture"/>
 
-  <!-- ═══ Required display engine ════════════════════════════════ -->
+  <!-- ═══ Target Platform ════════════════════════════════════════ -->
   <tizen:profile name="tv"/>
 
+  <!-- ═══ App Settings ═══════════════════════════════════════════ -->
+  <tizen:setting
+    screen-orientation="landscape"
+    context-menu="disable"
+    background-support="enable"
+    encryption="disable"
+    install-location="auto"
+    hwkey-event="true"/>
+
   <!-- ═══ Metadata ════════════════════════════════════════════════
-       prelaunch      — app stays in memory after launch (faster zap)
-       screen-off     — prevent screen saver during playback
-       background     — keep running when user switches away briefly
+       prelaunch      — keep app in memory after first launch (faster zap)
+       screen.off     — prevent TV screen saver during playback
+       background     — keep running when user briefly leaves app
   ═══════════════════════════════════════════════════════════════ -->
-  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch" value="true"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/screen.off.enable" value="false"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/background.enable" value="true"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch"
+                  value="true"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/screen.off.enable"
+                  value="false"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/background.enable"
+                  value="true"/>
 
-  <!-- Allow the app to run in the foreground when TV starts -->
-  <tizen:setting screen-orientation="landscape"
-                 context-menu="disable"
-                 background-support="enable"
-                 encryption="disable"
-                 install-location="auto"
-                 hwkey-event="true"/>
-
-  <!-- Register all TV remote colour and media keys your app uses -->
+  <!-- Default app-control operation so Tizen can launch the app  -->
   <tizen:app-control>
     <tizen:src name="index.html"/>
     <tizen:operation name="http://tizen.org/appcontrol/operation/default"/>
