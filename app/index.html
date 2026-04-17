@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
-<title>SAGA IPTV · OneUI Edition</title>
+<title>SAGA IPTV · OneUI</title>
 <script src="./shaka.js"></script>
 <script src="./cache.js"></script>
 <style>
 /*══════════════════════════════════════════════════════════════
   SAGA IPTV v35 — Samsung OneUI · Refined
   - Grid auto-hide (fullscreen playback)
-  - Infinite grid loop (no side panel trap)
+  - Infinite grid loop (wrap around)
   - Side panel: OneUI constructive style
 ══════════════════════════════════════════════════════════════*/
 *,*::before,*::after{
@@ -383,7 +383,7 @@ html,body{
 .kr .kdot{background:#e50914}.kg .kdot{background:#22c55e}.ky .kdot{background:#fbbf24}.kb .kdot{background:#3b82f6}
 
 /* Overlay (settings) */
-#overlay{/* same base styles, but refined */ position:absolute;inset:0;z-index:40;background:rgba(0,0,0,0.92);backdrop-filter:blur(28px);opacity:0;pointer-events:none;transition:opacity 200ms;}
+#overlay{position:absolute;inset:0;z-index:40;background:rgba(0,0,0,0.92);backdrop-filter:blur(28px);opacity:0;pointer-events:none;transition:opacity 200ms;}
 #overlay.on{opacity:1;pointer-events:auto}
 .ov-hdr{padding:20px 40px;border-bottom:1px solid var(--sep);display:flex;align-items:center}
 .ov-title{font-size:26px;font-weight:800}
@@ -414,7 +414,7 @@ html,body{
 .dk:focus{background:var(--accent);outline:none}
 .dk.go{background:var(--accent);color:white}
 
-/* toast, splash, etc */
+/* toast, splash */
 #toasts{position:absolute;top:80px;right:20px;z-index:200}
 .toast{background:rgba(0,0,0,0.9);border-left:3px solid var(--accent);border-radius:12px;padding:12px 20px;margin-top:8px;backdrop-filter:blur(8px)}
 #splash{position:absolute;inset:0;background:#000;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.6s}
@@ -455,151 +455,496 @@ html,body{
 </div>
 <canvas id="cc" width="8" height="8" style="display:none"></canvas>
 
-<script src="./shaka.js"></script>
-<script src="./cache.js"></script>
 <script>
 (function(){
-  // store previous vars (abbreviated for space but fully functional)
-  // core logic with modifications: infinite grid loop + auto-hide grid
-  let player, allChs=[], rowData=[], rowIdx=0, colIdxMap=new Map();
-  let favs=new Set(), pls=[], cfg={hq:true, muteSwitch:false, buf:12, osd:true};
-  let isPlaying=false, curUrl='', aspectMode=0, activeNav='home', searchQ='', srchOpen=false;
-  let rowsOuter=document.getElementById('rowsOuter'), rowsInner=document.getElementById('rowsInner'), heroInfo=document.getElementById('heroInfo');
-  let video=document.getElementById('video'), heroTitle=document.getElementById('heroTitle'), heroGroup=document.getElementById('heroGroup');
-  let hideGridTimer=null, zone='rows';
-  const ROW_H=130+50+8;
+'use strict';
 
-  // ---- helper functions (playlist, storage omitted for brevity, but full functionality remains)
-  function toast(m,t){let d=document.createElement('div');d.className='toast'+(t?' '+t:'');d.textContent=m;document.getElementById('toasts').appendChild(d);setTimeout(()=>d.remove(),2500);}
-  function setSig(t){document.getElementById('sigTxt').textContent=t}
-  // grid auto-hide logic (NEW)
-  function resetGridAutoHide(){
-    if(!document.fullscreenElement) return;
-    const mainDiv=document.getElementById('main');
-    if(mainDiv.classList.contains('grid-hidden')) mainDiv.classList.remove('grid-hidden');
-    if(hideGridTimer) clearTimeout(hideGridTimer);
-    if(isPlaying && document.fullscreenElement){
-      hideGridTimer=setTimeout(()=>{
-        if(isPlaying && document.fullscreenElement) mainDiv.classList.add('grid-hidden');
-      }, 4500);
+/* ── Polyfill + Tizen setup (keys) ── */
+if(typeof requestIdleCallback==='undefined'){
+  window.requestIdleCallback=cb=>setTimeout(()=>cb({timeRemaining:()=>50}),16);
+}
+(function(){
+  try{
+    if(!window.tizen||!tizen.tvinputdevice)return;
+    ['ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
+     'MediaPlay','MediaPause','MediaPlayPause','MediaStop',
+     'MediaFastForward','MediaRewind','ChannelUp','ChannelDown',
+     'VolumeUp','VolumeDown','VolumeMute','0','1','2','3','4','5','6','7','8','9',
+     'Exit','Return'].forEach(k=>{try{tizen.tvinputdevice.registerKey(k)}catch(e){}});
+  }catch(e){}
+})();
+
+/* ════════════════════════════════════════════════════════════
+   CONSTANTS & GLOBALS
+════════════════════════════════════════════════════════════ */
+const TW=200, TH=130, TGAP=16;
+const ROW_LABEL_H=50;
+const ROW_H=TH+ROW_LABEL_H+8;
+const DEFAULT_PL = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
+const TELUGU_PL  = {name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true};
+const JIO_PL     = {name:'Jio',url:DEFAULT_PL,builtIn:true};
+const LS = {FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
+
+const $=id=>document.getElementById(id);
+const QA=(s,r)=>[...(r||document).querySelectorAll(s)];
+const heroBg=$('heroBg'), heroTitle=$('heroTitle'), heroGroup=$('heroGroup'), heroInfo=$('heroInfo');
+const sigDot=$('sigDot'), sigTxt=$('sigTxt');
+const clock=$('clock');
+const rowsOuter=$('rowsOuter'), rowsInner=$('rowsInner');
+const searchBar=$('searchBar'), srchInput=$('srchInput');
+const overlay=$('overlay'), ovTitle=$('ovTitle'), ovSide=$('ovSide'), ovMain=$('ovMain');
+const video=$('video');
+const volHudEl=$('volHud'), volFill=$('volFill'), volPct=$('volPct'), volIco=$('volIco');
+const mDial=$('mDial'), dnum=$('dnum');
+const ckR=$('ckR'), ckG=$('ckG'), ckY=$('ckY'), ckB=$('ckB');
+const cc=$('cc'), ccx=cc.getContext('2d',{willReadFrequently:true});
+const toasts=$('toasts');
+
+let player=null, allChs=[], allGroups=[];
+let rowData=[];      // {label, channels[]}
+let rowIdx=0, colIdxMap=new Map();
+let rowScrollMap=new Map(), rowDomMap=new Map();
+let rowsTop=0;
+let curUrl='', isPlaying=false, isMuted=false, aspectMode=0;
+let favs=new Set(), pls=[], searchQ='', srchOpen=false;
+let activeNav='home';
+let dialStr='', dialTimer=null;
+let currentVol=50;
+let zone='rows';         // 'rows', 'nav', 'overlay', 'search', 'modal'
+let navIdx=0;
+let cfgSideIdx=0, cfgMainIdx=0, cfgSideZone=true;
+let cfg={hq:true, muteSwitch:false, buf:12, osd:true};
+let hideGridTimer=null;
+
+/* ── Utils ── */
+const esc=s=>!s?'':String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+function toast(msg,type='',ms=2600){
+  const el=document.createElement('div');
+  el.className='toast'+(type?' '+type:'');el.textContent=msg;
+  toasts.appendChild(el);
+  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),160)},ms);
+}
+function setSig(m){sigTxt.textContent=m}
+
+/* ── Volume ── */
+function getSysVol(){
+  try{if(window.tizen&&tizen.tvaudiocontrol)return tizen.tvaudiocontrol.getVolume()}catch(e){}
+  return Math.round(video.volume*100);
+}
+function setSysVol(v){
+  v=Math.max(0,Math.min(100,v));
+  try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setVolume(v);return}}catch(e){}
+  video.volume=v/100;
+}
+function volUp(){currentVol=Math.min(100,getSysVol()+5);setSysVol(currentVol);showVol()}
+function volDown(){currentVol=Math.max(0,getSysVol()-5);setSysVol(currentVol);showVol()}
+function showVol(){
+  currentVol=getSysVol();
+  volFill.style.width=currentVol+'%';volPct.textContent=currentVol;
+  volIco.textContent=currentVol===0?'🔇':currentVol<40?'🔉':'🔊';
+  volHudEl.classList.add('on');clearTimeout(window.volTimer);
+  window.volTimer=setTimeout(()=>volHudEl.classList.remove('on'),1800);
+}
+
+/* ── Storage ── */
+function loadStore(){
+  try{const r=lsGet(LS.FAVS);if(r)favs=new Set(JSON.parse(r))}catch(e){}
+  try{const r=lsGet(LS.PL);if(r)pls=JSON.parse(r)}catch(e){}
+  try{const r=lsGet(LS.CFG);if(r)Object.assign(cfg,JSON.parse(r))}catch(e){}
+}
+function saveFavs(){lsSet(LS.FAVS,JSON.stringify([...favs]))}
+function savePls() {lsSet(LS.PL,JSON.stringify(pls.filter(p=>!p.builtIn)))}
+function saveCfg() {lsSet(LS.CFG,JSON.stringify(cfg))}
+
+/* ════════════════════════════════════════════════════════════
+   DOMINANT COLOUR (simplified)
+════════════════════════════════════════════════════════════ */
+function extractColour(img,cb){
+  try{
+    ccx.clearRect(0,0,8,8);ccx.drawImage(img,0,0,8,8);
+    const d=ccx.getImageData(0,0,8,8).data;
+    let r=0,g=0,b=0,n=0;
+    for(let i=0;i<d.length;i+=4){
+      if(d[i+3]<40)continue;
+      r+=d[i];g+=d[i+1];b+=d[i+2];n++;
+    }
+    if(n<1){cb(null,null);return}
+    const fr=Math.round(r/n),fg=Math.round(g/n),fb=Math.round(b/n);
+    const tile=`rgba(${Math.round(fr*.35)},${Math.round(fg*.35)},${Math.round(fb*.35)},.9)`;
+    const hero=`rgb(${Math.round(fr*.25)},${Math.round(fg*.25)},${Math.round(fb*.25)})`;
+    cb(tile,hero);
+  }catch(e){cb(null,null)}
+}
+
+/* ════════════════════════════════════════════════════════════
+   M3U PARSER (chunked)
+════════════════════════════════════════════════════════════ */
+function parseM3UChunked(txt,onDone){
+  const lines=txt.split(/\r?\n/);
+  const out=[];let cur=null,i=0;
+  function chunk(){
+    const end=Math.min(i+800,lines.length);
+    for(;i<end;i++){
+      const l=lines[i].trim();
+      if(l.startsWith('#EXTINF')){
+        const ci=l.lastIndexOf(',');
+        let name=ci>=0?l.slice(ci+1).trim():'Channel';
+        name=name.replace(/\s*\([^)]*\)|\s*\[[^\]]*\]/g,'').trim()||'Channel';
+        cur={name,
+          logo:(l.match(/tvg-logo="([^"]*)"/i)||[])[1]||'',
+          group:(l.match(/group-title="([^"]*)"/i)||[])[1]||'General',
+          url:''};
+      }else if(l&&!l.startsWith('#')&&cur){
+        if(l.startsWith('http')){cur.url=l;out.push(cur);cur=null}
+      }
+    }
+    if(i<lines.length)requestIdleCallback(chunk,{timeout:50});
+    else onDone(out);
+  }
+  chunk();
+}
+
+/* ════════════════════════════════════════════════════════════
+   PLAYLIST LOAD
+════════════════════════════════════════════════════════════ */
+async function loadPl(url,name,force=false){
+  setSig('Loading '+name+'…');
+  try{
+    let txt=force?null:await AppCache.getM3U(url);
+    if(!txt){
+      const ctrl=new AbortController();
+      const tid=setTimeout(()=>ctrl.abort(),25000);
+      const resp=await fetch(url,{signal:ctrl.signal});
+      clearTimeout(tid);
+      if(!resp.ok)throw new Error('HTTP '+resp.status);
+      txt=await resp.text();
+      AppCache.setM3U(url,txt);
+    }
+    parseM3UChunked(txt,parsed=>{
+      if(!parsed.length){toast('No channels — '+name,'err');return}
+      const seen=new Set(allChs.map(c=>c.url));
+      const fresh=parsed.filter(c=>!seen.has(c.url));
+      allChs=allChs.concat(fresh);
+      buildRowData();renderRows();
+      setSig('✓ '+allChs.length+' channels');
+      toast(parsed.length+' ch — '+name,'ok');
+      AppCache.preloadImages(parsed.slice(0,60).map(c=>c.logo).filter(Boolean),[]);
+    });
+  }catch(e){setSig('Error: '+e.message.slice(0,50));toast(e.message.slice(0,45),'err');}
+}
+
+async function loadAll(force=false){
+  allChs=[];
+  await loadPl(TELUGU_PL.url,TELUGU_PL.name,force);
+  const ups=pls.filter(p=>!p.builtIn);
+  const srcs=ups.length?ups:[JIO_PL];
+  for(const p of srcs) await loadPl(p.url,p.name,force);
+  const lastUrl=lsGet(LS.LCHU);
+  if(lastUrl){
+    for(let ri=0;ri<rowData.length;ri++){
+      const ci=rowData[ri].channels.findIndex(c=>c.url===lastUrl);
+      if(ci>=0){rowIdx=ri;colIdxMap.set(ri,ci);syncFocus();break}
     }
   }
-  function showGridOnInteraction(){
-    const mainDiv=document.getElementById('main');
-    if(mainDiv.classList.contains('grid-hidden')) mainDiv.classList.remove('grid-hidden');
-    resetGridAutoHide();
+  hideSplash();
+}
+
+/* ════════════════════════════════════════════════════════════
+   ROW DATA & RENDERING (virtual)
+════════════════════════════════════════════════════════════ */
+function buildRowData(){
+  const groupsSet=new Set(allChs.map(c=>c.group));
+  const groups=['All',...Array.from(groupsSet).sort()];
+  rowData=groups.map(g=>{
+    let chs=allChs;
+    if(activeNav==='favs') chs=chs.filter(c=>favs.has(c.url));
+    if(g!=='All') chs=chs.filter(c=>c.group===g);
+    if(searchQ){const q=searchQ.toLowerCase();chs=chs.filter(c=>c.name.toLowerCase().includes(q))}
+    return{label:g,channels:chs.slice(0,200)};
+  }).filter(r=>r.channels.length>0);
+}
+
+function rowsVpH(){return rowsOuter.clientHeight||400}
+function totalRowsH(){return rowData.length*ROW_H}
+function frRowIdx(){return Math.max(0,Math.floor(rowsTop/ROW_H)-1)}
+function lrRowIdx(){return Math.min(rowData.length-1,Math.floor((rowsTop+rowsVpH())/ROW_H)+1)}
+
+function renderRows(){
+  if(!rowData.length){rowsInner.innerHTML='';rowsInner.style.height='0';rowDomMap.clear();return}
+  rowsInner.style.height=totalRowsH()+'px';
+  const F=frRowIdx(),L=lrRowIdx();
+  for(const[ri,d]of rowDomMap){if(ri<F||ri>L){d.el.remove();rowDomMap.delete(ri)}}
+  for(let ri=F;ri<=L;ri++){if(!rowDomMap.has(ri))buildRow(ri);else updateRowFocus(ri);}
+}
+
+function buildRow(ri){
+  const rd=rowData[ri];if(!rd)return;
+  const el=document.createElement('div');
+  el.className='cat-row';
+  el.style.top=(ri*ROW_H)+'px';
+  const lbl=document.createElement('div');
+  lbl.className='cat-row-label';
+  lbl.innerHTML=`${esc(rd.label)} <span class="cat-row-label-count">${rd.channels.length}</span>`;
+  el.appendChild(lbl);
+  const strip=document.createElement('div');
+  strip.className='tile-strip';
+  strip.style.paddingRight='60px';
+  rd.channels.forEach((ch,ci)=>{strip.appendChild(buildTile(ch,ci,ri));});
+  el.appendChild(strip);
+  rowsInner.appendChild(el);
+  rowDomMap.set(ri,{el,strip});
+  applyStripScroll(ri);
+  updateRowFocus(ri);
+}
+
+function buildTile(ch,ci,ri){
+  const t=document.createElement('div');
+  t.className='tile';
+  t.dataset.ci=ci;t.dataset.ri=ri;
+  const inner=document.createElement('div');inner.className='tile-inner';
+  const bg=document.createElement('div');bg.className='tile-bg';
+  if(ch.logo){
+    const img=document.createElement('img');
+    img.className='tile-img';img.loading='lazy';
+    img.src=esc(ch.logo);
+    img.onload=()=>{
+      extractColour(img,(tileCol,heroCol)=>{
+        if(tileCol){ch._col=tileCol;ch._hero=heroCol;inner.style.background=tileCol;bg.style.backgroundImage=`url('${esc(ch.logo)}')`;bg.classList.add('on')}
+        if(ri===rowIdx&&ci===(colIdxMap.get(ri)||0)) updateHeroFromChannel(ch);
+      });
+    };
+    inner.appendChild(bg);inner.appendChild(img);
+  }else{
+    const fb=document.createElement('div');fb.className='tile-fb';fb.textContent='📺';inner.appendChild(fb);
   }
-  // override fullscreen event to manage auto-hide
-  document.addEventListener('fullscreenchange',()=>{
-    if(document.fullscreenElement && isPlaying){
-      resetGridAutoHide();
-      if(cfg.osd) setTimeout(()=>heroInfo.classList.add('hide'), 3500);
-    } else {
-      document.getElementById('main').classList.remove('grid-hidden');
-      if(hideGridTimer) clearTimeout(hideGridTimer);
-      heroInfo.classList.remove('hide');
-    }
+  const grad=document.createElement('div');grad.className='tile-grad';
+  const nm=document.createElement('div');nm.className='tile-name';nm.textContent=ch.name;
+  grad.appendChild(nm);inner.appendChild(grad);
+  const num=document.createElement('div');num.className='tile-num';num.textContent=ci+1;
+  const fav=document.createElement('div');fav.className='tile-fav';fav.textContent='★';
+  if(favs.has(ch.url))fav.style.display='block';
+  t._fav=fav;
+  t.appendChild(inner);t.appendChild(num);t.appendChild(fav);
+  t.addEventListener('click',()=>{rowIdx=ri;colIdxMap.set(ri,ci);updateAllFocus();immediatePlay();zone='rows';});
+  return t;
+}
+
+function updateRowFocus(ri){
+  const d=rowDomMap.get(ri);if(!d)return;
+  const tiles=[...d.strip.children];
+  const ci=colIdxMap.get(ri)||0;
+  const ch=rowData[ri]?.channels[ci];
+  tiles.forEach((t,i)=>{
+    t.classList.toggle('sel',ri===rowIdx&&i===ci);
+    t.classList.toggle('playing',ch&&ch.url===curUrl&&isPlaying&&i===ci&&ri===rowIdx);
+    const rd=rowData[ri];if(rd&&rd.channels[i]&&t._fav)t._fav.style.display=favs.has(rd.channels[i].url)?'block':'none';
   });
-  // modify immediatePlay to reset auto-hide
-  const origPlay = window.immediatePlay;
-  // we'll re-implement a simplified version but ensure all features remain.
-  // we will embed the essential methods to keep the functionality.
-  // Given file length, I will embed the minimal but complete integration.
-  // All previous M3U, caching, shaka integration remains same but patched.
-  // For brevity, I'll attach modified event handlers for keys to call showGridOnInteraction and implement infinite grid loop.
+  if(ri===rowIdx&&ch) updateHeroFromChannel(ch);
+}
+function updateAllFocus(){rowDomMap.forEach((_,ri)=>updateRowFocus(ri));}
 
-  // --------------------- INFINITE GRID LOOP (no side panel trap) ---------------------
-  function navigateGrid(dx,dy){
-    const rowsCount=rowData.length;
-    if(rowsCount===0)return;
-    let newRow=rowIdx, newCol=colIdxMap.get(rowIdx)||0;
-    if(dy!==0){
-      newRow=(rowIdx+dy+rowsCount)%rowsCount;
-      const rowLen=rowData[newRow]?.channels.length||0;
-      let oldCol=colIdxMap.get(rowIdx)||0;
-      newCol=Math.min(oldCol, rowLen-1);
-      if(newCol<0)newCol=0;
-    }else if(dx!==0){
-      const rowLen=rowData[rowIdx]?.channels.length||0;
-      if(rowLen===0)return;
-      newCol=(newCol+dx+rowLen)%rowLen;
-    }
-    rowIdx=newRow;
-    colIdxMap.set(rowIdx,newCol);
-    syncFocusScroll();
+function applyStripScroll(ri){
+  const d=rowDomMap.get(ri);if(!d)return;
+  d.strip.style.transform=`translateX(${-(rowScrollMap.get(ri)||0)}px)`;
+}
+function syncColScroll(ri){
+  const ci=colIdxMap.get(ri)||0;
+  const cw=TW+TGAP;
+  const visW=rowsOuter.clientWidth-60;
+  let off=rowScrollMap.get(ri)||0;
+  const tileLeft=ci*cw, tileRight=tileLeft+TW;
+  if(tileLeft<off+40)          off=Math.max(0,tileLeft-40);
+  else if(tileRight>off+visW-40) off=tileRight-visW+80;
+  rowScrollMap.set(ri,Math.max(0,off));
+  applyStripScroll(ri);
+}
+function syncRowScroll(){
+  const top=rowIdx*ROW_H, bot=top+ROW_H, vph=rowsVpH();
+  let newTop=rowsTop;
+  if(top<rowsTop) newTop=Math.max(0,top-ROW_H);
+  else if(bot>rowsTop+vph) newTop=bot-vph+ROW_H;
+  rowsTop=newTop;
+  rowsInner.style.transform=`translateY(-${rowsTop}px)`;
+  renderRows();
+}
+function syncFocus(){
+  syncRowScroll();
+  syncColScroll(rowIdx);
+  requestAnimationFrame(()=>{
+    const d=rowDomMap.get(rowIdx);if(!d)return;
+    const ci=colIdxMap.get(rowIdx)||0;
+    const tile=[...d.strip.children][ci];
+    if(tile&&zone==='rows')tile.focus({preventScroll:true});
     updateAllFocus();
-    const ch=rowData[rowIdx]?.channels[newCol];
-    if(ch)updateHeroFromChannel(ch);
-  }
-
-  function syncFocusScroll(){
-    // sync row scroll & column scroll
-    const top=rowIdx*ROW_H, vph=rowsOuter.clientHeight;
-    let rowsTop=parseFloat(rowsInner.style.transform.match(/translateY\(-([\d.]+)px\)/)?.[1]||0);
-    if(top<rowsTop) rowsTop=Math.max(0,top-ROW_H);
-    else if(top+ROW_H>rowsTop+vph) rowsTop=top+vph-ROW_H;
-    rowsInner.style.transform=`translateY(-${rowsTop}px)`;
-    const d=rowDomMap.get(rowIdx);if(d){
-      const ci=colIdxMap.get(rowIdx)||0, cw=216;
-      let off=rowScrollMap.get(rowIdx)||0;
-      const tileLeft=ci*cw, visW=rowsOuter.clientWidth-60;
-      if(tileLeft<off) off=tileLeft-40;
-      else if(tileLeft+200>off+visW) off=tileLeft+200-visW+60;
-      rowScrollMap.set(rowIdx,Math.max(0,off));
-      d.strip.style.transform=`translateX(-${off}px)`;
-    }
-  }
-  // attach to keydown
-  // full featured integration: we replace the original zone rows handling.
-  // We'll also override the existing keydown listener by attaching a high-priority one.
-  window.addEventListener('keydown',function(e){
-    const kc=e.keyCode, key=e.key;
-    if(zone==='rows' && !srchOpen && !document.getElementById('overlay').classList.contains('on') && !document.getElementById('mDial').classList.contains('on')){
-      if(kc===37||key==='ArrowLeft'){e.preventDefault(); navigateGrid(-1,0); showGridOnInteraction(); return;}
-      if(kc===39||key==='ArrowRight'){e.preventDefault(); navigateGrid(1,0); showGridOnInteraction(); return;}
-      if(kc===38||key==='ArrowUp'){e.preventDefault(); navigateGrid(0,-1); showGridOnInteraction(); return;}
-      if(kc===40||key==='ArrowDown'){e.preventDefault(); navigateGrid(0,1); showGridOnInteraction(); return;}
-      if(kc===13||key==='Enter'){e.preventDefault(); immediatePlayWrapper(); return;}
-    }
   });
-  // wrapper for play
-  function immediatePlayWrapper(){
-    if(!player)return;
-    const ch=rowData[rowIdx]?.channels[colIdxMap.get(rowIdx)||0];
-    if(ch?.url){
-      curUrl=ch.url;
-      updateHeroFromChannel(ch);
-      player.load(ch.url).then(()=>video.play()).then(()=>{
-        isPlaying=true; setSig('Streaming'); 
-        if(document.fullscreenElement) resetGridAutoHide();
-        else enterFS();
-      }).catch(()=>{});
-    }
+}
+
+/* ── Infinite grid navigation (wrap) ── */
+function navigateGrid(dx,dy){
+  if(!rowData.length)return;
+  let newRow=rowIdx, newCol=colIdxMap.get(rowIdx)||0;
+  if(dy!==0){
+    newRow=(rowIdx+dy+rowData.length)%rowData.length;
+    const rowLen=rowData[newRow]?.channels.length||0;
+    newCol=Math.min(newCol, rowLen-1);
+    if(newCol<0)newCol=0;
+  }else if(dx!==0){
+    const rowLen=rowData[rowIdx]?.channels.length||0;
+    if(rowLen===0)return;
+    newCol=(newCol+dx+rowLen)%rowLen;
   }
-  function enterFS(){document.getElementById('root').requestFullscreen?.();}
-  function exitFS(){document.exitFullscreen?.();}
-  function updateHeroFromChannel(ch){heroTitle.textContent=ch.name;heroGroup.textContent=ch.group||'';if(ch.logo)document.getElementById('heroBg').style.backgroundImage=`url('${ch.logo}')`;}
-  // data structures
-  let rowDomMap=new Map(), rowScrollMap=new Map();
-  function updateAllFocus(){rowDomMap.forEach((_,ri)=>updateRowFocus(ri));}
-  function updateRowFocus(ri){const d=rowDomMap.get(ri);if(!d)return; const tiles=d.strip.children; const ci=colIdxMap.get(ri)||0; Array.from(tiles).forEach((t,i)=>{t.classList.toggle('sel',ri===rowIdx&&i===ci); if(ri===rowIdx&&i===ci&&rowData[ri]?.channels[ci])t.focus({preventScroll:true})});}
-  function buildRowData(){/* simplified but functional, using existing allChs and groups */ rowData= [{label:'All',channels:allChs.slice(0,200)}]; if(rowData[0]?.channels.length===0)rowData=[];}
-  function renderRows(){ rowsInner.innerHTML=''; rowDomMap.clear(); rowData.forEach((rd,ri)=>{ const el=document.createElement('div'); el.className='cat-row'; el.style.top=(ri*ROW_H)+'px'; const lbl=document.createElement('div'); lbl.className='cat-row-label'; lbl.innerHTML=rd.label; const strip=document.createElement('div'); strip.className='tile-strip'; rd.channels.forEach((ch,ci)=>{ const tile=document.createElement('div'); tile.className='tile'; tile.innerHTML=`<div class="tile-inner"><div class="tile-name">${ch.name}</div></div>`; tile.addEventListener('click',()=>{rowIdx=ri;colIdxMap.set(ri,ci);immediatePlayWrapper();}); strip.appendChild(tile); }); el.appendChild(lbl); el.appendChild(strip); rowsInner.appendChild(el); rowDomMap.set(ri,{el,strip}); }); updateAllFocus(); }
-  window.updateHeroFromChannel=updateHeroFromChannel;
-  // mock bootstrap
-  async function boot(){
-    allChs=[{name:'SUN TV',url:'http://sample',group:'Telugu',logo:''},{name:'Gemini TV',url:'http://sample2',group:'Telugu'}];
-    buildRowData(); renderRows(); rowIdx=0; colIdxMap.set(0,0); updateAllFocus(); setSig('Ready'); document.getElementById('splash').classList.add('off');
+  rowIdx=newRow;
+  colIdxMap.set(rowIdx,newCol);
+  syncFocus();
+  showGridOnInteraction();
+}
+
+/* ── Hero & auto-hide grid ── */
+function updateHeroFromChannel(ch){
+  if(!ch)return;
+  heroTitle.textContent=ch.name;
+  heroGroup.textContent=ch.group||'';
+  if(ch.logo){heroBg.style.backgroundImage=`url('${esc(ch.logo)}')`;}
+  if(ch._hero)heroBg.style.backgroundColor=ch._hero;
+}
+function resetGridAutoHide(){
+  const mainDiv=$('main');
+  if(!document.fullscreenElement) return;
+  if(mainDiv.classList.contains('grid-hidden')) mainDiv.classList.remove('grid-hidden');
+  if(hideGridTimer) clearTimeout(hideGridTimer);
+  if(isPlaying && document.fullscreenElement){
+    hideGridTimer=setTimeout(()=>{
+      if(isPlaying && document.fullscreenElement) mainDiv.classList.add('grid-hidden');
+    },4500);
   }
-  boot();
-  // overwrite missing but original appCache would exist from external scripts. ensure no break
-  window.AppCache = window.AppCache || { getM3U:()=>null, setM3U:()=>{}, clearAllM3U:()=>{}, preloadImages:()=>{} };
-  window.shaka = window.shaka || { Player: class {}, polyfill: { installAll:()=>{} } };
-  document.querySelectorAll('.nav-item').forEach(btn=>btn.addEventListener('click',()=>{ activeNav=btn.dataset.nav; document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('on')); btn.classList.add('on'); if(activeNav==='search'){document.getElementById('searchBar').classList.add('open');zone='search';}else zone='rows';}));
-  document.getElementById('ckG').addEventListener('click',()=>{document.getElementById('searchBar').classList.toggle('open');});
-  document.getElementById('ckY').addEventListener('click',()=>{aspectMode=(aspectMode+1)%3; video.style.objectFit=aspectMode===0?'contain':aspectMode===1?'cover':'fill';});
-  document.getElementById('ckB').addEventListener('click',()=>{document.fullscreenElement?exitFS():enterFS();});
-  window.resetGridAutoHide=resetGridAutoHide;
+}
+function showGridOnInteraction(){
+  const mainDiv=$('main');
+  if(mainDiv.classList.contains('grid-hidden')) mainDiv.classList.remove('grid-hidden');
+  resetGridAutoHide();
+}
+
+/* ── Shaka Player ── */
+async function initPlayer(){
+  await shaka.polyfill.installAll();
+  if(!shaka.Player.isBrowserSupported()){setSig('Shaka not supported');return}
+  player=new shaka.Player(video);
+  player.configure({abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10_000_000},streaming:{bufferingGoal:cfg.buf}});
+  player.addEventListener('error',e=>{setSig('Stream error');isPlaying=false;});
+  video.addEventListener('playing',()=>setSig('Streaming'));
+  setSig('Ready');
+}
+function immediatePlay(){
+  const ch=rowData[rowIdx]?.channels[colIdxMap.get(rowIdx)||0];
+  if(!ch?.url||!player)return;
+  if(ch.url===curUrl&&isPlaying)return;
+  curUrl=ch.url;lsSet(LS.LCHU,ch.url);
+  if(cfg.muteSwitch&&isPlaying)video.muted=true;
+  isPlaying=false;
+  updateHeroFromChannel(ch);
+  setSig('Connecting…');
+  player.load(ch.url).then(()=>video.play()).then(()=>{
+    isPlaying=true;setSig('Streaming');
+    if(cfg.hq)setTimeout(()=>{try{const t=player.getVariantTracks();if(t.length)player.selectVariantTrack(t.reduce((m,x)=>x.bandwidth>m.bandwidth?x:m,t[0]),false)}catch(e){}},4000);
+    if(document.fullscreenElement) resetGridAutoHide();
+    else enterFS();
+  }).catch(e=>{setSig('Load failed');isPlaying=false;});
+}
+function enterFS(){$('root').requestFullscreen?.();}
+function exitFS(){document.exitFullscreen?.();}
+document.addEventListener('fullscreenchange',()=>{
+  if(!document.fullscreenElement){ $('main').classList.remove('grid-hidden'); heroInfo.classList.remove('hide'); }
+  else if(isPlaying) resetGridAutoHide();
+});
+function cycleAspect(){aspectMode=(aspectMode+1)%3; video.style.objectFit=aspectMode===0?'contain':aspectMode===1?'cover':'fill'; toast(['Contain','Fill','Stretch'][aspectMode]);}
+function toggleFav(){
+  const ch=rowData[rowIdx]?.channels[colIdxMap.get(rowIdx)||0];
+  if(!ch)return;
+  if(favs.has(ch.url)){favs.delete(ch.url);toast('Removed from favourites');}
+  else{favs.add(ch.url);toast('Added to favourites','ok');}
+  saveFavs();updateAllFocus();
+}
+
+/* ── Sidebar & Overlays ── */
+const NAV_ITEMS=['niHome','niSearch','niFavs','niSources','niSettings'];
+function setNav(id){
+  activeNav=id.replace('ni','').toLowerCase();
+  NAV_ITEMS.forEach(n=>{const el=$(n);if(el)el.classList.toggle('on',n===id)});
+  if(activeNav==='search'){searchBar.classList.add('open');srchInput.focus();zone='search';return;}
+  if(activeNav==='settings'){openOverlay('settings');return;}
+  if(activeNav==='sources'){openOverlay('sources');return;}
+  buildRowData();renderRows();syncFocus();zone='rows';
+}
+function openSearch(){searchBar.classList.add('open');srchInput.focus();zone='search';}
+function closeSearch(){searchBar.classList.remove('open');srchInput.value='';searchQ='';buildRowData();renderRows();syncFocus();zone='rows';}
+srchInput.addEventListener('input',()=>{searchQ=srchInput.value.trim();buildRowData();renderRows();});
+
+function openOverlay(ctx){ovContext=ctx;overlay.classList.add('on');zone='overlay';if(ctx==='settings')renderSettings();else renderSources();}
+function closeOverlay(){overlay.classList.remove('on');zone='rows';syncFocus();}
+$('ovClose').addEventListener('click',closeOverlay);
+function renderSettings(){ /* simplified but functional */ ovTitle.textContent='Settings'; ovSide.innerHTML='<div class="ov-nav-item on" data-sect="playback"><span>Playback</span></div>'; ovMain.innerHTML=`<div class="set-row"><div class="set-row-l"><div>Force Highest Quality</div></div><label class="tog"><input type="checkbox" id="cfgHQ" ${cfg.hq?'checked':''}><span class="tog-t"></span></label></div>`; $('#cfgHQ').onchange=function(){cfg.hq=this.checked;saveCfg();};}
+function renderSources(){ ovTitle.textContent='Sources'; ovMain.innerHTML=`<button class="ov-btn" id="addSrcBtnOv">Add Source</button>`; $('#addSrcBtnOv').onclick=()=>{const url=prompt('M3U URL');if(url)loadPl(url,'Custom');closeOverlay();};}
+function openDial(){mDial.classList.add('on');zone='modal';}
+function closeDial(){mDial.classList.remove('on');zone='rows';syncFocus();}
+function dialPush(d){if(d==='clr')dialStr=dialStr.slice(0,-1);else if(d==='go'){const n=parseInt(dialStr,10);dialStr='';dnum.textContent='—';closeDial();if(!isNaN(n)&&n>=1){let count=0;for(let ri=0;ri<rowData.length;ri++){const rd=rowData[ri];if(n<=count+rd.channels.length){rowIdx=ri;colIdxMap.set(ri,n-count-1);syncFocus();immediatePlay();return}count+=rd.channels.length;}toast('Not found','err');}}else if(dialStr.length<4)dialStr+=d; dnum.textContent=dialStr||'—';}
+document.querySelectorAll('.dk').forEach(b=>b.addEventListener('click',()=>dialPush(b.dataset.d)));
+ckR.addEventListener('click',()=>{const g=rowData[(rowIdx+1)%rowData.length]?.label;if(g){buildRowData();renderRows();syncFocus();toast(g);}});
+ckG.addEventListener('click',()=>srchOpen?closeSearch():openSearch());
+ckY.addEventListener('click',cycleAspect);
+ckB.addEventListener('click',()=>document.fullscreenElement?exitFS():enterFS());
+NAV_ITEMS.forEach(id=>{const el=$(id);if(el)el.addEventListener('click',()=>setNav(id))});
+
+/* ── Clock & Status ── */
+function tick(){clock.textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})}
+tick();setInterval(tick,10000);
+
+/* ── Key handler (integration) ── */
+window.addEventListener('keydown',e=>{
+  const kc=e.keyCode,k=e.key;
+  if(kc===447||k==='VolumeUp'){e.preventDefault();volUp();return}
+  if(kc===448||k==='VolumeDown'){e.preventDefault();volDown();return}
+  if(kc===449||k==='VolumeMute'){e.preventDefault();isMuted=!isMuted;video.muted=isMuted;showVol();return}
+  if(kc===10009||k==='Escape'){
+    if(document.fullscreenElement){e.preventDefault();exitFS();return}
+    if(zone==='overlay'){e.preventDefault();closeOverlay();return}
+    if(zone==='modal'){e.preventDefault();closeDial();return}
+    if(zone==='search'){e.preventDefault();closeSearch();return}
+    if(zone==='nav'){e.preventDefault();zone='rows';syncFocus();return}
+    return;
+  }
+  if(document.activeElement===srchInput){if(kc===13)closeSearch();return;}
+  if(zone==='modal'){if(kc===13){dialPush('go');e.preventDefault();}return;}
+  if(zone==='overlay'){/* basic nav */ if(kc===27)closeOverlay(); return;}
+  if(zone==='rows'){
+    if(kc===38||k==='ArrowUp'){e.preventDefault();navigateGrid(0,-1);return;}
+    if(kc===40||k==='ArrowDown'){e.preventDefault();navigateGrid(0,1);return;}
+    if(kc===37||k==='ArrowLeft'){e.preventDefault();navigateGrid(-1,0);return;}
+    if(kc===39||k==='ArrowRight'){e.preventDefault();navigateGrid(1,0);return;}
+    if(kc===13||k==='Enter'){e.preventDefault();immediatePlay();return;}
+  }
+  if(kc===403){e.preventDefault();ckR.click();}
+  if(kc===404){e.preventDefault();ckG.click();}
+  if(kc===405){e.preventDefault();cycleAspect();}
+  if(kc===406){e.preventDefault();ckB.click();}
+  if(k==='f'||k==='F'){e.preventDefault();toggleFav();}
+  if(kc===415)video.play();
+  if(kc===19)video.pause();
+  if(k==='d')openDial();
+});
+function hideSplash(){$('splash').classList.add('off');setTimeout(()=>{$('splash').style.display='none'},600);}
+
+/* ── Boot ── */
+(async function boot(){
+  loadStore();
+  pls=pls.filter(p=>p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url);
+  pls.unshift(JIO_PL);pls.unshift(TELUGU_PL);
+  await initPlayer();
+  await loadAll(false);
+  currentVol=getSysVol();
+  setInterval(()=>{if(player&&isPlaying)try{const bw=player.getStats().estimatedBandwidth||0;if(bw>4e6)sigDot.style.background='#22c55e';else if(bw>1e6)sigDot.style.background='#f59e0b';else sigDot.style.background='#ef4444';}catch(e){}},3000);
+})();
 })();
 </script>
 </body>
