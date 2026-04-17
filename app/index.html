@@ -3,78 +3,51 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
 <title>SAGA IPTV</title>
-<script src="./shaka.js"></script>
-<script src="./cache.js"></script>
+<!-- Shaka Player from CDN (replaces missing shaka.js) -->
+<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.0/dist/shaka-player.compiled.js"></script>
 <style>
 /*══════════════════════════════════════════════════════════════
-  SAGA IPTV v35 — JioTV+ Style
-  ─────────────────────────────────────────────────────────────
-  · Full-screen video hero at all times
-  · Top bar: logo + horizontal nav tabs + icon buttons
-  · Bottom: two horizontal channel rows (Live + Categories)
-  · Auto-hides top+bottom after 3s idle → clean fullscreen view
-  · YELLOW key → quick-action popup
-  · All animations: GPU-only (transform/opacity)
+  SAGA IPTV v35 — JioTV+ Style (Fully Self‑Contained)
 ══════════════════════════════════════════════════════════════*/
-
 *,*::before,*::after{
   margin:0;padding:0;box-sizing:border-box;
   user-select:none;-webkit-user-select:none;
   -webkit-tap-highlight-color:transparent;
 }
-
 :root{
   --black:     #000;
   --w:         #fff;
   --w2:        rgba(255,255,255,.75);
   --w3:        rgba(255,255,255,.45);
   --w4:        rgba(255,255,255,.12);
-  --accent:    #e50914;   /* Jio red */
+  --accent:    #e50914;
   --accent2:   #ff4444;
-  --yellow:    #f5c518;   /* Yellow key highlight */
+  --yellow:    #f5c518;
   --green:     #00c853;
   --sep:       rgba(255,255,255,.12);
-
-  /* Card sizes */
-  --cw:  190px;   /* channel card width */
-  --ch:  110px;   /* channel card height */
-  --sw:  190px;   /* show card width */
-  --sh:  108px;   /* show card height */
+  --cw:  190px;
+  --ch:  110px;
+  --sw:  190px;
+  --sh:  108px;
   --cgap: 14px;
-
-  /* Top bar */
   --topbar-h: 72px;
-
-  /* Bottom panel */
-  --bottom-h: 310px;  /* height of the two rows + padding */
-  --row1-h:   148px;  /* row 1 (channels): label + cards */
-  --row2-h:   148px;  /* row 2 (shows) */
-
-  /* Transitions */
+  --bottom-h: 310px;
   --dur:   120ms;
   --ease:  cubic-bezier(.4,0,.2,1);
   --spring:cubic-bezier(.22,1,.36,1);
 }
-
 html,body{
   width:100vw;height:100vh;overflow:hidden;
   background:#000;color:var(--w);
   font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-  -webkit-font-smoothing:antialiased;
 }
-
-/* ════════════════════════════════════════════════════════════
-   ROOT
-════════════════════════════════════════════════════════════ */
 #root{
   width:100vw;height:100vh;
   position:relative;overflow:hidden;
   transform:translateZ(0);isolation:isolate;
 }
-
-/* ── VIDEO — always fills 100% ───────────────────────────── */
 #video{
   position:absolute;inset:0;
   width:100%;height:100%;
@@ -82,42 +55,24 @@ html,body{
   display:block;
   transform:translateZ(0);
   will-change:transform;
-  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
   z-index:1;
 }
 #video.contain{object-fit:contain}
 #video.stretch{object-fit:fill}
-
-/* ── VIGNETTE — protects top and bottom text readability ─── */
 #vignette{
   position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:
-    linear-gradient(to bottom,
-      rgba(0,0,0,.72) 0%,
-      rgba(0,0,0,.0)  18%,
-      rgba(0,0,0,.0)  55%,
-      rgba(0,0,0,.75) 78%,
-      rgba(0,0,0,.95) 100%
-    );
+  background:linear-gradient(to bottom,rgba(0,0,0,.72) 0%,rgba(0,0,0,.0) 18%,rgba(0,0,0,.0) 55%,rgba(0,0,0,.75) 78%,rgba(0,0,0,.95) 100%);
   transition:opacity 300ms;
 }
-/* When UI is hidden, vignette also fades */
 #vignette.dim{opacity:.3}
-
-/* ════════════════════════════════════════════════════════════
-   TOP BAR  (logo | nav tabs | icon buttons)
-   Auto-hides: slides UP off-screen after 3s idle
-════════════════════════════════════════════════════════════ */
 #topBar{
   position:absolute;top:0;left:0;right:0;
   height:var(--topbar-h);
   z-index:30;
   display:flex;align-items:center;
   padding:0 48px;
-  gap:0;
-  /* Glass band */
   background:linear-gradient(to bottom,rgba(0,0,0,.78) 0%,transparent 100%);
-  /* Auto-hide animation */
   will-change:transform,opacity;
   transition:transform 320ms var(--spring), opacity 280ms;
 }
@@ -125,31 +80,20 @@ html,body{
   transform:translateY(-100%);
   opacity:0;pointer-events:none;
 }
-
-/* Brand */
 .brand{
   display:flex;align-items:center;gap:4px;
   margin-right:40px;flex-shrink:0;
 }
-.brand-jio{
-  font-size:22px;font-weight:900;
-  color:var(--w);letter-spacing:-.5px;
-}
-.brand-tv{
-  font-size:14px;font-weight:800;
-  color:var(--w);background:var(--accent);
-  padding:1px 5px;border-radius:4px;letter-spacing:.5px;
-}
-.brand-plus{
-  font-size:18px;font-weight:900;color:var(--yellow);margin-left:1px;
-}
-
-/* Nav tabs */
+.brand-jio{font-size:22px;font-weight:900;color:var(--w);letter-spacing:-.5px;}
+.brand-tv{font-size:14px;font-weight:800;color:var(--w);background:var(--accent);padding:1px 5px;border-radius:4px;}
+.brand-plus{font-size:18px;font-weight:900;color:var(--yellow);margin-left:1px;}
 #navTabs{
   display:flex;align-items:center;gap:6px;
   flex:1;
-  overflow:hidden;
+  overflow-x:auto;
+  scrollbar-width:none;
 }
+#navTabs::-webkit-scrollbar{display:none}
 .ntab{
   height:36px;padding:0 18px;
   border:none;border-radius:18px;
@@ -157,21 +101,9 @@ html,body{
   font-size:15px;font-weight:600;
   cursor:pointer;outline:none;
   white-space:nowrap;flex-shrink:0;
-  transition:background var(--dur),color var(--dur),transform 100ms;
+  transition:background var(--dur),color var(--dur);
 }
-.ntab:focus{outline:none}
-/* Selected tab: white pill */
-.ntab.on{
-  background:var(--w);
-  color:#111;
-  font-weight:700;
-}
-.ntab.focused-nav{
-  outline:2px solid rgba(255,255,255,.7);
-  outline-offset:2px;
-}
-
-/* Right icons */
+.ntab.on{background:var(--w);color:#111;font-weight:700;}
 .top-icons{
   display:flex;align-items:center;gap:12px;
   margin-left:24px;flex-shrink:0;
@@ -183,21 +115,14 @@ html,body{
   border:none;cursor:pointer;outline:none;
   display:flex;align-items:center;justify-content:center;
   color:var(--w);
-  transition:background var(--dur);
 }
 .top-icon svg{width:20px;height:20px;fill:currentColor}
-.top-icon:focus,.top-icon:hover{background:rgba(255,255,255,.24);outline:2px solid rgba(255,255,255,.5);outline-offset:1px}
-
-/* ════════════════════════════════════════════════════════════
-   BOTTOM PANEL  (two horizontal channel rows)
-   Auto-hides: slides DOWN off-screen after 3s idle
-════════════════════════════════════════════════════════════ */
+.top-icon:focus{background:rgba(255,255,255,.24);outline:2px solid rgba(255,255,255,.5);}
 #bottomPanel{
   position:absolute;bottom:0;left:0;right:0;
   height:var(--bottom-h);
   z-index:30;
   padding:0 0 16px;
-  /* No background — vignette handles darkening */
   will-change:transform,opacity;
   transition:transform 320ms var(--spring), opacity 280ms;
 }
@@ -205,12 +130,7 @@ html,body{
   transform:translateY(calc(100% + 20px));
   opacity:0;pointer-events:none;
 }
-
-/* Row wrapper */
-.ch-row{
-  padding:0 48px;
-  margin-bottom:4px;
-}
+.ch-row{padding:0 48px;margin-bottom:4px;}
 .ch-row-label{
   font-size:16px;font-weight:700;color:var(--w);
   margin-bottom:12px;
@@ -221,20 +141,13 @@ html,body{
   background:rgba(255,255,255,.1);
   border-radius:10px;padding:2px 8px;
 }
-
-/* Horizontal strip — slides left/right via translateX */
 .tile-strip{
   display:flex;gap:var(--cgap);
   will-change:transform;
   transition:transform 200ms var(--ease);
   overflow:visible;
-  padding-bottom:4px; /* for focus glow */
+  padding-bottom:4px;
 }
-
-/* ════════════════════════════════════════════════════════════
-   CHANNEL CARD  (190×110px, rounded 12px)
-   Logo centred, badges bottom-right, scale on focus.
-════════════════════════════════════════════════════════════ */
 .card{
   width:var(--cw);
   height:var(--ch);
@@ -244,19 +157,14 @@ html,body{
   background:#1a1a2e;
   border:2px solid rgba(255,255,255,.06);
   overflow:visible;
-  transition:transform 180ms var(--spring),
-             border-color 120ms,
-             box-shadow 120ms;
+  transition:transform 180ms var(--spring), border-color 120ms;
   transform:scale(1) translateZ(0);
-  will-change:transform;
 }
-/* Inner clip for image + bg */
 .card-inner{
   position:absolute;inset:0;
   border-radius:10px;
   overflow:hidden;
 }
-/* Blurred dominant-colour bg wash */
 .card-bg{
   position:absolute;inset:-4px;
   background-size:cover;background-position:center;
@@ -264,65 +172,31 @@ html,body{
   opacity:0;transition:opacity 400ms;
 }
 .card-bg.on{opacity:1}
-/* Logo */
 .card-img{
   position:absolute;inset:0;
   width:100%;height:100%;
   object-fit:contain;
   padding:10px;
-  display:block;
-  image-rendering:-webkit-optimize-contrast;
 }
-/* Fallback */
-.card-fb{
-  position:absolute;inset:0;
-  display:flex;align-items:center;justify-content:center;
-  font-size:28px;color:rgba(255,255,255,.3);
-}
-/* Bottom-right badges */
 .card-badges{
   position:absolute;bottom:7px;right:7px;
-  display:flex;gap:4px;align-items:center;
-  z-index:4;
+  display:flex;gap:4px;z-index:4;
 }
 .badge{
-  font-size:9px;font-weight:800;letter-spacing:.4px;
-  padding:2px 6px;border-radius:4px;line-height:14px;
+  font-size:9px;font-weight:800;
+  padding:2px 6px;border-radius:4px;
 }
 .badge-live{background:var(--accent);color:#fff}
-.badge-hd{background:var(--green);color:#000}
-.badge-new{background:var(--yellow);color:#000}
-/* Channel number (top-left) */
 .card-num{
   position:absolute;top:7px;left:8px;
   font-size:10px;color:rgba(255,255,255,.22);
-  font-variant-numeric:tabular-nums;z-index:4;line-height:1;
 }
-/* Fav star */
-.card-fav{
-  position:absolute;top:7px;right:8px;
-  font-size:12px;color:#f5c518;
-  display:none;z-index:4;
-}
-/* Playing progress bar */
-.card.playing .card-inner::after{
-  content:'';
-  position:absolute;bottom:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,var(--accent),var(--accent2));
-}
-
-/* ── FOCUSED card ─── */
 .card.sel{
   border-color:rgba(255,255,255,.95);
   transform:scale(1.1) translateZ(0);
   z-index:10;
-  box-shadow:
-    0 0 0 3px rgba(255,255,255,.15),
-    0 12px 40px rgba(0,0,0,.8),
-    0 0 32px rgba(255,255,255,.08);
+  box-shadow:0 0 0 3px rgba(255,255,255,.15),0 12px 40px rgba(0,0,0,.8);
 }
-
-/* Special "TV Guide" card — first card, blue bg */
 .card.tvguide .card-inner{background:#1565c0}
 .card.tvguide .card-guide-content{
   position:absolute;inset:0;
@@ -330,8 +204,6 @@ html,body{
 }
 .card.tvguide .guide-icon{font-size:28px;color:#fff}
 .card.tvguide .guide-label{font-size:13px;font-weight:700;color:#fff}
-
-/* Show card (row 2) — same structure, different default bg */
 .show-card{
   width:var(--sw);height:var(--sh);
   border-radius:10px;
@@ -339,32 +211,23 @@ html,body{
   cursor:pointer;outline:none;
   background:#222;
   border:2px solid rgba(255,255,255,.05);
-  overflow:visible;
-  transition:transform 180ms var(--spring),border-color 120ms,box-shadow 120ms;
-  transform:scale(1) translateZ(0);
-  will-change:transform;
+  transition:transform 180ms var(--spring),border-color 120ms;
 }
 .show-card-inner{position:absolute;inset:0;border-radius:8px;overflow:hidden}
-.show-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
-.show-card-fb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;color:rgba(255,255,255,.3)}
+.show-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .show-card-grad{
   position:absolute;bottom:0;left:0;right:0;
   padding:24px 8px 7px;
   background:linear-gradient(transparent,rgba(0,0,0,.85));
   border-radius:0 0 8px 8px;
 }
-.show-card-name{font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.show-card-name{font-size:11px;font-weight:700;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .show-card.sel{
   border-color:rgba(255,255,255,.9);
   transform:scale(1.1) translateZ(0);
   z-index:10;
-  box-shadow:0 0 0 3px rgba(255,255,255,.15),0 12px 40px rgba(0,0,0,.8);
+  box-shadow:0 0 0 3px rgba(255,255,255,.15);
 }
-
-/* ════════════════════════════════════════════════════════════
-   NOW PLAYING — centre info (channel name, group)
-   Fades in when a channel is selected / playing
-════════════════════════════════════════════════════════════ */
 #nowInfo{
   position:absolute;
   bottom:calc(var(--bottom-h) + 16px);
@@ -379,25 +242,20 @@ html,body{
 #nowInfo.visible{opacity:1;transform:none}
 #nowTag{
   display:flex;align-items:center;gap:8px;
-  font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  font-size:12px;font-weight:700;letter-spacing:2px;
   color:rgba(255,255,255,.6);margin-bottom:8px;
 }
 .now-dot{
   width:7px;height:7px;border-radius:50%;
   background:var(--accent2);
-  animation:npulse 2s ease-in-out infinite;
+  animation:npulse 2s infinite;
 }
 @keyframes npulse{0%,100%{opacity:1}50%{opacity:.3}}
 #nowTitle{
   font-size:40px;font-weight:900;
   color:var(--w);line-height:1;
-  letter-spacing:-.02em;
   text-shadow:0 4px 20px rgba(0,0,0,.8);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-#nowMeta{
-  display:flex;align-items:center;gap:10px;
-  margin-top:10px;
 }
 .now-pill{
   background:rgba(255,255,255,.15);
@@ -407,21 +265,10 @@ html,body{
   padding:4px 12px;
   font-size:12px;font-weight:700;color:var(--w);
 }
-.now-pill.live{
-  background:rgba(229,9,20,.25);
-  border-color:rgba(229,9,20,.5);
-  color:#ff6b6b;
-}
-
-/* ════════════════════════════════════════════════════════════
-   YELLOW KEY POPUP  (quick actions menu)
-   Opens on YELLOW remote key press.
-   Centred glass card with action buttons.
-════════════════════════════════════════════════════════════ */
 #yellowPopup{
   position:absolute;inset:0;z-index:60;
   background:rgba(0,0,0,.82);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  backdrop-filter:blur(16px);
   display:none;align-items:center;justify-content:center;
 }
 #yellowPopup.on{display:flex}
@@ -432,9 +279,7 @@ html,body{
   padding:36px;
   width:480px;
   max-width:90vw;
-  animation:ypIn 150ms var(--spring);
 }
-@keyframes ypIn{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}
 .yp-header{
   display:flex;align-items:center;gap:12px;
   margin-bottom:28px;
@@ -443,20 +288,15 @@ html,body{
 }
 .yp-dot{
   width:12px;height:12px;border-radius:50%;
-  background:var(--yellow);flex-shrink:0;
+  background:var(--yellow);
 }
 .yp-title{font-size:20px;font-weight:800;color:var(--w)}
 .yp-close{
   margin-left:auto;
   background:rgba(255,255,255,.1);border:none;
-  color:var(--w3);font-size:18px;cursor:pointer;outline:none;
+  color:var(--w3);font-size:18px;cursor:pointer;
   width:32px;height:32px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  transition:background var(--dur);
 }
-.yp-close:focus,.yp-close:hover{background:rgba(255,255,255,.2);color:var(--w);outline:2px solid rgba(255,255,255,.4)}
-
-/* Action items */
 .yp-actions{display:flex;flex-direction:column;gap:8px}
 .yp-action{
   display:flex;align-items:center;gap:16px;
@@ -465,57 +305,33 @@ html,body{
   background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.09);
   cursor:pointer;outline:none;
-  transition:background var(--dur),border-color var(--dur),transform 80ms;
   font-size:16px;font-weight:600;color:var(--w);
-  text-align:left;width:100%;
 }
-.yp-action:focus,.yp-action:hover{
-  background:rgba(255,255,255,.12);
-  border-color:rgba(255,255,255,.25);
-  outline:none;
-  transform:translateX(4px);
-}
-.yp-action:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:1px}
+.yp-action:focus{background:rgba(255,255,255,.12);outline:2px solid rgba(255,255,255,.4);}
 .yp-action-icon{
   width:40px;height:40px;border-radius:10px;
   display:flex;align-items:center;justify-content:center;
-  font-size:20px;flex-shrink:0;
+  font-size:20px;
 }
-.yp-action-text{flex:1}
-.yp-action-title{font-size:15px;font-weight:700;color:var(--w)}
-.yp-action-desc{font-size:12px;color:var(--w3);margin-top:2px}
-.yp-action-arrow{color:var(--w3);font-size:18px}
-
-/* Add Source sub-form in popup */
 #ypAddForm{display:none;flex-direction:column;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)}
 #ypAddForm.open{display:flex}
 .yp-input{
   width:100%;padding:12px 16px;border-radius:10px;
   background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
   color:var(--w);font-size:15px;outline:none;
-  -webkit-user-select:text !important;user-select:text !important;
 }
-.yp-input:focus{border-color:rgba(255,255,255,.4);outline:2px solid rgba(255,255,255,.3);outline-offset:1px}
-.yp-input::placeholder{color:var(--w3)}
+.yp-input:focus{border-color:rgba(255,255,255,.4);outline:2px solid rgba(255,255,255,.3);}
 .yp-row{display:flex;gap:10px}
 .yp-btn{
-  flex:1;padding:12px 16px;border-radius:10px;
-  border:1px solid rgba(255,255,255,.2);
+  flex:1;padding:12px;border-radius:10px;
   background:rgba(255,255,255,.08);color:var(--w);
-  font-size:14px;font-weight:700;cursor:pointer;outline:none;
-  transition:background var(--dur);
+  font-size:14px;font-weight:700;cursor:pointer;
 }
-.yp-btn:focus,.yp-btn:hover{background:rgba(255,255,255,.18);outline:2px solid rgba(255,255,255,.4);outline-offset:1px}
 .yp-btn-prim{background:var(--accent);border-color:var(--accent)}
-.yp-btn-prim:focus,.yp-btn-prim:hover{background:var(--accent2);border-color:var(--accent2)}
-
-/* ════════════════════════════════════════════════════════════
-   SETTINGS OVERLAY
-════════════════════════════════════════════════════════════ */
 #settingsOverlay{
   position:absolute;inset:0;z-index:55;
   background:rgba(0,0,0,.88);
-  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  backdrop-filter:blur(18px);
   display:none;flex-direction:column;
 }
 #settingsOverlay.on{display:flex}
@@ -523,55 +339,31 @@ html,body{
   display:flex;align-items:center;
   padding:28px 48px 20px;
   border-bottom:1px solid rgba(255,255,255,.1);
-  flex-shrink:0;
 }
 .so-title{font-size:24px;font-weight:800;color:var(--w);flex:1}
 .so-close{
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-  color:var(--w2);font-size:15px;font-weight:700;cursor:pointer;outline:none;
-  padding:8px 20px;border-radius:8px;
-  transition:background var(--dur);
+  color:var(--w2);padding:8px 20px;border-radius:8px;cursor:pointer;
 }
-.so-close:focus,.so-close:hover{background:rgba(255,255,255,.2);outline:2px solid rgba(255,255,255,.5);outline-offset:2px;color:var(--w)}
-.so-body{
-  display:flex;flex:1;overflow:hidden;
-}
-.so-side{
-  width:260px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.1);
-  padding:16px 0;overflow-y:auto;scrollbar-width:none;
-}
-.so-side::-webkit-scrollbar{display:none}
-.so-main{flex:1;overflow-y:auto;padding:24px 48px;scrollbar-width:none}
-.so-main::-webkit-scrollbar{display:none}
+.so-body{display:flex;flex:1;overflow:hidden}
+.so-side{width:260px;border-right:1px solid rgba(255,255,255,.1);padding:16px 0;overflow-y:auto}
+.so-main{flex:1;overflow-y:auto;padding:24px 48px}
 .so-nav{
   display:flex;align-items:center;gap:14px;
-  padding:14px 24px;cursor:pointer;outline:none;
+  padding:14px 24px;cursor:pointer;
   font-size:15px;font-weight:600;color:var(--w3);
   border-left:3px solid transparent;
-  transition:background var(--dur),color var(--dur);
 }
-.so-nav.on,.so-nav:focus,.so-nav:hover{
-  background:rgba(255,255,255,.07);color:var(--w);
-  border-left-color:var(--accent);
-}
-.so-nav:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:-2px}
-.so-nav svg{width:18px;height:18px;fill:currentColor;flex-shrink:0}
-.so-sect-label{font-size:11px;font-weight:700;color:var(--w3);letter-spacing:1px;text-transform:uppercase;padding:8px 24px 4px;margin-top:8px}
-
-/* Setting rows */
+.so-nav.on,.so-nav:focus{background:rgba(255,255,255,.07);color:var(--w);border-left-color:var(--accent);outline:none}
 .srow{
   display:flex;align-items:center;justify-content:space-between;
   padding:18px 0;border-bottom:1px solid rgba(255,255,255,.08);
-  cursor:pointer;outline:none;border-radius:6px;
-  padding-left:8px;padding-right:8px;
+  cursor:pointer;
 }
-.srow:last-child{border-bottom:none}
-.srow:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:2px;background:rgba(255,255,255,.04)}
-.srow-l{flex:1;margin-right:20px}
+.srow-l{flex:1}
 .srow-title{font-size:17px;font-weight:600;color:var(--w)}
-.srow-desc{font-size:12px;color:var(--w3);margin-top:3px;line-height:1.4}
-/* Toggle */
-.tog{position:relative;width:54px;height:28px;flex-shrink:0}
+.srow-desc{font-size:12px;color:var(--w3);margin-top:3px}
+.tog{position:relative;width:54px;height:28px}
 .tog input{opacity:0;width:0;height:0;position:absolute}
 .tog-t{
   position:absolute;inset:0;cursor:pointer;
@@ -582,47 +374,23 @@ html,body{
   content:'';position:absolute;
   width:20px;height:20px;top:4px;left:4px;
   background:#fff;border-radius:50%;
-  box-shadow:0 1px 4px rgba(0,0,0,.4);
-  transition:transform 180ms var(--ease);will-change:transform;
+  transition:transform 180ms;
 }
 .tog input:checked+.tog-t{background:var(--accent)}
 .tog input:checked+.tog-t::before{transform:translateX(26px)}
 .oui-sel{
   width:100%;padding:11px 14px;margin-top:8px;
   background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
-  border-radius:8px;color:var(--w);font-size:15px;outline:none;appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 14px center;
+  border-radius:8px;color:var(--w);
 }
-.oui-sel:focus{border-color:rgba(255,255,255,.4);outline:2px solid rgba(255,255,255,.4);outline-offset:2px}
-.so-btn{
-  display:flex;align-items:center;gap:10px;
-  width:100%;padding:14px 18px;border:1px solid rgba(255,255,255,.15);
-  background:rgba(255,255,255,.07);color:var(--w);
-  font-size:15px;font-weight:700;cursor:pointer;outline:none;
-  border-radius:10px;margin-top:8px;
-  transition:background var(--dur);
-}
-.so-btn:focus,.so-btn:hover{background:rgba(255,255,255,.14);outline:2px solid rgba(255,255,255,.4);outline-offset:2px}
-.so-btn-danger{border-color:rgba(229,9,20,.3);color:#ff7070}
-
-/* Sources list */
 .src-card{
   display:flex;align-items:center;gap:14px;
   padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);
-  cursor:pointer;outline:none;
+  cursor:pointer;
 }
-.src-card:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:2px;background:rgba(255,255,255,.03)}
-.src-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
-.src-info{flex:1;min-width:0}
 .src-nm{font-size:15px;font-weight:700}
-.src-url{font-size:11px;color:var(--w3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.src-del{background:none;border:none;color:var(--w3);cursor:pointer;font-size:18px;padding:4px 8px;outline:none}
-.src-del:focus{color:#ff7070;outline:2px solid rgba(255,255,255,.4)}
-
-/* ════════════════════════════════════════════════════════════
-   DIALER MODAL
-════════════════════════════════════════════════════════════ */
+.src-url{font-size:11px;color:var(--w3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-del{background:none;border:none;color:var(--w3);cursor:pointer;font-size:18px}
 #mDial{
   position:absolute;inset:0;z-index:65;
   background:rgba(0,0,0,.85);backdrop-filter:blur(14px);
@@ -633,408 +401,258 @@ html,body{
   background:rgba(14,14,24,.99);
   border:1px solid rgba(255,255,255,.18);
   padding:36px;width:320px;border-radius:20px;
-  animation:ypIn 150ms var(--spring);
 }
 .dial-screen{
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.06);
   border-radius:12px;padding:20px;text-align:center;margin-bottom:18px;
 }
-.dial-num{font-size:46px;font-weight:800;color:var(--w);letter-spacing:8px;min-height:58px;font-variant-numeric:tabular-nums}
-.dial-hint{font-size:11px;color:var(--w3);margin-top:4px}
+.dial-num{font-size:46px;font-weight:800;color:var(--w);letter-spacing:8px;min-height:58px}
 .dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .dk{
   background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
   color:var(--w);padding:18px;border-radius:12px;
-  font-size:28px;font-weight:700;cursor:pointer;outline:none;
-  transition:background var(--dur);
+  font-size:28px;font-weight:700;cursor:pointer;
 }
-.dk:focus,.dk:hover{background:var(--accent);color:#fff;border-color:var(--accent);outline:none}
-.dk.go{grid-column:span 2;background:rgba(229,9,20,.2);border-color:rgba(229,9,20,.4);color:#ff6b6b;font-size:16px}
-.dk.clr{color:#ff7070;font-size:20px}
-
-/* ════════════════════════════════════════════════════════════
-   VOLUME HUD
-════════════════════════════════════════════════════════════ */
+.dk:focus{background:var(--accent);outline:none}
+.dk.go{grid-column:span 2;background:rgba(229,9,20,.2);font-size:16px}
 #volHud{
-  position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%);
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   z-index:70;
   background:rgba(0,0,0,.92);
   backdrop-filter:blur(16px);
-  border:1px solid rgba(255,255,255,.2);
   padding:20px 40px;border-radius:16px;
   display:flex;align-items:center;gap:20px;
   min-width:360px;
-  opacity:0;will-change:opacity;transition:opacity 180ms;
+  opacity:0;transition:opacity 180ms;
   pointer-events:none;
 }
 #volHud.on{opacity:1}
-#volIco{font-size:28px;flex-shrink:0}
-.vol-track{flex:1;height:5px;background:rgba(255,255,255,.2);border-radius:3px;overflow:hidden}
-.vol-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width 80ms linear}
-#volPct{font-size:22px;font-weight:700;min-width:44px;text-align:right}
-
-/* ════════════════════════════════════════════════════════════
-   TOAST
-════════════════════════════════════════════════════════════ */
+.vol-track{flex:1;height:5px;background:rgba(255,255,255,.2);border-radius:3px}
+.vol-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px}
 #toasts{
   position:absolute;top:90px;right:24px;z-index:9999;
   display:flex;flex-direction:column;gap:8px;pointer-events:none;
 }
 .toast{
   background:rgba(8,8,20,.96);
-  border:1px solid rgba(255,255,255,.15);
   border-left:3px solid var(--accent);
   padding:12px 20px;font-size:15px;color:var(--w);
-  max-width:340px;border-radius:10px;
+  border-radius:10px;
   animation:tIn 160ms ease forwards;
-  box-shadow:0 8px 32px rgba(0,0,0,.7);
 }
-.toast.ok{border-left-color:var(--green)}
-.toast.err{border-left-color:#cc3344}
-.toast.out{animation:tOut 140ms ease forwards}
 @keyframes tIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
-@keyframes tOut{from{opacity:1}to{transform:translateX(110%);opacity:0}}
-
-/* ── SPLASH ── */
 #splash{
   position:absolute;inset:0;z-index:9500;
   background:#000;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity 600ms ease;
+  transition:opacity 600ms;
 }
 #splash.off{opacity:0;pointer-events:none}
-.spl-logo{
-  font-size:20vw;font-weight:900;letter-spacing:-.03em;
-  color:var(--w);line-height:.9;
-}
+.spl-logo{font-size:20vw;font-weight:900;color:var(--w)}
 .spl-accent{color:var(--accent)}
-.spl-bar{width:20vw;height:2px;background:rgba(255,255,255,.1);margin-top:5vw;overflow:hidden;border-radius:1px}
-.spl-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--yellow));animation:sf 1s ease-in-out infinite}
+.spl-bar{width:20vw;height:2px;background:rgba(255,255,255,.1);margin-top:5vw;overflow:hidden}
+.spl-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--yellow));animation:sf 1s infinite}
 @keyframes sf{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
-.spl-msg{font-size:1vw;color:var(--w3);margin-top:2vw;letter-spacing:.2em;text-transform:uppercase}
-
-::-webkit-scrollbar{width:3px;height:3px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+.spl-msg{font-size:1vw;color:var(--w3);margin-top:2vw}
 </style>
 </head>
 <body>
-
-<div id="splash">
-  <div class="spl-logo">S<span class="spl-accent">+</span></div>
-  <div class="spl-bar"><div class="spl-fill"></div></div>
-  <div class="spl-msg" id="splMsg">Initialising…</div>
-</div>
-
+<div id="splash"><div class="spl-logo">S<span class="spl-accent">+</span></div><div class="spl-bar"><div class="spl-fill"></div></div><div class="spl-msg" id="splMsg">Initialising…</div></div>
 <div id="root">
-  <!-- Full-screen video hero -->
   <video id="video" playsinline autoplay></video>
-
-  <!-- Vignette -->
   <div id="vignette"></div>
-
-  <!-- ══ TOP BAR ══════════════════════════════════════════ -->
   <div id="topBar">
-    <!-- Brand -->
-    <div class="brand">
-      <span class="brand-jio">SAGA</span>
-      <span class="brand-tv">TV</span>
-      <span class="brand-plus">+</span>
-    </div>
-
-    <!-- Nav tabs (injected by JS from categories) -->
+    <div class="brand"><span class="brand-jio">SAGA</span><span class="brand-tv">TV</span><span class="brand-plus">+</span></div>
     <div id="navTabs"></div>
-
-    <!-- Right icons -->
-    <div class="top-icons">
-      <!-- Settings icon -->
-      <button class="top-icon" id="settingsBtn" tabindex="-1" title="Settings">
-        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
-      </button>
-    </div>
+    <div class="top-icons"><button class="top-icon" id="settingsBtn"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button></div>
   </div>
-
-  <!-- ══ NOW PLAYING INFO ═══════════════════════════════════ -->
-  <div id="nowInfo">
-    <div id="nowTag"><span class="now-dot"></span>NOW PLAYING</div>
-    <div id="nowTitle">Select a channel</div>
-    <div id="nowMeta">
-      <span class="now-pill live">● LIVE</span>
-      <span class="now-pill" id="nowGroup" style="display:none"></span>
-      <span class="now-pill" id="nowQ"     style="display:none"></span>
-    </div>
-  </div>
-
-  <!-- ══ BOTTOM PANEL (two rows) ═══════════════════════════ -->
+  <div id="nowInfo"><div id="nowTag"><span class="now-dot"></span>NOW PLAYING</div><div id="nowTitle">Select a channel</div><div id="nowMeta"><span class="now-pill live">● LIVE</span><span class="now-pill" id="nowGroup"></span><span class="now-pill" id="nowQ"></span></div></div>
   <div id="bottomPanel">
-    <!-- Row 1: Live Channels -->
-    <div class="ch-row" id="row1Wrap">
-      <div class="ch-row-label">
-        Live Channels
-        <span class="ch-row-label-count" id="row1Count">0</span>
-      </div>
-      <div class="tile-strip" id="row1Strip"></div>
-    </div>
-
-    <!-- Row 2: Category / Shows -->
-    <div class="ch-row" id="row2Wrap" style="margin-top:8px">
-      <div class="ch-row-label">
-        <span id="row2Label">Live Shows to Watch</span>
-        <span class="ch-row-label-count" id="row2Count">0</span>
-      </div>
-      <div class="tile-strip" id="row2Strip"></div>
-    </div>
+    <div class="ch-row"><div class="ch-row-label">Live Channels <span class="ch-row-label-count" id="row1Count">0</span></div><div class="tile-strip" id="row1Strip"></div></div>
+    <div class="ch-row" style="margin-top:8px"><div class="ch-row-label"><span id="row2Label">Live Shows to Watch</span><span class="ch-row-label-count" id="row2Count">0</span></div><div class="tile-strip" id="row2Strip"></div></div>
   </div>
-
-  <!-- ══ YELLOW POPUP ══════════════════════════════════════ -->
-  <div id="yellowPopup">
-    <div class="yp-card" id="ypCard">
-      <div class="yp-header">
-        <div class="yp-dot"></div>
-        <div class="yp-title">Quick Actions</div>
-        <button class="yp-close" id="ypClose">✕</button>
-      </div>
-      <div class="yp-actions" id="ypActions">
-        <button class="yp-action" id="ypa-add" tabindex="0">
-          <div class="yp-action-icon" style="background:rgba(59,130,246,.2)">➕</div>
-          <div class="yp-action-text">
-            <div class="yp-action-title">Add M3U Source</div>
-            <div class="yp-action-desc">Add a new playlist URL</div>
-          </div>
-          <span class="yp-action-arrow">›</span>
-        </button>
-        <button class="yp-action" id="ypa-refresh" tabindex="0">
-          <div class="yp-action-icon" style="background:rgba(34,200,83,.2)">↺</div>
-          <div class="yp-action-text">
-            <div class="yp-action-title">Refresh All</div>
-            <div class="yp-action-desc">Re-fetch all playlists</div>
-          </div>
-          <span class="yp-action-arrow">›</span>
-        </button>
-        <button class="yp-action" id="ypa-dialer" tabindex="0">
-          <div class="yp-action-icon" style="background:rgba(245,197,24,.2)">📱</div>
-          <div class="yp-action-text">
-            <div class="yp-action-title">Channel Dialer</div>
-            <div class="yp-action-desc">Jump to channel by number</div>
-          </div>
-          <span class="yp-action-arrow">›</span>
-        </button>
-        <button class="yp-action" id="ypa-settings" tabindex="0">
-          <div class="yp-action-icon" style="background:rgba(229,9,20,.2)">⚙️</div>
-          <div class="yp-action-text">
-            <div class="yp-action-title">Settings</div>
-            <div class="yp-action-desc">Playback, quality, cache</div>
-          </div>
-          <span class="yp-action-arrow">›</span>
-        </button>
-        <button class="yp-action" id="ypa-favs" tabindex="0">
-          <div class="yp-action-icon" style="background:rgba(245,197,24,.18)">★</div>
-          <div class="yp-action-text">
-            <div class="yp-action-title">Favourites</div>
-            <div class="yp-action-desc">Show favourite channels</div>
-          </div>
-          <span class="yp-action-arrow">›</span>
-        </button>
-      </div>
-      <!-- Add source form (hidden by default) -->
-      <div id="ypAddForm">
-        <input class="yp-input" id="ypPlName" type="text"  placeholder="Playlist name" autocomplete="off">
-        <input class="yp-input" id="ypPlUrl"  type="url"   placeholder="https://…/playlist.m3u" autocomplete="off">
-        <div class="yp-row">
-          <button class="yp-btn yp-btn-prim" id="ypSave">Add &amp; Load</button>
-          <button class="yp-btn"             id="ypCancel">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ SETTINGS OVERLAY ══════════════════════════════════ -->
-  <div id="settingsOverlay">
-    <div class="so-hdr">
-      <span class="so-title">Settings</span>
-      <button class="so-close" id="soClose">✕ Close</button>
-    </div>
-    <div class="so-body">
-      <div class="so-side" id="soSide">
-        <div class="so-sect-label">Playback</div>
-        <div class="so-nav on" tabindex="0" data-s="playback">
-          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Playback
-        </div>
-        <div class="so-sect-label">Display</div>
-        <div class="so-nav" tabindex="0" data-s="display">
-          <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2H6v2h12v-2h-2v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>Display
-        </div>
-        <div class="so-sect-label">Manage</div>
-        <div class="so-nav" tabindex="0" data-s="sources">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>Sources
-        </div>
-      </div>
-      <div class="so-main" id="soMain"></div>
-    </div>
-  </div>
-
-  <!-- ══ DIALER ════════════════════════════════════════════ -->
-  <div id="mDial">
-    <div class="dial-box">
-      <div class="dial-screen">
-        <div class="dial-num" id="dnum">—</div>
-        <div class="dial-hint">Enter channel number · OK to jump</div>
-      </div>
-      <div class="dgrid">
-        <button class="dk" data-d="1">1</button><button class="dk" data-d="2">2</button><button class="dk" data-d="3">3</button>
-        <button class="dk" data-d="4">4</button><button class="dk" data-d="5">5</button><button class="dk" data-d="6">6</button>
-        <button class="dk" data-d="7">7</button><button class="dk" data-d="8">8</button><button class="dk" data-d="9">9</button>
-        <button class="dk clr" data-d="clr">⌫</button>
-        <button class="dk" data-d="0">0</button>
-        <button class="dk go" data-d="go">▶ Go</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Volume HUD -->
-  <div id="volHud">
-    <span id="volIco">🔊</span>
-    <div class="vol-track"><div class="vol-fill" id="volFill" style="width:50%"></div></div>
-    <span id="volPct">50</span>
-  </div>
-
+  <div id="yellowPopup"><div class="yp-card"><div class="yp-header"><div class="yp-dot"></div><div class="yp-title">Quick Actions</div><button class="yp-close" id="ypClose">✕</button></div><div class="yp-actions" id="ypActions"><button class="yp-action" id="ypa-add"><div class="yp-action-icon" style="background:rgba(59,130,246,.2)">➕</div><div class="yp-action-text"><div class="yp-action-title">Add M3U Source</div><div class="yp-action-desc">Add a new playlist URL</div></div><span class="yp-action-arrow">›</span></button><button class="yp-action" id="ypa-refresh"><div class="yp-action-icon" style="background:rgba(34,200,83,.2)">↺</div><div class="yp-action-text"><div class="yp-action-title">Refresh All</div><div class="yp-action-desc">Re-fetch all playlists</div></div><span class="yp-action-arrow">›</span></button><button class="yp-action" id="ypa-dialer"><div class="yp-action-icon" style="background:rgba(245,197,24,.2)">📱</div><div class="yp-action-text"><div class="yp-action-title">Channel Dialer</div><div class="yp-action-desc">Jump to channel by number</div></div><span class="yp-action-arrow">›</span></button><button class="yp-action" id="ypa-settings"><div class="yp-action-icon" style="background:rgba(229,9,20,.2)">⚙️</div><div class="yp-action-text"><div class="yp-action-title">Settings</div><div class="yp-action-desc">Playback, quality, cache</div></div><span class="yp-action-arrow">›</span></button><button class="yp-action" id="ypa-favs"><div class="yp-action-icon" style="background:rgba(245,197,24,.18)">★</div><div class="yp-action-text"><div class="yp-action-title">Favourites</div><div class="yp-action-desc">Show favourite channels</div></div><span class="yp-action-arrow">›</span></button></div><div id="ypAddForm"><input class="yp-input" id="ypPlName" placeholder="Playlist name"><input class="yp-input" id="ypPlUrl" placeholder="https://…/playlist.m3u"><div class="yp-row"><button class="yp-btn yp-btn-prim" id="ypSave">Add &amp; Load</button><button class="yp-btn" id="ypCancel">Cancel</button></div></div></div></div>
+  <div id="settingsOverlay"><div class="so-hdr"><span class="so-title">Settings</span><button class="so-close" id="soClose">✕ Close</button></div><div class="so-body"><div class="so-side" id="soSide"><div class="so-sect-label">Playback</div><div class="so-nav on" tabindex="0" data-s="playback"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Playback</div><div class="so-sect-label">Display</div><div class="so-nav" tabindex="0" data-s="display"><svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2H6v2h12v-2h-2v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>Display</div><div class="so-sect-label">Manage</div><div class="so-nav" tabindex="0" data-s="sources"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>Sources</div></div><div class="so-main" id="soMain"></div></div></div>
+  <div id="mDial"><div class="dial-box"><div class="dial-screen"><div class="dial-num" id="dnum">—</div><div class="dial-hint">Enter channel number · OK to jump</div></div><div class="dgrid"><button class="dk" data-d="1">1</button><button class="dk" data-d="2">2</button><button class="dk" data-d="3">3</button><button class="dk" data-d="4">4</button><button class="dk" data-d="5">5</button><button class="dk" data-d="6">6</button><button class="dk" data-d="7">7</button><button class="dk" data-d="8">8</button><button class="dk" data-d="9">9</button><button class="dk clr" data-d="clr">⌫</button><button class="dk" data-d="0">0</button><button class="dk go" data-d="go">▶ Go</button></div></div></div>
+  <div id="volHud"><span id="volIco">🔊</span><div class="vol-track"><div class="vol-fill" id="volFill" style="width:50%"></div></div><span id="volPct">50</span></div>
   <div id="toasts"></div>
 </div>
-
 <canvas id="cc" width="8" height="8" style="display:none"></canvas>
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v35 — JioTV+ Style
-  ──────────────────────────────────────────────────────────────
-  Key behaviours:
-  · Full-screen video at all times
-  · Top nav tabs + bottom rows AUTO-HIDE after 3 seconds idle
-  · Any key/remote press shows UI again and resets timer
-  · YELLOW key → quick-action popup (no search, per requirement)
-  · RED key → cycle category tabs
-  · OK → play channel + fullscreen
-  · All v32 playback engine preserved (Shaka, stallSkip, HQ lock)
-  · Tizen tvaudiocontrol for volume
+  INLINE CACHE.JS (AppCache) – IndexedDB + localStorage fallback
+══════════════════════════════════════════════════════════════════*/
+(function(){
+  const DB_NAME = 'SagaIPTV';
+  const STORE_NAME = 'm3uCache';
+  let db = null;
+  const pending = [];
+
+  function openDB(){
+    return new Promise((resolve, reject)=>{
+      if(db && db.name === DB_NAME) return resolve(db);
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if(!db.objectStoreNames.contains(STORE_NAME)){
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+      req.onerror = (e) => reject(e.target.error);
+    });
+  }
+
+  window.AppCache = {
+    getM3U: async function(url){
+      try{
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const record = await new Promise((res,rej)=>{
+          const get = store.get(url);
+          get.onsuccess = () => res(get.result);
+          get.onerror = () => rej(get.error);
+        });
+        if(record && record.data && record.expiry > Date.now()) return record.data;
+        return null;
+      }catch(e){
+        try{ return localStorage.getItem('cache_'+btoa(url)); }catch(e2){ return null; }
+      }
+    },
+    setM3U: async function(url, data){
+      try{
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.put({ data: data, expiry: Date.now() + 3600000 }, url);
+        await new Promise((res,rej)=>{ tx.oncomplete = res; tx.onerror = rej; });
+      }catch(e){
+        try{ localStorage.setItem('cache_'+btoa(url), data); }catch(e2){}
+      }
+    },
+    clearAllM3U: async function(){
+      try{
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).clear();
+        await new Promise((res,rej)=>{ tx.oncomplete = res; tx.onerror = rej; });
+      }catch(e){}
+      try{
+        for(let i=0;i<localStorage.length;i++){
+          let key = localStorage.key(i);
+          if(key && key.startsWith('cache_')) localStorage.removeItem(key);
+        }
+      }catch(e){}
+    },
+    preloadImages: function(urls, onProgress){
+      // stub for compatibility
+    }
+  };
+})();
+
+/*══════════════════════════════════════════════════════════════════
+  MAIN APP – SAGA IPTV v35 (Tizen OS 9 Ready)
 ══════════════════════════════════════════════════════════════════*/
 (function(){
 'use strict';
 
-/* ── Polyfill ── */
-if(typeof requestIdleCallback==='undefined'){
-  window.requestIdleCallback=cb=>setTimeout(()=>cb({timeRemaining:()=>50}),16);
-  window.cancelIdleCallback=clearTimeout;
-}
-
-/* ── Tizen key registration ── */
-(function(){
-  try{
-    if(!window.tizen||!tizen.tvinputdevice)return;
+/* ---- Safe Tizen key registration ---- */
+try{
+  if(window.tizen && tizen.tvinputdevice){
     ['ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
      'MediaPlay','MediaPause','MediaPlayPause','MediaStop',
-     'MediaFastForward','MediaRewind',
-     'ChannelUp','ChannelDown',
-     'VolumeUp','VolumeDown','VolumeMute',
-     '0','1','2','3','4','5','6','7','8','9',
-     'Exit','Return'
-    ].forEach(k=>{try{tizen.tvinputdevice.registerKey(k)}catch(e){}});
-  }catch(e){}
-})();
+     'ChannelUp','ChannelDown','VolumeUp','VolumeDown','VolumeMute',
+     '0','1','2','3','4','5','6','7','8','9','Exit','Return'
+    ].forEach(k=>{ try{ tizen.tvinputdevice.registerKey(k); }catch(e){} });
+  }
+}catch(e){}
 
-/* ════════════════════════════════════════════════════════════
-   CONSTANTS
-════════════════════════════════════════════════════════════ */
-const CW=190, CH=110, CGAP=14;     /* card width/height/gap */
-const SW=190, SH=108;              /* show card size */
-const AUTO_HIDE_MS = 3000;         /* hide UI after 3s idle */
-const PLAY_DEB     = 80;
-const DEFAULT_PL   = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
-const TELUGU_PL    = {name:'Telugu', url:'https://iptv-org.github.io/iptv/languages/tel.m3u', builtIn:true};
-const JIO_PL       = {name:'Jio',    url:DEFAULT_PL, builtIn:true};
-const ASPECTS      = ['Contain','Fill','Stretch'];
-const LS           = {FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
-
-/* ── DOM ── */
-const $  = id => document.getElementById(id);
-const QA = (s,r) => [...(r||document).querySelectorAll(s)];
-
-const video      = $('video');
-const vignette   = $('vignette');
-const topBar     = $('topBar');
-const navTabs    = $('navTabs');
-const bottomPanel= $('bottomPanel');
-const nowInfo    = $('nowInfo');
-const nowTitle   = $('nowTitle');
-const nowGroup   = $('nowGroup');
-const nowQ       = $('nowQ');
-const row1Strip  = $('row1Strip');
-const row2Strip  = $('row2Strip');
-const row2Label  = $('row2Label');
-const row1Count  = $('row1Count');
-const row2Count  = $('row2Count');
-const yellowPopup= $('yellowPopup');
-const ypAddForm  = $('ypAddForm');
+/* ---- DOM elements ---- */
+const $ = id => document.getElementById(id);
+const video = $('video');
+const vignette = $('vignette');
+const topBar = $('topBar');
+const navTabs = $('navTabs');
+const bottomPanel = $('bottomPanel');
+const nowInfo = $('nowInfo');
+const nowTitle = $('nowTitle');
+const nowGroup = $('nowGroup');
+const nowQ = $('nowQ');
+const row1Strip = $('row1Strip');
+const row2Strip = $('row2Strip');
+const row2Label = $('row2Label');
+const row1Count = $('row1Count');
+const row2Count = $('row2Count');
+const yellowPopup = $('yellowPopup');
+const ypAddForm = $('ypAddForm');
 const settingsOv = $('settingsOverlay');
-const soSide     = $('soSide');
-const soMain     = $('soMain');
-const mDial      = $('mDial');
-const dnum       = $('dnum');
-const volHudEl   = $('volHud');
-const volFill    = $('volFill');
-const volPct     = $('volPct');
-const volIco     = $('volIco');
-const cc         = $('cc');
-const ccx        = cc.getContext('2d',{willReadFrequently:true});
-const toasts     = $('toasts');
+const soSide = $('soSide');
+const soMain = $('soMain');
+const mDial = $('mDial');
+const dnum = $('dnum');
+const volHudEl = $('volHud');
+const volFill = $('volFill');
+const volPct = $('volPct');
+const volIco = $('volIco');
+const cc = $('cc');
+const ccx = cc.getContext('2d',{willReadFrequently:true});
+const toasts = $('toasts');
 
-/* ── State ── */
-let player=null, allChs=[], allGroups=[];
-let favOnly=false;
-let curUrl='', isPlaying=false, isMuted=false, aspectMode=0;
-let favs=new Set(), pls=[], searchQ='';
-let activeTab='all';    /* 'all' | group name */
+/* ---- State ---- */
+let player = null;
+let allChs = [];
+let allGroups = [];
+let favOnly = false;
+let curUrl = '';
+let isPlaying = false;
+let isMuted = false;
+let aspectMode = 0;
+let favs = new Set();
+let pls = [];
+let activeTab = 'all';
+let focusRow = 1;
+let col1 = 0, col2 = 0;
+let scroll1 = 0, scroll2 = 0;
+let row1Chs = [], row2Chs = [];
+let hideTimer = null;
+let uiVisible = true;
+let zone = 'rows';
+let tabIdx = 0;
+let ypIdx = 0;
+let soSideIdx = 0, soMainIdx = 0, soSideZone = true;
+let dialStr = '', dialTimer = null;
+let rDialStr = '', rDialTimer = null;
+let playTimer = null;
+let volTimer = null;
+let currentVol = 50;
+let cfg = { hq: true, muteSwitch: false, buf: 12, osd: true };
 
-/* Row navigation */
-let focusRow=1;           /* 1=row1 (channels), 2=row2 (shows), 0=navtabs */
-let col1=0, col2=0;       /* current column in each row */
-let scroll1=0, scroll2=0; /* px offset of each strip */
-let row1Chs=[], row2Chs=[]; /* channels in each row */
+/* ---- localStorage helpers ---- */
+const lsGet = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
+const lsSet = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+function loadStore(){
+  try{ const r = lsGet('saga:favs'); if(r) favs = new Set(JSON.parse(r)); }catch(e){}
+  try{ const r = lsGet('saga:pl'); if(r) pls = JSON.parse(r); }catch(e){}
+  try{ const r = lsGet('saga:cfg'); if(r) Object.assign(cfg, JSON.parse(r)); }catch(e){}
+}
+function saveFavs(){ lsSet('saga:favs', JSON.stringify([...favs])); }
+function savePls(){ lsSet('saga:pl', JSON.stringify(pls.filter(p=>!p.builtIn))); }
+function saveCfg(){ lsSet('saga:cfg', JSON.stringify(cfg)); }
 
-/* Auto-hide */
-let hideTimer=null;
-let uiVisible=true;
-
-/* Zone */
-let zone='rows';   /* 'rows'|'tabs'|'yp'|'settings'|'dialer' */
-let tabIdx=0;
-let ypIdx=0;       /* focused action in yellow popup */
-let soSideIdx=0, soMainIdx=0, soSideZone=true;
-let dialStr='', dialTimer=null;
-let rDialStr='', rDialTimer=null;
-let playTimer=null, volTimer=null;
-let currentVol=50;
-let cfg={hq:true,muteSwitch:false,buf:12,osd:true};
-
-/* ── Utils ── */
-const esc=s=>!s?'':String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
-const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
-function toast(msg,type='',ms=2600){
-  const el=document.createElement('div');
-  el.className='toast'+(type?' '+type:'');el.textContent=msg;
+/* ---- UI helpers ---- */
+function toast(msg, type=''){
+  const el = document.createElement('div');
+  el.className = 'toast'+(type?' '+type:'');
+  el.textContent = msg;
   toasts.appendChild(el);
-  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),160)},ms);
+  setTimeout(()=>{ el.remove(); }, 2600);
 }
 
-/* ════════════════════════════════════════════════════════════
-   AUTO-HIDE SYSTEM
-   Every user interaction calls wakeUI().
-   After AUTO_HIDE_MS of silence, hideUI() fires.
-════════════════════════════════════════════════════════════ */
 function wakeUI(){
   if(!uiVisible){
-    uiVisible=true;
+    uiVisible = true;
     topBar.classList.remove('hidden');
     bottomPanel.classList.remove('hidden');
     vignette.classList.remove('dim');
@@ -1042,898 +660,564 @@ function wakeUI(){
   resetHideTimer();
 }
 function hideUI(){
-  /* Don't hide if any overlay is open */
-  if(zone==='yp'||zone==='settings'||zone==='dialer')return;
-  uiVisible=false;
+  if(zone !== 'rows') return;
+  uiVisible = false;
   topBar.classList.add('hidden');
   bottomPanel.classList.add('hidden');
   vignette.classList.add('dim');
 }
 function resetHideTimer(){
   clearTimeout(hideTimer);
-  hideTimer=setTimeout(hideUI, AUTO_HIDE_MS);
+  hideTimer = setTimeout(hideUI, 3000);
 }
-/* Start the timer on boot */
-function startHideTimer(){
-  resetHideTimer();
-}
+function startHideTimer(){ resetHideTimer(); }
 
-/* ── Volume ── */
+/* ---- Volume (Tizen safe) ---- */
 function getSysVol(){
-  try{if(window.tizen&&tizen.tvaudiocontrol)return tizen.tvaudiocontrol.getVolume()}catch(e){}
-  return Math.round(video.volume*100);
+  try{ if(window.tizen && tizen.tvaudiocontrol) return tizen.tvaudiocontrol.getVolume(); }catch(e){}
+  return Math.round(video.volume * 100);
 }
 function setSysVol(v){
-  v=Math.max(0,Math.min(100,v));
-  try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setVolume(v);return}}catch(e){}
-  video.volume=v/100;
+  v = Math.max(0, Math.min(100, v));
+  try{ if(window.tizen && tizen.tvaudiocontrol){ tizen.tvaudiocontrol.setVolume(v); return; } }catch(e){}
+  video.volume = v/100;
 }
-function volUp(){currentVol=Math.min(100,getSysVol()+5);setSysVol(currentVol);showVol()}
-function volDown(){currentVol=Math.max(0,getSysVol()-5);setSysVol(currentVol);showVol()}
+function volUp(){ currentVol = Math.min(100, getSysVol()+5); setSysVol(currentVol); showVol(); }
+function volDown(){ currentVol = Math.max(0, getSysVol()-5); setSysVol(currentVol); showVol(); }
 function showVol(){
-  currentVol=getSysVol();
-  volFill.style.width=currentVol+'%';volPct.textContent=currentVol;
-  volIco.textContent=currentVol===0?'🔇':currentVol<40?'🔉':'🔊';
-  volHudEl.classList.add('on');clearTimeout(volTimer);
-  volTimer=setTimeout(()=>volHudEl.classList.remove('on'),1800);
+  currentVol = getSysVol();
+  volFill.style.width = currentVol+'%';
+  volPct.textContent = currentVol;
+  volIco.textContent = currentVol===0 ? '🔇' : (currentVol<40 ? '🔉' : '🔊');
+  volHudEl.classList.add('on');
+  clearTimeout(volTimer);
+  volTimer = setTimeout(()=>volHudEl.classList.remove('on'), 1800);
 }
 
-/* ── Storage ── */
-function loadStore(){
-  try{const r=lsGet(LS.FAVS);if(r)favs=new Set(JSON.parse(r))}catch(e){}
-  try{const r=lsGet(LS.PL);  if(r)pls=JSON.parse(r)}catch(e){}
-  try{const r=lsGet(LS.CFG); if(r)Object.assign(cfg,JSON.parse(r))}catch(e){}
-}
-function saveFavs(){lsSet(LS.FAVS,JSON.stringify([...favs]))}
-function savePls() {lsSet(LS.PL,  JSON.stringify(pls.filter(p=>!p.builtIn)))}
-function saveCfg() {lsSet(LS.CFG, JSON.stringify(cfg))}
-
-/* ════════════════════════════════════════════════════════════
-   DOMINANT COLOUR
-════════════════════════════════════════════════════════════ */
-function extractColour(img,cb){
-  try{
-    ccx.clearRect(0,0,8,8);ccx.drawImage(img,0,0,8,8);
-    const d=ccx.getImageData(0,0,8,8).data;
-    let r=0,g=0,b=0,n=0;
-    for(let i=0;i<d.length;i+=4){
-      if(d[i+3]<40)continue;
-      const mx=Math.max(d[i],d[i+1],d[i+2]),mn=Math.min(d[i],d[i+1],d[i+2]);
-      const w=0.2+(mx?(mx-mn)/mx*.8:0);
-      r+=d[i]*w;g+=d[i+1]*w;b+=d[i+2]*w;n+=w;
-    }
-    if(n<1){cb(null);return}
-    cb(`rgba(${Math.round(r/n*.38)},${Math.round(g/n*.38)},${Math.round(b/n*.38)},.92)`);
-  }catch(e){cb(null)}
-}
-
-/* ════════════════════════════════════════════════════════════
-   M3U PARSER — chunked
-════════════════════════════════════════════════════════════ */
-function parseM3UChunked(txt,onDone){
-  const lines=txt.split(/\r?\n/);
-  const out=[];let cur=null,i=0;
+/* ---- Playlist loading ---- */
+function parseM3UChunked(txt, onDone){
+  const lines = txt.split(/\r?\n/);
+  const out = [];
+  let cur = null;
+  let i = 0;
   function chunk(){
-    const end=Math.min(i+800,lines.length);
-    for(;i<end;i++){
-      const l=lines[i].trim();
+    const end = Math.min(i+800, lines.length);
+    for(; i<end; i++){
+      const l = lines[i].trim();
       if(l.startsWith('#EXTINF')){
-        const ci=l.lastIndexOf(',');
-        let name=ci>=0?l.slice(ci+1).trim():'Channel';
-        name=name.replace(/\s*\([^)]*\)|\s*\[[^\]]*\]/g,'').trim()||'Channel';
-        cur={name,_col:null,
-          logo:(l.match(/tvg-logo="([^"]*)"/i)||[])[1]||'',
-          group:(l.match(/group-title="([^"]*)"/i)||[])[1]||'General',
-          url:''};
-      }else if(l&&!l.startsWith('#')&&cur){
-        if(l.startsWith('http')){cur.url=l;out.push(cur);cur=null}
+        const ci = l.lastIndexOf(',');
+        let name = ci>=0 ? l.slice(ci+1).trim() : 'Channel';
+        name = name.replace(/\s*\([^)]*\)|\s*\[[^\]]*\]/g,'').trim() || 'Channel';
+        cur = {
+          name: name,
+          logo: (l.match(/tvg-logo="([^"]*)"/i)||[])[1] || '',
+          group: (l.match(/group-title="([^"]*)"/i)||[])[1] || 'General',
+          url: ''
+        };
+      }else if(l && !l.startsWith('#') && cur){
+        if(l.startsWith('http')){
+          cur.url = l;
+          out.push(cur);
+          cur = null;
+        }
       }
     }
-    if(i<lines.length)requestIdleCallback(chunk,{timeout:50});
+    if(i < lines.length) requestIdleCallback(chunk, {timeout:50});
     else onDone(out);
   }
   chunk();
 }
 
-/* ════════════════════════════════════════════════════════════
-   PLAYLIST LOAD
-════════════════════════════════════════════════════════════ */
-function loadPl(url,name,force=false){
-  return new Promise(resolve=>{
-    (async()=>{
-      try{
-        let txt=force?null:await AppCache.getM3U(url);
-        if(!txt){
-          const ctrl=new AbortController();
-          const tid=setTimeout(()=>ctrl.abort(),25000);
-          const resp=await fetch(url,{signal:ctrl.signal});
-          clearTimeout(tid);
-          if(!resp.ok)throw new Error('HTTP '+resp.status);
-          txt=await resp.text();
-          AppCache.setM3U(url,txt);
-        }
-        parseM3UChunked(txt,parsed=>{
-          if(!parsed.length){toast('No channels — '+name,'err');resolve([]);return}
-          const seen=new Set(allChs.map(c=>c.url));
-          const fresh=parsed.filter(c=>!seen.has(c.url));
-          if(name==='Jio')fresh.forEach(ch=>{ch._src='jio'});
-          allChs=allChs.concat(fresh);
-          lsSet('saga:last',url);
-          rebuildGroups();rebuildNavTabs();updateRows();
-          toast(parsed.length+' channels — '+name,'ok');
-          AppCache.preloadImages(parsed.slice(0,60).map(c=>c.logo).filter(Boolean),[]);
-          resolve(parsed);
-        });
-      }catch(e){
-        toast(e.message.slice(0,50),'err');resolve([]);
-      }
-    })();
-  });
+async function loadPl(url, name, force=false){
+  try{
+    let txt = force ? null : await AppCache.getM3U(url);
+    if(!txt){
+      const ctrl = new AbortController();
+      const tid = setTimeout(()=>ctrl.abort(), 25000);
+      const resp = await fetch(url, {signal:ctrl.signal});
+      clearTimeout(tid);
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      txt = await resp.text();
+      await AppCache.setM3U(url, txt);
+    }
+    parseM3UChunked(txt, parsed=>{
+      if(!parsed.length){ toast('No channels - '+name,'err'); return; }
+      const seen = new Set(allChs.map(c=>c.url));
+      const fresh = parsed.filter(c=>!seen.has(c.url));
+      if(name === 'Jio') fresh.forEach(ch=>{ ch._src='jio'; });
+      allChs = allChs.concat(fresh);
+      rebuildGroups();
+      rebuildNavTabs();
+      updateRows();
+      toast(parsed.length+' channels - '+name,'ok');
+    });
+  }catch(e){
+    toast(e.message.slice(0,50),'err');
+  }
 }
 
 async function loadAll(force=false){
-  allChs=[];
-  const snap=allChs.length;
-  await loadPl(TELUGU_PL.url,TELUGU_PL.name,force);
-  allChs.slice(snap).forEach(ch=>{ch._src='telugu'});
-  const ups=pls.filter(p=>!p.builtIn);
-  const srcs=ups.length?ups:[JIO_PL];
+  allChs = [];
+  const snap = allChs.length;
+  await loadPl('https://iptv-org.github.io/iptv/languages/tel.m3u', 'Telugu', force);
+  allChs.slice(snap).forEach(ch=>{ ch._src='telugu'; });
+  const ups = pls.filter(p=>!p.builtIn);
+  const srcs = ups.length ? ups : [{name:'Jio', url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u', builtIn:true}];
   for(const p of srcs){
-    const before=allChs.length;
-    await loadPl(p.url,p.name,force);
-    if(p.name==='Jio')allChs.slice(before).forEach(ch=>{ch._src='jio'});
+    const before = allChs.length;
+    await loadPl(p.url, p.name, force);
+    if(p.name === 'Jio') allChs.slice(before).forEach(ch=>{ ch._src='jio'; });
   }
-  // Restore last channel highlight
-  const lastUrl=lsGet(LS.LCHU);
+  const lastUrl = lsGet('saga:lchu');
   if(lastUrl){
-    const idx=getFilteredChs().findIndex(c=>c.url===lastUrl);
-    if(idx>=0){col1=idx;syncRow1Scroll()}
+    const idx = getFilteredChs().findIndex(c=>c.url===lastUrl);
+    if(idx>=0) col1 = idx;
   }
   hideSplash();
   startHideTimer();
 }
 
-/* ════════════════════════════════════════════════════════════
-   GROUPS + NAV TABS
-════════════════════════════════════════════════════════════ */
+/* ---- Groups & Navigation ---- */
 function rebuildGroups(){
-  const raw=new Set(allChs.map(c=>c.group));
-  const hasTel=allChs.some(c=>c._src==='telugu');
-  const hasJio=allChs.some(c=>c._src==='jio');
-  const rest=[...raw].filter(g=>g!=='Jio'&&g!=='Telugu').sort((a,b)=>a.localeCompare(b)).slice(0,12);
-  allGroups=['For You'];
-  if(hasTel)allGroups.push('Telugu');
+  const raw = new Set(allChs.map(c=>c.group));
+  const hasTel = allChs.some(c=>c._src==='telugu');
+  const hasJio = allChs.some(c=>c._src==='jio');
+  const rest = [...raw].filter(g=>g!=='Jio' && g!=='Telugu').sort().slice(0,12);
+  allGroups = ['For You'];
+  if(hasTel) allGroups.push('Telugu');
   if(hasJio) allGroups.push('Jio');
   allGroups.push(...rest);
   if(hasTel||hasJio) allGroups.push('Favourites');
 }
-
 function rebuildNavTabs(){
-  navTabs.innerHTML='';
+  navTabs.innerHTML = '';
   allGroups.forEach((g,i)=>{
-    const btn=document.createElement('button');
-    btn.className='ntab'+(g===activeTab?' on':'');
-    btn.textContent=g;
-    btn.dataset.g=g;
-    btn.tabIndex=-1;
+    const btn = document.createElement('button');
+    btn.className = 'ntab' + (g===activeTab ? ' on' : '');
+    btn.textContent = g;
+    btn.dataset.g = g;
     btn.addEventListener('click',()=>setTab(g));
     navTabs.appendChild(btn);
   });
 }
-
 function setTab(g){
-  activeTab=g;
-  favOnly=(g==='Favourites');
-  QA('.ntab',navTabs).forEach(b=>b.classList.toggle('on',b.dataset.g===g));
-  col1=0;col2=0;scroll1=0;scroll2=0;
+  activeTab = g;
+  favOnly = (g === 'Favourites');
+  document.querySelectorAll('.ntab').forEach(b=>b.classList.toggle('on',b.dataset.g===g));
+  col1 = 0; col2 = 0; scroll1 = 0; scroll2 = 0;
   updateRows();
-  // Scroll active tab into view
-  const active=navTabs.querySelector('.ntab.on');
-  if(active)active.scrollIntoView({inline:'nearest',behavior:'smooth'});
 }
-
-/* ════════════════════════════════════════════════════════════
-   ROW DATA
-   Row 1: filtered channel list (the "live channels" row)
-   Row 2: another group or "Live Shows" from a different cat
-════════════════════════════════════════════════════════════ */
 function getFilteredChs(){
-  let arr=allChs;
-  if(favOnly)arr=arr.filter(c=>favs.has(c.url));
-  if(activeTab==='Telugu')      arr=allChs.filter(c=>c._src==='telugu');
-  else if(activeTab==='Jio')    arr=allChs.filter(c=>c._src==='jio');
-  else if(activeTab!=='For You'&&activeTab!=='Favourites')arr=allChs.filter(c=>c.group===activeTab);
-  if(searchQ){const q=searchQ.toLowerCase();arr=arr.filter(c=>c.name.toLowerCase().includes(q))}
+  let arr = allChs;
+  if(favOnly) arr = arr.filter(c=>favs.has(c.url));
+  if(activeTab === 'Telugu') arr = allChs.filter(c=>c._src==='telugu');
+  else if(activeTab === 'Jio') arr = allChs.filter(c=>c._src==='jio');
+  else if(activeTab !== 'For You' && activeTab !== 'Favourites') arr = allChs.filter(c=>c.group===activeTab);
   return arr;
 }
-
 function updateRows(){
-  const chs=getFilteredChs();
-  row1Chs=chs;
-
-  // Row 2: pick a contrasting group
-  let r2=[];
-  if(activeTab==='For You'){
-    // Mix: favourites first, then other channels
-    r2=allChs.filter(c=>c._src==='jio').slice(0,40);
-    row2Label.textContent='Jio Channels';
-  }else if(activeTab==='Jio'){
-    r2=allChs.filter(c=>c._src==='telugu').slice(0,40);
-    row2Label.textContent='Telugu Channels';
-  }else{
-    r2=allChs.filter(c=>c.group!==activeTab).slice(0,40);
-    row2Label.textContent='Live Shows to Watch';
-  }
-  row2Chs=r2;
-
-  if(col1>=row1Chs.length)col1=Math.max(0,row1Chs.length-1);
-  if(col2>=row2Chs.length)col2=Math.max(0,row2Chs.length-1);
-
-  renderRow1();renderRow2();
+  row1Chs = getFilteredChs();
+  if(activeTab === 'For You'){ row2Chs = allChs.filter(c=>c._src==='jio').slice(0,40); row2Label.textContent='Jio Channels'; }
+  else if(activeTab === 'Jio'){ row2Chs = allChs.filter(c=>c._src==='telugu').slice(0,40); row2Label.textContent='Telugu Channels'; }
+  else{ row2Chs = allChs.filter(c=>c.group!==activeTab).slice(0,40); row2Label.textContent='Live Shows to Watch'; }
+  if(col1 >= row1Chs.length) col1 = Math.max(0, row1Chs.length-1);
+  if(col2 >= row2Chs.length) col2 = Math.max(0, row2Chs.length-1);
+  renderRow1(); renderRow2();
   updateNowInfo();
 }
+function updateNowInfo(ch=null){
+  const c = ch || (focusRow===1 ? row1Chs[col1] : row2Chs[col2]);
+  if(!c){ nowInfo.classList.remove('visible'); return; }
+  nowTitle.textContent = c.name;
+  nowGroup.textContent = c.group || '';
+  nowInfo.classList.add('visible');
+  if(cfg.osd) setTimeout(()=>nowInfo.classList.remove('visible'),5000);
+}
 
-/* ════════════════════════════════════════════════════════════
-   RENDER ROW 1 — channel cards (+ TV Guide first card)
-════════════════════════════════════════════════════════════ */
+/* ---- Render Rows ---- */
+function makeCard(ch, ci){
+  const card = document.createElement('div');
+  card.className = 'card' + (ch.url===curUrl && isPlaying ? ' playing' : '');
+  const inner = document.createElement('div'); inner.className = 'card-inner';
+  if(ch.logo){
+    const img = document.createElement('img');
+    img.className = 'card-img';
+    img.src = ch.logo;
+    img.onerror = () => { img.style.display='none'; const fb=document.createElement('div'); fb.className='card-fb'; fb.textContent='📺'; inner.appendChild(fb); };
+    inner.appendChild(img);
+  }else{
+    const fb = document.createElement('div'); fb.className='card-fb'; fb.textContent='📺'; inner.appendChild(fb);
+  }
+  const badges = document.createElement('div'); badges.className='card-badges';
+  const liveB = document.createElement('span'); liveB.className='badge badge-live'; liveB.textContent='LIVE';
+  badges.appendChild(liveB);
+  inner.appendChild(badges);
+  const num = document.createElement('div'); num.className='card-num'; num.textContent = ci+1;
+  card.appendChild(inner); card.appendChild(num);
+  card.addEventListener('click',()=>{ col1=ci; updateRow1Focus(); syncRow1Scroll(); focusRow=1; immediatePlay(); wakeUI(); });
+  return card;
+}
 function renderRow1(){
-  row1Strip.innerHTML='';
-  row1Count.textContent=row1Chs.length;
-
-  // TV Guide card always first
-  const guideCard=document.createElement('div');
-  guideCard.className='card tvguide';
-  guideCard.tabIndex=-1;
-  guideCard.innerHTML=`<div class="card-inner"><div class="card-guide-content"><div class="guide-icon">≡</div><div class="guide-label">TV Guide</div></div></div>`;
-  guideCard.addEventListener('click',()=>{toast('TV Guide coming soon');wakeUI()});
+  row1Strip.innerHTML = '';
+  row1Count.textContent = row1Chs.length;
+  const guideCard = document.createElement('div');
+  guideCard.className = 'card tvguide';
+  guideCard.innerHTML = `<div class="card-inner"><div class="card-guide-content"><div class="guide-icon">≡</div><div class="guide-label">TV Guide</div></div></div>`;
+  guideCard.addEventListener('click',()=>toast('TV Guide coming soon'));
   row1Strip.appendChild(guideCard);
-
-  // Channel cards
-  row1Chs.forEach((ch,ci)=>{
-    row1Strip.appendChild(makeCard(ch,ci));
-  });
-
+  row1Chs.forEach((ch,ci)=>{ row1Strip.appendChild(makeCard(ch,ci)); });
   updateRow1Focus();
   syncRow1Scroll();
 }
-
-function makeCard(ch,ci){
-  const card=document.createElement('div');
-  card.className='card'+(ch.url===curUrl&&isPlaying?' playing':'');
-  card.dataset.ci=ci;card.tabIndex=-1;
-
-  const inner=document.createElement('div');inner.className='card-inner';
-  if(ch._col)inner.style.background=ch._col;
-
-  const bg=document.createElement('div');bg.className='card-bg';
-
+function updateRow1Focus(){
+  const cards = [...row1Strip.children];
+  cards.forEach((c,i)=>{
+    if(i===0){ c.classList.toggle('sel', focusRow===1 && col1===-1); c.tabIndex = (focusRow===1 && col1===-1) ? 0 : -1; return; }
+    const ci = i-1;
+    const sel = (focusRow===1 && ci===col1);
+    c.classList.toggle('sel', sel);
+    c.tabIndex = sel ? 0 : -1;
+  });
+}
+function syncRow1Scroll(){
+  const ci = col1+1;
+  const cw = 190+14;
+  const visW = window.innerWidth-96;
+  if(ci*cw < scroll1+cw) scroll1 = Math.max(0, (ci-1)*cw);
+  else if(ci*cw+190 > scroll1+visW) scroll1 = ci*cw - visW + 190 + 14;
+  scroll1 = Math.max(0, scroll1);
+  row1Strip.style.transform = `translateX(${-scroll1}px)`;
+}
+function makeShowCard(ch, ci){
+  const card = document.createElement('div');
+  card.className = 'show-card';
+  const inner = document.createElement('div'); inner.className = 'show-card-inner';
   if(ch.logo){
-    const img=document.createElement('img');
-    img.className='card-img';img.loading='lazy';img.decoding='async';
-    img.src=esc(ch.logo);
-    img.onload=()=>{
-      extractColour(img,col=>{
-        if(col){ch._col=col;inner.style.background=col;bg.style.backgroundImage=`url('${esc(ch.logo)}')`;bg.classList.add('on')}
-      });
-    };
-    img.onerror=()=>{img.style.display='none';const fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';inner.appendChild(fb)};
-    inner.appendChild(bg);inner.appendChild(img);
+    const img = document.createElement('img');
+    img.className = 'show-card-img';
+    img.src = ch.logo;
+    img.onerror = () => { img.style.display='none'; const fb=document.createElement('div'); fb.className='show-card-fb'; fb.textContent='📺'; inner.appendChild(fb); };
+    inner.appendChild(img);
   }else{
-    const fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';inner.appendChild(fb);
+    const fb = document.createElement('div'); fb.className='show-card-fb'; fb.textContent='📺'; inner.appendChild(fb);
   }
-
-  // Badges
-  const badges=document.createElement('div');badges.className='card-badges';
-  const liveB=document.createElement('span');liveB.className='badge badge-live';liveB.textContent='LIVE';
-  badges.appendChild(liveB);
-  inner.appendChild(badges);
-
-  const num=document.createElement('div');num.className='card-num';num.textContent=ci+1;
-  card.appendChild(inner);card.appendChild(num);
-
+  const grad = document.createElement('div'); grad.className='show-card-grad';
+  const nm = document.createElement('div'); nm.className='show-card-name'; nm.textContent = ch.name;
+  grad.appendChild(nm); inner.appendChild(grad);
+  card.appendChild(inner);
   card.addEventListener('click',()=>{
-    col1=ci;updateRow1Focus();syncRow1Scroll();
-    focusRow=1;immediatePlay();wakeUI();
+    col2 = ci; updateRow2Focus(); syncRow2Scroll();
+    row1Chs = [ch, ...allChs.filter(c=>c.group===ch.group && c.url!==ch.url)];
+    col1 = 0; renderRow1(); focusRow = 1; updateNowInfo(ch); immediatePlay(); wakeUI();
   });
   return card;
 }
-
-function updateRow1Focus(){
-  // +1 because TV Guide is index 0
-  const cards=[...row1Strip.children];
-  cards.forEach((c,i)=>{
-    if(i===0){c.classList.toggle('sel',focusRow===1&&col1===-1);c.tabIndex=(focusRow===1&&col1===-1)?0:-1;return}
-    const ci=i-1;
-    const sel=focusRow===1&&ci===col1;
-    c.classList.toggle('sel',sel);
-    c.tabIndex=sel?0:-1;
-    const ch=row1Chs[ci];
-    if(ch)c.classList.toggle('playing',ch.url===curUrl&&isPlaying);
-  });
-}
-
-function syncRow1Scroll(){
-  const ci=col1+1; /* +1 for TV Guide */
-  const cw=CW+CGAP;
-  const visW=window.innerWidth-96;
-  if(ci*cw<scroll1+cw)          scroll1=Math.max(0,(ci-1)*cw);
-  else if(ci*cw+CW>scroll1+visW)scroll1=ci*cw-visW+CW+CGAP;
-  scroll1=Math.max(0,scroll1);
-  row1Strip.style.transform=`translateX(${-scroll1}px)`;
-}
-
-/* ════════════════════════════════════════════════════════════
-   RENDER ROW 2 — show/channel cards (smaller)
-════════════════════════════════════════════════════════════ */
 function renderRow2(){
-  row2Strip.innerHTML='';
-  row2Count.textContent=row2Chs.length;
-  row2Chs.forEach((ch,ci)=>{
-    row2Strip.appendChild(makeShowCard(ch,ci));
-  });
+  row2Strip.innerHTML = '';
+  row2Count.textContent = row2Chs.length;
+  row2Chs.forEach((ch,ci)=>{ row2Strip.appendChild(makeShowCard(ch,ci)); });
   updateRow2Focus();
   syncRow2Scroll();
 }
-
-function makeShowCard(ch,ci){
-  const card=document.createElement('div');
-  card.className='show-card'+(ch.url===curUrl&&isPlaying?' playing':'');
-  card.dataset.ci=ci;card.tabIndex=-1;
-
-  const inner=document.createElement('div');inner.className='show-card-inner';
-  if(ch._col)inner.style.background=ch._col;
-
-  if(ch.logo){
-    const img=document.createElement('img');
-    img.className='show-card-img';img.loading='lazy';img.decoding='async';
-    img.style.objectFit='contain';img.style.padding='8px';
-    img.src=esc(ch.logo);
-    img.onload=()=>{extractColour(img,col=>{if(col){ch._col=col;inner.style.background=col}})};
-    img.onerror=()=>{img.style.display='none';const fb=document.createElement('div');fb.className='show-card-fb';fb.textContent='📺';inner.appendChild(fb)};
-    inner.appendChild(img);
-  }else{
-    const fb=document.createElement('div');fb.className='show-card-fb';fb.textContent='📺';inner.appendChild(fb);
-  }
-
-  const grad=document.createElement('div');grad.className='show-card-grad';
-  const nm=document.createElement('div');nm.className='show-card-name';nm.textContent=ch.name;
-  grad.appendChild(nm);inner.appendChild(grad);
-
-  card.appendChild(inner);
-  card.addEventListener('click',()=>{
-    col2=ci;updateRow2Focus();syncRow2Scroll();
-    // Swap to this channel's group tab
-    row1Chs=[ch,...allChs.filter(c=>c.group===ch.group&&c.url!==ch.url)];
-    col1=0;renderRow1();focusRow=1;
-    updateNowInfo(ch);immediatePlay();wakeUI();
-  });
-  return card;
-}
-
 function updateRow2Focus(){
-  const cards=[...row2Strip.children];
+  const cards = [...row2Strip.children];
   cards.forEach((c,i)=>{
-    const sel=focusRow===2&&i===col2;
-    c.classList.toggle('sel',sel);c.tabIndex=sel?0:-1;
-    const ch=row2Chs[i];
-    if(ch)c.classList.toggle('playing',ch.url===curUrl&&isPlaying);
+    const sel = (focusRow===2 && i===col2);
+    c.classList.toggle('sel', sel);
+    c.tabIndex = sel ? 0 : -1;
   });
 }
-
 function syncRow2Scroll(){
-  const ci=col2,cw=SW+CGAP;
-  const visW=window.innerWidth-96;
-  if(ci*cw<scroll2+cw)          scroll2=Math.max(0,(ci-1)*cw);
-  else if(ci*cw+SW>scroll2+visW)scroll2=ci*cw-visW+SW+CGAP;
-  scroll2=Math.max(0,scroll2);
-  row2Strip.style.transform=`translateX(${-scroll2}px)`;
+  const ci = col2;
+  const cw = 190+14;
+  const visW = window.innerWidth-96;
+  if(ci*cw < scroll2+cw) scroll2 = Math.max(0, (ci-1)*cw);
+  else if(ci*cw+190 > scroll2+visW) scroll2 = ci*cw - visW + 190 + 14;
+  scroll2 = Math.max(0, scroll2);
+  row2Strip.style.transform = `translateX(${-scroll2}px)`;
 }
 
-/* ── Now playing info ── */
-function updateNowInfo(overrideCh=null){
-  const ch=overrideCh||(focusRow===1?row1Chs[col1]:row2Chs[col2]);
-  if(!ch){nowInfo.classList.remove('visible');return}
-  nowTitle.textContent=ch.name;
-  nowGroup.textContent=ch.group||'';
-  nowGroup.style.display=ch.group?'':'none';
-  nowInfo.classList.add('visible');
-}
-
-/* ════════════════════════════════════════════════════════════
-   SHAKA PLAYER
-════════════════════════════════════════════════════════════ */
+/* ---- Shaka Player ---- */
 async function initPlayer(){
   await shaka.polyfill.installAll();
-  if(!shaka.Player.isBrowserSupported()){toast('Shaka not supported','err');return}
-  player=new shaka.Player(video);recfg();
-
-  player.addEventListener('adaptation',   updateQ);
-  player.addEventListener('variantchanged',updateQ);
-  player.addEventListener('buffering',e=>{if(e.buffering){}});
-  player.addEventListener('error',e=>{
-    const msg=(e.detail?.message)||'Stream error';
-    toast(msg.slice(0,50),'err');isPlaying=false;
-    const u2=curUrl;
-    setTimeout(()=>{if(!isPlaying&&curUrl===u2)immediatePlay()},3000);
-  });
-  video.addEventListener('playing',()=>{
-    updateRow1Focus();updateRow2Focus();
-  });
-  video.addEventListener('error',()=>{toast('Video error','err');isPlaying=false});
+  if(!shaka.Player.isBrowserSupported()){ toast('Shaka not supported','err'); return; }
+  player = new shaka.Player(video);
+  recfg();
+  player.addEventListener('error', e=>{ toast('Stream error','err'); isPlaying=false; setTimeout(()=>{ if(!isPlaying && curUrl) immediatePlay(); },3000); });
+  video.addEventListener('playing',()=>{ updateRow1Focus(); updateRow2Focus(); });
 }
 function recfg(){
-  if(!player)return;
+  if(!player) return;
   player.configure({
-    abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10_000_000,switchInterval:8,bandwidthUpgradeTarget:.8,bandwidthDowngradeTarget:.9},
-    streaming:{bufferingGoal:cfg.buf,rebufferingGoal:2,stallEnabled:true,stallThreshold:1,stallSkip:.1,
-      retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:.3,timeout:25000},safeSeekOffset:2},
+    abr: { enabled: !cfg.hq, defaultBandwidthEstimate: 10000000 },
+    streaming: { bufferingGoal: cfg.buf, rebufferingGoal: 2, stallEnabled: true, stallThreshold: 1 }
   });
 }
-function updateQ(){
-  if(!player)return;
+function lockHQ(){
+  if(!player || !isPlaying) return;
   try{
-    const a=player.getVariantTracks().find(t=>t.active);
-    if(a){const q=(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1e6).toFixed(1)+'M';nowQ.textContent=q;nowQ.style.display=''}
+    const tracks = player.getVariantTracks();
+    if(tracks.length) player.selectVariantTrack(tracks.reduce((a,b)=>a.bandwidth>b.bandwidth?a:b));
   }catch(e){}
 }
-function lockHQ(){
-  if(!player||!isPlaying)return;
-  try{const t=player.getVariantTracks();if(!t.length)return;
-    player.selectVariantTrack(t.reduce((m,x)=>x.bandwidth>m.bandwidth?x:m,t[0]),false)}catch(e){}
-}
-
-function getFocusedCh(){
-  if(focusRow===1)return row1Chs[col1]||null;
-  if(focusRow===2)return row2Chs[col2]||null;
-  return null;
-}
-
 function immediatePlay(){
   clearTimeout(playTimer);
-  playTimer=setTimeout(_doPlay,PLAY_DEB);
+  playTimer = setTimeout(async ()=>{
+    const ch = focusRow===1 ? row1Chs[col1] : row2Chs[col2];
+    if(!ch || !player) return;
+    if(ch.url === curUrl && isPlaying) return;
+    curUrl = ch.url; lsSet('saga:lchu', ch.url);
+    if(cfg.muteSwitch && isPlaying) video.muted = true;
+    isPlaying = false;
+    updateNowInfo(ch);
+    try{
+      await player.load(ch.url);
+      await video.play();
+      isPlaying = true;
+      if(cfg.muteSwitch) setTimeout(()=>{ video.muted = isMuted; },700);
+      if(cfg.hq) setTimeout(lockHQ,4000);
+      updateRow1Focus(); updateRow2Focus();
+    }catch(err){ toast('Playback error','err'); isPlaying=false; }
+  }, 80);
 }
-async function _doPlay(){
-  const ch=getFocusedCh();if(!ch?.url||!player)return;
-  if(ch.url===curUrl&&isPlaying)return;
-  curUrl=ch.url;lsSet(LS.LCHU,ch.url);
-  if(cfg.muteSwitch&&isPlaying)video.muted=true;
-  isPlaying=false;
-  updateNowInfo(ch);
-  try{
-    await player.load(ch.url);
-    await video.play();
-    isPlaying=true;
-    if(cfg.muteSwitch)setTimeout(()=>{video.muted=isMuted},700);
-    if(cfg.hq)setTimeout(lockHQ,4000);
-    updateQ();
-    updateRow1Focus();updateRow2Focus();
-    // Auto-hide now info after 5s
-    if(cfg.osd)setTimeout(()=>nowInfo.classList.remove('visible'),5000);
-  }catch(err){
-    toast('Load failed: '+err.message.slice(0,40),'err');
-    isPlaying=false;if(cfg.muteSwitch)video.muted=isMuted;
-  }
-}
-
-/* Aspect */
 function cycleAspect(){
-  aspectMode=(aspectMode+1)%ASPECTS.length;
+  aspectMode = (aspectMode+1)%3;
   video.classList.remove('contain','stretch');
-  if(aspectMode===1)video.classList.add('contain');
-  if(aspectMode===2)video.classList.add('stretch');
-  toast(ASPECTS[aspectMode]);
+  if(aspectMode===1) video.classList.add('contain');
+  if(aspectMode===2) video.classList.add('stretch');
+  toast(['Cover','Contain','Stretch'][aspectMode]);
 }
-/* Fav */
 function toggleFav(){
-  const ch=getFocusedCh();if(!ch)return;
-  if(favs.has(ch.url)){favs.delete(ch.url);toast('Removed from favourites')}
-  else{favs.add(ch.url);toast('Added to favourites','ok')}
+  const ch = focusRow===1 ? row1Chs[col1] : row2Chs[col2];
+  if(!ch) return;
+  if(favs.has(ch.url)){ favs.delete(ch.url); toast('Removed from favourites'); }
+  else{ favs.add(ch.url); toast('Added to favourites','ok'); }
   saveFavs();
 }
 
-/* ════════════════════════════════════════════════════════════
-   YELLOW POPUP
-════════════════════════════════════════════════════════════ */
-const YP_ACTIONS=['ypa-add','ypa-refresh','ypa-dialer','ypa-settings','ypa-favs'];
-
-function openYP(){
-  yellowPopup.classList.add('on');zone='yp';ypIdx=0;
-  ypAddForm.classList.remove('open');
-  $('ypAddForm').style.display='none';
-  // Show action list
-  $('ypActions').style.display='flex';
-  wakeUI();clearTimeout(hideTimer); /* keep UI visible while popup open */
-  setTimeout(()=>focusYP(),50);
-}
-function closeYP(){
-  yellowPopup.classList.remove('on');zone='rows';
-  resetHideTimer();
-  syncFocusInRows();
-}
-function focusYP(){
-  const items=QA('.yp-action',$('ypActions'));
-  if(items[ypIdx])items[ypIdx].focus({preventScroll:true});
-}
-$('ypClose').addEventListener('click',closeYP);
-
-$('ypa-add').addEventListener('click',()=>{
-  $('ypActions').style.display='none';
-  ypAddForm.classList.add('open');
-  $('ypAddForm').style.display='flex';
-  setTimeout(()=>$('ypPlName').focus(),50);
-});
-$('ypa-refresh').addEventListener('click',()=>{
-  closeYP();AppCache.clearAllM3U();allChs=[];toast('Refreshing playlists…');loadAll(true);
-});
-$('ypa-dialer').addEventListener('click',()=>{closeYP();openDial()});
-$('ypa-settings').addEventListener('click',()=>{closeYP();openSettings()});
-$('ypa-favs').addEventListener('click',()=>{closeYP();setTab('Favourites')});
-$('ypCancel').addEventListener('click',()=>{
-  ypAddForm.classList.remove('open');$('ypAddForm').style.display='none';
-  $('ypActions').style.display='flex';setTimeout(()=>focusYP(),30);
-});
-$('ypSave').addEventListener('click',()=>{
-  const name=$('ypPlName').value.trim(),url=$('ypPlUrl').value.trim();
-  if(!name||!url){toast('Enter name and URL','err');return}
-  if(pls.some(p=>p.url===url)){toast('Already added','err');return}
-  pls.push({name,url});savePls();
-  $('ypPlName').value='';$('ypPlUrl').value='';
-  ypAddForm.classList.remove('open');$('ypAddForm').style.display='none';
-  $('ypActions').style.display='flex';
-  closeYP();loadPl(url,name);
+/* ---- Yellow Popup ---- */
+function openYP(){ yellowPopup.classList.add('on'); zone='yp'; ypIdx=0; ypAddForm.classList.remove('open'); ypAddForm.style.display='none'; document.getElementById('ypActions').style.display='flex'; wakeUI(); clearTimeout(hideTimer); setTimeout(()=>focusYP(),50); }
+function closeYP(){ yellowPopup.classList.remove('on'); zone='rows'; resetHideTimer(); syncFocusInRows(); }
+function focusYP(){ const items = document.querySelectorAll('#ypActions .yp-action'); if(items[ypIdx]) items[ypIdx].focus(); }
+document.getElementById('ypClose').addEventListener('click',closeYP);
+document.getElementById('ypa-add').addEventListener('click',()=>{ document.getElementById('ypActions').style.display='none'; ypAddForm.classList.add('open'); ypAddForm.style.display='flex'; setTimeout(()=>document.getElementById('ypPlName').focus(),50); });
+document.getElementById('ypa-refresh').addEventListener('click',()=>{ closeYP(); AppCache.clearAllM3U(); allChs=[]; toast('Refreshing...'); loadAll(true); });
+document.getElementById('ypa-dialer').addEventListener('click',()=>{ closeYP(); openDial(); });
+document.getElementById('ypa-settings').addEventListener('click',()=>{ closeYP(); openSettings(); });
+document.getElementById('ypa-favs').addEventListener('click',()=>{ closeYP(); setTab('Favourites'); });
+document.getElementById('ypCancel').addEventListener('click',()=>{ ypAddForm.classList.remove('open'); ypAddForm.style.display='none'; document.getElementById('ypActions').style.display='flex'; setTimeout(focusYP,30); });
+document.getElementById('ypSave').addEventListener('click',()=>{
+  const name = document.getElementById('ypPlName').value.trim();
+  const url = document.getElementById('ypPlUrl').value.trim();
+  if(!name || !url){ toast('Enter name and URL','err'); return; }
+  if(pls.some(p=>p.url===url)){ toast('Already added','err'); return; }
+  pls.push({name,url}); savePls();
+  document.getElementById('ypPlName').value=''; document.getElementById('ypPlUrl').value='';
+  ypAddForm.classList.remove('open'); ypAddForm.style.display='none';
+  document.getElementById('ypActions').style.display='flex';
+  closeYP(); loadPl(url,name);
 });
 
-/* ════════════════════════════════════════════════════════════
-   SETTINGS OVERLAY
-════════════════════════════════════════════════════════════ */
-function openSettings(){
-  settingsOv.classList.add('on');zone='settings';
-  soSideIdx=0;soMainIdx=0;soSideZone=true;
-  renderSettingsSect('playback');
-  wakeUI();clearTimeout(hideTimer);
-  setTimeout(()=>QA('.so-nav',soSide)[0]?.focus({preventScroll:true}),50);
-}
-function closeSettings(){
-  settingsOv.classList.remove('on');zone='rows';
-  resetHideTimer();syncFocusInRows();
-}
-$('soClose').addEventListener('click',closeSettings);
-$('settingsBtn').addEventListener('click',openSettings);
-
-QA('.so-nav',soSide).forEach(n=>{
-  n.addEventListener('click',()=>{
-    QA('.so-nav',soSide).forEach(x=>x.classList.remove('on'));n.classList.add('on');
-    renderSettingsSect(n.dataset.s);soMainIdx=0;
-    setTimeout(()=>{const it=QA('[tabindex="0"]',soMain);it[0]?.focus({preventScroll:true})},30);
-  });
-});
-
+/* ---- Settings ---- */
+function openSettings(){ settingsOv.classList.add('on'); zone='settings'; soSideIdx=0; soMainIdx=0; soSideZone=true; renderSettingsSect('playback'); wakeUI(); clearTimeout(hideTimer); setTimeout(()=>document.querySelectorAll('.so-nav')[0]?.focus(),50); }
+function closeSettings(){ settingsOv.classList.remove('on'); zone='rows'; resetHideTimer(); syncFocusInRows(); }
+document.getElementById('soClose').addEventListener('click',closeSettings);
+document.getElementById('settingsBtn').addEventListener('click',openSettings);
+document.querySelectorAll('.so-nav').forEach(n=>{ n.addEventListener('click',()=>{ document.querySelectorAll('.so-nav').forEach(x=>x.classList.remove('on')); n.classList.add('on'); renderSettingsSect(n.dataset.s); soMainIdx=0; setTimeout(()=>{ const it=document.querySelectorAll('[tabindex="0"]',soMain); if(it[0]) it[0].focus(); },30); }); });
 function renderSettingsSect(s){
   if(s==='playback'){
-    soMain.innerHTML=`
-      <div class="srow" tabindex="0">
-        <div class="srow-l"><div class="srow-title">Force Highest Quality</div><div class="srow-desc">Lock max bitrate — prevents freeze</div></div>
-        <label class="tog"><input type="checkbox" id="cfgHQ" ${cfg.hq?'checked':''}><span class="tog-t"></span></label>
-      </div>
-      <div class="srow" tabindex="0">
-        <div class="srow-l"><div class="srow-title">Mute on Channel Switch</div><div class="srow-desc">Silence during zap, restore after 700ms</div></div>
-        <label class="tog"><input type="checkbox" id="cfgMute" ${cfg.muteSwitch?'checked':''}><span class="tog-t"></span></label>
-      </div>
-      <div class="srow-title" style="margin-top:20px;margin-bottom:8px;color:rgba(255,255,255,.7);font-size:15px">Buffer Goal</div>
-      <select class="oui-sel" id="cfgBuf" tabindex="0">
-        <option value="6" ${cfg.buf==6?'selected':''}>6 s — Ultra Low Latency</option>
-        <option value="8" ${cfg.buf==8?'selected':''}>8 s — Low Latency</option>
-        <option value="12" ${cfg.buf==12?'selected':''}>12 s — Balanced</option>
-        <option value="20" ${cfg.buf==20?'selected':''}>20 s — Stable</option>
-      </select>`;
-    wireSettings();
+    soMain.innerHTML = `<div class="srow" tabindex="0"><div class="srow-l"><div class="srow-title">Force Highest Quality</div><div class="srow-desc">Lock max bitrate</div></div><label class="tog"><input type="checkbox" id="cfgHQ" ${cfg.hq?'checked':''}><span class="tog-t"></span></label></div>
+                        <div class="srow" tabindex="0"><div class="srow-l"><div class="srow-title">Mute on Channel Switch</div><div class="srow-desc">Silence during zap</div></div><label class="tog"><input type="checkbox" id="cfgMute" ${cfg.muteSwitch?'checked':''}><span class="tog-t"></span></label></div>
+                        <div class="srow-title" style="margin-top:20px;">Buffer Goal</div>
+                        <select class="oui-sel" id="cfgBuf"><option value="6" ${cfg.buf==6?'selected':''}>6 s</option><option value="8" ${cfg.buf==8?'selected':''}>8 s</option><option value="12" ${cfg.buf==12?'selected':''}>12 s</option><option value="20" ${cfg.buf==20?'selected':''}>20 s</option></select>`;
+    const hq = document.getElementById('cfgHQ'); const mu = document.getElementById('cfgMute'); const bu = document.getElementById('cfgBuf');
+    if(hq) hq.onchange = function(){ cfg.hq = this.checked; saveCfg(); recfg(); };
+    if(mu) mu.onchange = function(){ cfg.muteSwitch = this.checked; saveCfg(); };
+    if(bu) bu.onchange = function(){ cfg.buf = +this.value; saveCfg(); recfg(); };
   }else if(s==='display'){
-    soMain.innerHTML=`
-      <div class="srow" tabindex="0">
-        <div class="srow-l"><div class="srow-title">OSD Auto-hide</div><div class="srow-desc">Channel info fades after 5 seconds</div></div>
-        <label class="tog"><input type="checkbox" id="cfgOsd" ${cfg.osd?'checked':''}><span class="tog-t"></span></label>
-      </div>`;
-    wireSettings();
+    soMain.innerHTML = `<div class="srow" tabindex="0"><div class="srow-l"><div class="srow-title">OSD Auto-hide</div><div class="srow-desc">Channel info fades after 5 seconds</div></div><label class="tog"><input type="checkbox" id="cfgOsd" ${cfg.osd?'checked':''}><span class="tog-t"></span></label></div>`;
+    const os = document.getElementById('cfgOsd');
+    if(os) os.onchange = function(){ cfg.osd = this.checked; saveCfg(); };
   }else if(s==='sources'){
-    const dp=[...pls];
-    let html='';
-    if(!dp.length)html='<p style="color:rgba(255,255,255,.4);padding:16px">No custom sources added</p>';
-    else html=dp.map((p,i)=>`
-      <div class="src-card" tabindex="0" data-i="${i}">
-        <div class="src-dot" style="${p.builtIn?'':'background:var(--accent)'}"></div>
-        <div class="src-info">
-          <div class="src-nm">${esc(p.name)}${p.builtIn?' <small style="opacity:.5">(built-in)</small>':''}</div>
-          <div class="src-url">${esc(p.url)}</div>
-        </div>
-        ${p.builtIn?'':`<button class="src-del" data-del="${i}">🗑</button>`}
-      </div>`).join('');
-    soMain.innerHTML=html+`<button class="so-btn" id="refreshSoBtnSo" tabindex="0">↺ Refresh All</button>`;
+    const dp = [...pls];
+    let html = dp.map((p,i)=>`<div class="src-card" tabindex="0" data-i="${i}"><div class="src-dot"></div><div class="src-info"><div class="src-nm">${escapeHtml(p.name)}${p.builtIn?' <small>(built-in)</small>':''}</div><div class="src-url">${escapeHtml(p.url)}</div></div>${p.builtIn?'':`<button class="src-del" data-del="${i}">🗑</button>`}</div>`).join('');
+    soMain.innerHTML = html + `<button class="so-btn" id="refreshSoBtnSo" tabindex="0">↺ Refresh All</button>`;
     soMain.querySelectorAll('.src-card').forEach(el=>{
-      el.addEventListener('click',e=>{
-        if(e.target.closest('[data-del]'))return;
-        const p=dp[+el.dataset.i];if(p){loadPl(p.url,p.name);closeSettings()}
-      });
+      el.addEventListener('click',e=>{ if(e.target.closest('[data-del]')) return; const p=dp[+el.dataset.i]; if(p){ loadPl(p.url,p.name); closeSettings(); } });
     });
     soMain.querySelectorAll('[data-del]').forEach(btn=>{
-      btn.addEventListener('click',e=>{e.stopPropagation();const i=+btn.dataset.del;pls.splice(i,1);savePls();renderSettingsSect('sources')});
+      btn.addEventListener('click',e=>{ e.stopPropagation(); const i=+btn.dataset.del; pls.splice(i,1); savePls(); renderSettingsSect('sources'); });
     });
-    $('refreshSoBtnSo')?.addEventListener('click',()=>{AppCache.clearAllM3U();allChs=[];loadAll(true);closeSettings()});
+    const refBtn = document.getElementById('refreshSoBtnSo');
+    if(refBtn) refBtn.addEventListener('click',()=>{ AppCache.clearAllM3U(); allChs=[]; loadAll(true); closeSettings(); });
   }
 }
-function wireSettings(){
-  const hq=$('cfgHQ');const mu=$('cfgMute');const bu=$('cfgBuf');const os=$('cfgOsd');
-  if(hq)hq.onchange=function(){cfg.hq=this.checked;saveCfg();recfg()};
-  if(mu)mu.onchange=function(){cfg.muteSwitch=this.checked;saveCfg()};
-  if(bu)bu.onchange=function(){cfg.buf=+this.value;saveCfg();recfg()};
-  if(os)os.onchange=function(){cfg.osd=this.checked;saveCfg()};
-}
+function escapeHtml(s){ return String(s).replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m; }); }
 
-/* ── Dialer ── */
-function openDial(){mDial.classList.add('on');zone='dialer';wakeUI();clearTimeout(hideTimer);setTimeout(()=>dnum.parentElement?.focus(),50)}
-function closeDial(){mDial.classList.remove('on');zone='rows';resetHideTimer();syncFocusInRows()}
-QA('.dk',$('mDial')).forEach(b=>b.addEventListener('click',()=>dialPush(b.dataset.d)));
+/* ---- Dialer ---- */
+function openDial(){ mDial.classList.add('on'); zone='dialer'; wakeUI(); clearTimeout(hideTimer); setTimeout(()=>dnum.parentElement?.focus(),50); }
+function closeDial(){ mDial.classList.remove('on'); zone='rows'; resetHideTimer(); syncFocusInRows(); }
 function dialPush(d){
-  if(d==='clr')dialStr=dialStr.slice(0,-1);
-  else if(d==='go'){dialGo();return}
-  else if(dialStr.length<4)dialStr+=d;
-  dnum.textContent=dialStr||'—';clearTimeout(dialTimer);
-  if(dialStr.length>=3)dialTimer=setTimeout(dialGo,1400);
+  if(d==='clr') dialStr = dialStr.slice(0,-1);
+  else if(d==='go'){ dialGo(); return; }
+  else if(dialStr.length<4) dialStr += d;
+  dnum.textContent = dialStr || '—';
+  clearTimeout(dialTimer);
+  if(dialStr.length>=3) dialTimer = setTimeout(dialGo,1400);
 }
 function dialGo(){
-  const n=parseInt(dialStr,10);dialStr='';dnum.textContent='—';closeDial();
-  if(!isNaN(n)&&n>=1&&n<=row1Chs.length){col1=n-1;focusRow=1;updateRow1Focus();syncRow1Scroll();immediatePlay()}
+  const n = parseInt(dialStr,10); dialStr=''; dnum.textContent='—'; closeDial();
+  if(!isNaN(n) && n>=1 && n<=row1Chs.length){ col1=n-1; focusRow=1; updateRow1Focus(); syncRow1Scroll(); immediatePlay(); }
   else toast('Channel not found','err');
 }
 function remoteDigit(d){
-  rDialStr+=d;clearTimeout(rDialTimer);
-  rDialTimer=setTimeout(()=>{
-    const n=parseInt(rDialStr,10);rDialStr='';
-    if(!isNaN(n)&&n>=1&&n<=row1Chs.length){col1=n-1;focusRow=1;updateRow1Focus();syncRow1Scroll();immediatePlay()}
-    else toast('Not found','err');
-  },1200);
+  rDialStr += d; clearTimeout(rDialTimer);
+  rDialTimer = setTimeout(()=>{ const n=parseInt(rDialStr,10); rDialStr=''; if(!isNaN(n) && n>=1 && n<=row1Chs.length){ col1=n-1; focusRow=1; updateRow1Focus(); syncRow1Scroll(); immediatePlay(); }else toast('Not found','err'); },1200);
 }
-
-/* ── Focus helpers ── */
 function syncFocusInRows(){
-  if(focusRow===0){
-    const tabs=QA('.ntab',navTabs);tabs[tabIdx]?.focus({preventScroll:true})}
-  else if(focusRow===1){
-    const cards=[...row1Strip.children];const idx=col1+1;
-    if(cards[idx]){cards[idx].tabIndex=0;cards[idx].focus({preventScroll:true})}
-  }else{
-    const cards=[...row2Strip.children];
-    if(cards[col2]){cards[col2].tabIndex=0;cards[col2].focus({preventScroll:true})}
+  if(focusRow===1){
+    const cards = [...row1Strip.children];
+    const idx = col1+1;
+    if(cards[idx]){ cards[idx].tabIndex=0; cards[idx].focus({preventScroll:true}); }
+  }else if(focusRow===2){
+    const cards = [...row2Strip.children];
+    if(cards[col2]){ cards[col2].tabIndex=0; cards[col2].focus({preventScroll:true}); }
   }
 }
 
-/* Clock */
-function tick(){
-  const t=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-  /* Show in top-bar as right-most item — injected into brand area by updating brand-jio */
-}
-tick();setInterval(tick,30000);
+/* ---- Key handling (Tizen friendly) ---- */
+function hideSplash(){ document.getElementById('splash').classList.add('off'); setTimeout(()=>document.getElementById('splash').style.display='none',600); }
 
-function hideSplash(){$('splash').classList.add('off');setTimeout(()=>{$('splash').style.display='none'},600)}
-
-/* ════════════════════════════════════════════════════════════
-   KEYMAP — Tizen OS 9 / BN59-01199F
-════════════════════════════════════════════════════════════ */
-const KC={
-  UP:38,DN:40,LT:37,RT:39,TUP:48888,TDN:48889,TLT:48886,TRT:48887,
-  ENTER:13,BACK:10009,
-  PLAY:415,PAUSE:19,PP:10252,STOP:413,FF:417,REW:412,
-  RED:403,GREEN:404,YELLOW:405,BLUE:406,
-  CHUP:427,CHDN:428,VOL_UP:447,VOL_DN:448,MUTE:449,
-};
-const isUp =(kc,k)=>kc===KC.UP ||kc===KC.TUP||k==='ArrowUp'  ||k==='Up';
-const isDn =(kc,k)=>kc===KC.DN ||kc===KC.TDN||k==='ArrowDown' ||k==='Down';
-const isLt =(kc,k)=>kc===KC.LT ||kc===KC.TLT||k==='ArrowLeft' ||k==='Left';
-const isRt =(kc,k)=>kc===KC.RT ||kc===KC.TRT||k==='ArrowRight'||k==='Right';
-const isOK =(kc,k)=>kc===KC.ENTER||k==='Enter';
-const isBack=(kc,k)=>kc===KC.BACK||k==='Escape';
-const isDig =(e)=>{const kc=e.keyCode;return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key?.length===1&&e.key>='0'&&e.key<='9')};
-const getDig=(e)=>{if(e.key?.length===1&&e.key>='0'&&e.key<='9')return e.key;if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);return String(e.keyCode-48)};
-
-window.addEventListener('keydown',e=>{
-  const kc=e.keyCode,k=e.key;
-
-  /* Volume — always first, always wake UI */
-  if(kc===KC.VOL_UP){e.preventDefault();volUp();wakeUI();return}
-  if(kc===KC.VOL_DN){e.preventDefault();volDown();wakeUI();return}
-  if(kc===KC.MUTE||k==='VolumeMute'){
-    e.preventDefault();wakeUI();
-    try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setMute(!tizen.tvaudiocontrol.isMute());showVol();return}}catch(ex){}
-    isMuted=!isMuted;video.muted=isMuted;return;
-  }
-
-  /* Any key wakes UI */
+window.addEventListener('keydown', e=>{
+  const kc = e.keyCode;
+  const key = e.key;
+  if(kc === 447 || key === 'VolumeUp'){ e.preventDefault(); volUp(); wakeUI(); return; }
+  if(kc === 448 || key === 'VolumeDown'){ e.preventDefault(); volDown(); wakeUI(); return; }
+  if(kc === 449 || key === 'VolumeMute'){ e.preventDefault(); wakeUI(); try{ if(window.tizen && tizen.tvaudiocontrol){ tizen.tvaudiocontrol.setMute(!tizen.tvaudiocontrol.isMute()); showVol(); }else{ isMuted=!isMuted; video.muted=isMuted; } }catch(e){} return; }
   wakeUI();
-
-  /* Input fields in YP form */
-  if(document.activeElement===$('ypPlName')||document.activeElement===$('ypPlUrl')){
-    if(isBack(kc,k)){e.preventDefault();$('ypCancel').click()}
+  if(document.activeElement === document.getElementById('ypPlName') || document.activeElement === document.getElementById('ypPlUrl')){
+    if(kc===10009 || key==='Escape'){ e.preventDefault(); document.getElementById('ypCancel').click(); }
     return;
   }
-
-  /* ── DIALER ── */
-  if(zone==='dialer'){
-    if(isDig(e)){e.preventDefault();dialPush(getDig(e));return}
-    if(isOK(kc,k)){e.preventDefault();dialGo();return}
-    if(isBack(kc,k)){e.preventDefault();closeDial();return}
+  if(zone === 'dialer'){
+    if((kc>=48 && kc<=57) || (kc>=96 && kc<=105) || (key>='0' && key<='9')){ e.preventDefault(); dialPush(key); return; }
+    if(kc===13 || key==='Enter'){ e.preventDefault(); dialGo(); return; }
+    if(kc===10009 || key==='Escape'){ e.preventDefault(); closeDial(); return; }
     return;
   }
-
-  /* ── YELLOW POPUP ── */
-  if(zone==='yp'){
-    if(isBack(kc,k)){e.preventDefault();closeYP();return}
-    const showingForm=ypAddForm.classList.contains('open');
-    if(!showingForm){
-      const items=QA('.yp-action',$('ypActions'));
-      if(isUp(kc,k)){e.preventDefault();ypIdx=Math.max(0,ypIdx-1);focusYP();return}
-      if(isDn(kc,k)){e.preventDefault();ypIdx=Math.min(items.length-1,ypIdx+1);focusYP();return}
-      if(isOK(kc,k)){e.preventDefault();items[ypIdx]?.click();return}
+  if(zone === 'yp'){
+    if(kc===10009 || key==='Escape'){ e.preventDefault(); closeYP(); return; }
+    if(!ypAddForm.classList.contains('open')){
+      const items = document.querySelectorAll('#ypActions .yp-action');
+      if(kc===38 || key==='ArrowUp'){ e.preventDefault(); ypIdx = Math.max(0, ypIdx-1); focusYP(); return; }
+      if(kc===40 || key==='ArrowDown'){ e.preventDefault(); ypIdx = Math.min(items.length-1, ypIdx+1); focusYP(); return; }
+      if(kc===13 || key==='Enter'){ e.preventDefault(); items[ypIdx]?.click(); return; }
     }
     return;
   }
-
-  /* ── SETTINGS ── */
-  if(zone==='settings'){
-    if(isBack(kc,k)){e.preventDefault();closeSettings();return}
-    const sideItems=QA('.so-nav',soSide);
-    const mainItems=QA('[tabindex="0"]',soMain);
-    if(isUp(kc,k)){
+  if(zone === 'settings'){
+    if(kc===10009 || key==='Escape'){ e.preventDefault(); closeSettings(); return; }
+    const sideItems = document.querySelectorAll('.so-nav');
+    const mainItems = document.querySelectorAll('[tabindex="0"]', soMain);
+    if(kc===38 || key==='ArrowUp'){
       e.preventDefault();
-      if(soSideZone){soSideIdx=Math.max(0,soSideIdx-1);sideItems[soSideIdx]?.focus({preventScroll:true})}
-      else{soMainIdx=Math.max(0,soMainIdx-1);mainItems[soMainIdx]?.focus({preventScroll:true});mainItems[soMainIdx]?.scrollIntoView({block:'nearest'})}
+      if(soSideZone){ soSideIdx = Math.max(0, soSideIdx-1); sideItems[soSideIdx]?.focus({preventScroll:true}); }
+      else{ soMainIdx = Math.max(0, soMainIdx-1); mainItems[soMainIdx]?.focus({preventScroll:true}); }
       return;
     }
-    if(isDn(kc,k)){
+    if(kc===40 || key==='ArrowDown'){
       e.preventDefault();
-      if(soSideZone){soSideIdx=Math.min(sideItems.length-1,soSideIdx+1);sideItems[soSideIdx]?.focus({preventScroll:true})}
-      else{soMainIdx=Math.min(mainItems.length-1,soMainIdx+1);mainItems[soMainIdx]?.focus({preventScroll:true});mainItems[soMainIdx]?.scrollIntoView({block:'nearest'})}
+      if(soSideZone){ soSideIdx = Math.min(sideItems.length-1, soSideIdx+1); sideItems[soSideIdx]?.focus({preventScroll:true}); }
+      else{ soMainIdx = Math.min(mainItems.length-1, soMainIdx+1); mainItems[soMainIdx]?.focus({preventScroll:true}); }
       return;
     }
-    if(isRt(kc,k)&&soSideZone){e.preventDefault();soSideZone=false;soMainIdx=0;mainItems[0]?.focus({preventScroll:true});return}
-    if(isLt(kc,k)&&!soSideZone){e.preventDefault();soSideZone=true;sideItems[soSideIdx]?.focus({preventScroll:true});return}
-    if(isOK(kc,k)){
+    if((kc===39 || key==='ArrowRight') && soSideZone){ e.preventDefault(); soSideZone=false; soMainIdx=0; if(mainItems[0]) mainItems[0].focus({preventScroll:true}); return; }
+    if((kc===37 || key==='ArrowLeft') && !soSideZone){ e.preventDefault(); soSideZone=true; sideItems[soSideIdx]?.focus({preventScroll:true}); return; }
+    if(kc===13 || key==='Enter'){
       e.preventDefault();
-      const f=document.activeElement;
-      if(f?.classList.contains('srow')){const cb=f.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}))}}
-      else if(f?.classList.contains('so-nav'))f.click();
+      const f = document.activeElement;
+      if(f?.classList.contains('srow')){ const cb = f.querySelector('input[type=checkbox]'); if(cb){ cb.checked=!cb.checked; cb.dispatchEvent(new Event('change',{bubbles:true})); } }
+      else if(f?.classList.contains('so-nav')) f.click();
       else f?.click();
       return;
     }
     return;
   }
-
-  /* ── NAV TABS ZONE ── */
-  if(zone==='tabs'){
-    const tabs=QA('.ntab',navTabs);
-    if(isLt(kc,k)){e.preventDefault();tabIdx=Math.max(0,tabIdx-1);tabs[tabIdx]?.focus({preventScroll:true});tabs[tabIdx]?.scrollIntoView({inline:'nearest'});return}
-    if(isRt(kc,k)){e.preventDefault();tabIdx=Math.min(tabs.length-1,tabIdx+1);tabs[tabIdx]?.focus({preventScroll:true});tabs[tabIdx]?.scrollIntoView({inline:'nearest'});return}
-    if(isOK(kc,k)){e.preventDefault();tabs[tabIdx]?.click();zone='rows';focusRow=1;syncFocusInRows();return}
-    if(isDn(kc,k)){e.preventDefault();zone='rows';focusRow=1;syncFocusInRows();return}
-    if(isBack(kc,k)){e.preventDefault();zone='rows';focusRow=1;syncFocusInRows();return}
+  if(zone === 'tabs'){
+    const tabs = document.querySelectorAll('.ntab');
+    if(kc===37 || key==='ArrowLeft'){ e.preventDefault(); tabIdx = Math.max(0, tabIdx-1); tabs[tabIdx]?.focus({preventScroll:true}); tabs[tabIdx]?.scrollIntoView({inline:'nearest'}); return; }
+    if(kc===39 || key==='ArrowRight'){ e.preventDefault(); tabIdx = Math.min(tabs.length-1, tabIdx+1); tabs[tabIdx]?.focus({preventScroll:true}); tabs[tabIdx]?.scrollIntoView({inline:'nearest'}); return; }
+    if(kc===13 || key==='Enter'){ e.preventDefault(); tabs[tabIdx]?.click(); zone='rows'; focusRow=1; syncFocusInRows(); return; }
+    if(kc===40 || key==='ArrowDown'){ e.preventDefault(); zone='rows'; focusRow=1; syncFocusInRows(); return; }
+    if(kc===10009 || key==='Escape'){ e.preventDefault(); zone='rows'; focusRow=1; syncFocusInRows(); return; }
     return;
   }
-
-  /* ── MAIN ROWS ZONE ── */
-  if(zone==='rows'){
-    if(isUp(kc,k)){
+  if(zone === 'rows'){
+    if(kc===38 || key==='ArrowUp'){
       e.preventDefault();
-      if(focusRow===2){focusRow=1;updateRow1Focus();syncRow1Scroll();syncFocusInRows()}
-      else if(focusRow===1){
-        zone='tabs';focusRow=0;
-        const tabs=QA('.ntab',navTabs);
-        tabIdx=Math.max(0,allGroups.indexOf(activeTab));
-        tabs[tabIdx]?.focus({preventScroll:true});
-        tabs[tabIdx]?.classList.add('focused-nav');
-      }
+      if(focusRow===2){ focusRow=1; updateRow1Focus(); syncRow1Scroll(); syncFocusInRows(); }
+      else if(focusRow===1){ zone='tabs'; focusRow=0; const tabs=document.querySelectorAll('.ntab'); tabIdx=Math.max(0,allGroups.indexOf(activeTab)); tabs[tabIdx]?.focus({preventScroll:true}); }
       return;
     }
-    if(isDn(kc,k)){
+    if(kc===40 || key==='ArrowDown'){
       e.preventDefault();
-      if(focusRow===1&&row2Chs.length>0){focusRow=2;updateRow2Focus();syncRow2Scroll();syncFocusInRows()}
-      else if(focusRow===2){/* already at bottom */}
+      if(focusRow===1 && row2Chs.length>0){ focusRow=2; updateRow2Focus(); syncRow2Scroll(); syncFocusInRows(); }
       return;
     }
-    if(isLt(kc,k)){
+    if(kc===37 || key==='ArrowLeft'){
       e.preventDefault();
-      if(focusRow===1){
-        if(col1>0){col1--;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}
-      }else if(focusRow===2){
-        if(col2>0){col2--;updateRow2Focus();syncRow2Scroll()}
-      }
+      if(focusRow===1){ if(col1>0){ col1--; updateRow1Focus(); syncRow1Scroll(); syncFocusInRows(); updateNowInfo(); } }
+      else if(focusRow===2){ if(col2>0){ col2--; updateRow2Focus(); syncRow2Scroll(); } }
       return;
     }
-    if(isRt(kc,k)){
+    if(kc===39 || key==='ArrowRight'){
       e.preventDefault();
-      if(focusRow===1){
-        if(col1<row1Chs.length-1){col1++;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}
-      }else if(focusRow===2){
-        if(col2<row2Chs.length-1){col2++;updateRow2Focus();syncRow2Scroll()}
-      }
+      if(focusRow===1){ if(col1<row1Chs.length-1){ col1++; updateRow1Focus(); syncRow1Scroll(); syncFocusInRows(); updateNowInfo(); } }
+      else if(focusRow===2){ if(col2<row2Chs.length-1){ col2++; updateRow2Focus(); syncRow2Scroll(); } }
       return;
     }
-    if(isOK(kc,k)){e.preventDefault();immediatePlay();return}
-    if(isBack(kc,k)){
-      /* If playing fullscreen — nothing to do (video IS fullscreen always) */
-      return;
-    }
+    if(kc===13 || key==='Enter'){ e.preventDefault(); immediatePlay(); return; }
   }
-
-  /* Universal keys */
   switch(true){
-    case kc===KC.RED:
-      e.preventDefault();
-      {const i=allGroups.indexOf(activeTab);setTab(allGroups[(i+1)%allGroups.length])}break;
-    case kc===KC.GREEN:
-      /* Green = cycle aspect ratio */
-      e.preventDefault();cycleAspect();break;
-    case kc===KC.YELLOW:
-      /* YELLOW = quick-action popup (per requirement) */
-      e.preventDefault();openYP();break;
-    case kc===KC.BLUE:
-      e.preventDefault();toggleFav();break;
-    case kc===KC.PLAY:  e.preventDefault();video.play().catch(()=>{});break;
-    case kc===KC.PAUSE: e.preventDefault();video.pause();break;
-    case kc===KC.PP:    e.preventDefault();video.paused?video.play().catch(()=>{}):video.pause();break;
-    case kc===KC.STOP:  e.preventDefault();if(player){player.unload();isPlaying=false;curUrl=''}break;
-    case kc===KC.CHUP||k==='PageUp':
-      e.preventDefault();
-      if(focusRow===1&&col1>0){col1--;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}break;
-    case kc===KC.CHDN||k==='PageDown':
-      e.preventDefault();
-      if(focusRow===1&&col1<row1Chs.length-1){col1++;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}break;
-    case k==='f'||k==='F': e.preventDefault();toggleFav();break;
-    case k==='d'||k==='D': e.preventDefault();openDial();break;
-    case isDig(e): e.preventDefault();remoteDigit(getDig(e));break;
+    case (kc===403): e.preventDefault(); const i=allGroups.indexOf(activeTab); setTab(allGroups[(i+1)%allGroups.length]); break;
+    case (kc===404): e.preventDefault(); cycleAspect(); break;
+    case (kc===405): e.preventDefault(); openYP(); break;
+    case (kc===406): e.preventDefault(); toggleFav(); break;
+    case (kc===415): e.preventDefault(); video.play().catch(()=>{}); break;
+    case (kc===19): e.preventDefault(); video.pause(); break;
+    case (kc===10252): e.preventDefault(); video.paused?video.play().catch(()=>{}):video.pause(); break;
+    case (kc===413): e.preventDefault(); if(player){ player.unload(); isPlaying=false; curUrl=''; } break;
+    case (kc===427): e.preventDefault(); if(focusRow===1 && col1>0){ col1--; updateRow1Focus(); syncRow1Scroll(); updateNowInfo(); } break;
+    case (kc===428): e.preventDefault(); if(focusRow===1 && col1<row1Chs.length-1){ col1++; updateRow1Focus(); syncRow1Scroll(); updateNowInfo(); } break;
+    case (key==='f'||key==='F'): e.preventDefault(); toggleFav(); break;
+    case (key==='d'||key==='D'): e.preventDefault(); openDial(); break;
+    default: if((kc>=48 && kc<=57) || (kc>=96 && kc<=105) || (key>='0' && key<='9')){ e.preventDefault(); remoteDigit(key); break; }
   }
 });
+document.getElementById('root').addEventListener('click', wakeUI);
 
-/* Clicking on video area wakes UI */
-$('root').addEventListener('click',wakeUI);
-
-/* ── BOOT ── */
+/* ---- Boot ---- */
 (async function boot(){
   loadStore();
-  pls=pls.filter(p=>p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url);
-  pls.unshift(JIO_PL);pls.unshift(TELUGU_PL);
-
-  $('splMsg').textContent='Initialising player…';
+  pls = pls.filter(p=>p.url!=='https://iptv-org.github.io/iptv/languages/tel.m3u' && p.url!=='https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u');
+  pls.unshift({name:'Jio', url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u', builtIn:true});
+  pls.unshift({name:'Telugu', url:'https://iptv-org.github.io/iptv/languages/tel.m3u', builtIn:true});
+  document.getElementById('splMsg').textContent = 'Initialising player...';
   await initPlayer();
-  $('splMsg').textContent='Loading channels…';
-
-  /* Initial tabs with placeholder */
-  allGroups=['For You','Telugu','Jio','Entertainment','News','Movies'];
-  rebuildNavTabs();setTab('For You');
-
-  const snap=allChs.length;
-  await loadPl(TELUGU_PL.url,TELUGU_PL.name,false);
-  allChs.slice(snap).forEach(ch=>{ch._src='telugu'});
-
-  const ups=pls.filter(p=>!p.builtIn);
-  const srcs=ups.length?ups:[JIO_PL];
-  for(const p of srcs){
-    const before=allChs.length;
-    await loadPl(p.url,p.name,false);
-    if(p.name==='Jio')allChs.slice(before).forEach(ch=>{ch._src='jio'});
-  }
-
-  rebuildGroups();rebuildNavTabs();setTab('For You');
-
-  /* Restore last channel */
-  const lastUrl=lsGet(LS.LCHU);
+  document.getElementById('splMsg').textContent = 'Loading channels...';
+  allGroups = ['For You','Telugu','Jio','Entertainment','News','Movies'];
+  rebuildNavTabs(); setTab('For You');
+  await loadAll(false);
+  rebuildGroups(); rebuildNavTabs(); setTab('For You');
+  const lastUrl = lsGet('saga:lchu');
   if(lastUrl){
-    const idx=row1Chs.findIndex(c=>c.url===lastUrl);
-    if(idx>=0){col1=idx;focusRow=1;updateRow1Focus();syncRow1Scroll();updateNowInfo()}
+    const idx = row1Chs.findIndex(c=>c.url===lastUrl);
+    if(idx>=0){ col1=idx; focusRow=1; updateRow1Focus(); syncRow1Scroll(); updateNowInfo(); }
   }
-
   hideSplash();
   startHideTimer();
-  currentVol=getSysVol();
+  currentVol = getSysVol();
 })();
-
 })();
 </script>
 </body>
