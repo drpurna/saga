@@ -2,942 +2,1938 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
-<title>JioTV+ · IPTV Player</title>
-<!-- Shaka Player CDN -->
-<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.0/dist/shaka-player.compiled.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
+<title>SAGA IPTV</title>
+<script src="./shaka.js"></script>
+<script src="./cache.js"></script>
 <style>
-/* ==================== JioTV+ UI - Premium Dark Theme ==================== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
+/*══════════════════════════════════════════════════════════════
+  SAGA IPTV v35 — JioTV+ Style
+  ─────────────────────────────────────────────────────────────
+  · Full-screen video hero at all times
+  · Top bar: logo + horizontal nav tabs + icon buttons
+  · Bottom: two horizontal channel rows (Live + Categories)
+  · Auto-hides top+bottom after 3s idle → clean fullscreen view
+  · YELLOW key → quick-action popup
+  · All animations: GPU-only (transform/opacity)
+══════════════════════════════════════════════════════════════*/
+
+*,*::before,*::after{
+  margin:0;padding:0;box-sizing:border-box;
+  user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;
 }
 
-:root {
-  --bg-primary: #0a0c10;
-  --bg-secondary: #111317;
-  --accent: #8b5cf6;      /* Jio purple */
-  --accent-glow: #a78bfa;
-  --accent-gradient: linear-gradient(135deg, #8b5cf6, #c084fc);
-  --text-primary: #ffffff;
-  --text-secondary: #b0b3b8;
-  --text-muted: #6c6f78;
-  --border-light: rgba(255,255,255,0.08);
-  --card-bg: rgba(18, 20, 25, 0.9);
-  --focus-glow: 0 0 0 3px rgba(139, 92, 246, 0.6);
-  --tw: 200px;
-  --th: 120px;
-  --tgap: 16px;
+:root{
+  --black:     #000;
+  --w:         #fff;
+  --w2:        rgba(255,255,255,.75);
+  --w3:        rgba(255,255,255,.45);
+  --w4:        rgba(255,255,255,.12);
+  --accent:    #e50914;   /* Jio red */
+  --accent2:   #ff4444;
+  --yellow:    #f5c518;   /* Yellow key highlight */
+  --green:     #00c853;
+  --sep:       rgba(255,255,255,.12);
+
+  /* Card sizes */
+  --cw:  190px;   /* channel card width */
+  --ch:  110px;   /* channel card height */
+  --sw:  190px;   /* show card width */
+  --sh:  108px;   /* show card height */
+  --cgap: 14px;
+
+  /* Top bar */
+  --topbar-h: 72px;
+
+  /* Bottom panel */
+  --bottom-h: 310px;  /* height of the two rows + padding */
+  --row1-h:   148px;  /* row 1 (channels): label + cards */
+  --row2-h:   148px;  /* row 2 (shows) */
+
+  /* Transitions */
+  --dur:   120ms;
+  --ease:  cubic-bezier(.4,0,.2,1);
+  --spring:cubic-bezier(.22,1,.36,1);
 }
 
-body {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
-  overflow: hidden;
-  height: 100vh;
-  width: 100vw;
+html,body{
+  width:100vw;height:100vh;overflow:hidden;
+  background:#000;color:var(--w);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
 }
 
-/* main app container */
-#app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  background: radial-gradient(circle at 20% 30%, #11151f, #030507);
-  position: relative;
+/* ════════════════════════════════════════════════════════════
+   ROOT
+════════════════════════════════════════════════════════════ */
+#root{
+  width:100vw;height:100vh;
+  position:relative;overflow:hidden;
+  transform:translateZ(0);isolation:isolate;
 }
 
-/* ==================== TOP BAR (JioTV+ style) ==================== */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 32px;
-  background: rgba(0,0,0,0.4);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-light);
-  z-index: 20;
+/* ── VIDEO — always fills 100% ───────────────────────────── */
+#video{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  display:block;
+  transform:translateZ(0);
+  will-change:transform;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;
+  z-index:1;
 }
-.logo-area {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+#video.contain{object-fit:contain}
+#video.stretch{object-fit:fill}
+
+/* ── VIGNETTE — protects top and bottom text readability ─── */
+#vignette{
+  position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:
+    linear-gradient(to bottom,
+      rgba(0,0,0,.72) 0%,
+      rgba(0,0,0,.0)  18%,
+      rgba(0,0,0,.0)  55%,
+      rgba(0,0,0,.75) 78%,
+      rgba(0,0,0,.95) 100%
+    );
+  transition:opacity 300ms;
 }
-.logo-icon {
-  width: 40px;
-  height: 40px;
-  background: var(--accent-gradient);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  font-weight: 900;
-  box-shadow: 0 4px 12px rgba(139,92,246,0.3);
+/* When UI is hidden, vignette also fades */
+#vignette.dim{opacity:.3}
+
+/* ════════════════════════════════════════════════════════════
+   TOP BAR  (logo | nav tabs | icon buttons)
+   Auto-hides: slides UP off-screen after 3s idle
+════════════════════════════════════════════════════════════ */
+#topBar{
+  position:absolute;top:0;left:0;right:0;
+  height:var(--topbar-h);
+  z-index:30;
+  display:flex;align-items:center;
+  padding:0 48px;
+  gap:0;
+  /* Glass band */
+  background:linear-gradient(to bottom,rgba(0,0,0,.78) 0%,transparent 100%);
+  /* Auto-hide animation */
+  will-change:transform,opacity;
+  transition:transform 320ms var(--spring), opacity 280ms;
 }
-.logo-text {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, #fff, #c084fc);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.status-area {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-}
-.network-badge {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 40px;
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  backdrop-filter: blur(4px);
-}
-.network-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #22c55e;
-  animation: pulse 1.5s infinite;
-}
-@keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
-#clock {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+#topBar.hidden{
+  transform:translateY(-100%);
+  opacity:0;pointer-events:none;
 }
 
-/* ==================== MAIN LAYOUT ==================== */
-.main-content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  padding: 20px 32px 20px 32px;
-  gap: 24px;
+/* Brand */
+.brand{
+  display:flex;align-items:center;gap:4px;
+  margin-right:40px;flex-shrink:0;
+}
+.brand-jio{
+  font-size:22px;font-weight:900;
+  color:var(--w);letter-spacing:-.5px;
+}
+.brand-tv{
+  font-size:14px;font-weight:800;
+  color:var(--w);background:var(--accent);
+  padding:1px 5px;border-radius:4px;letter-spacing:.5px;
+}
+.brand-plus{
+  font-size:18px;font-weight:900;color:var(--yellow);margin-left:1px;
 }
 
-/* LEFT SIDEBAR (categories) - JioTV+ style vertical menu */
-.sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  background: rgba(10, 12, 16, 0.6);
-  backdrop-filter: blur(16px);
-  border-radius: 28px;
-  border: 1px solid var(--border-light);
-  padding: 20px 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
+/* Nav tabs */
+#navTabs{
+  display:flex;align-items:center;gap:6px;
+  flex:1;
+  overflow:hidden;
 }
-.sidebar::-webkit-scrollbar { width: 4px; }
-.sidebar-category {
-  padding: 12px 20px;
-  margin: 4px 12px;
-  border-radius: 40px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  transition: all 0.15s;
-  cursor: pointer;
-  white-space: nowrap;
+.ntab{
+  height:36px;padding:0 18px;
+  border:none;border-radius:18px;
+  background:transparent;color:var(--w2);
+  font-size:15px;font-weight:600;
+  cursor:pointer;outline:none;
+  white-space:nowrap;flex-shrink:0;
+  transition:background var(--dur),color var(--dur),transform 100ms;
 }
-.sidebar-category svg {
-  width: 18px;
-  height: 18px;
-  margin-right: 12px;
-  vertical-align: middle;
-  fill: currentColor;
+.ntab:focus{outline:none}
+/* Selected tab: white pill */
+.ntab.on{
+  background:var(--w);
+  color:#111;
+  font-weight:700;
 }
-.sidebar-category.active {
-  background: var(--accent);
-  color: white;
-  box-shadow: 0 4px 12px rgba(139,92,246,0.3);
-}
-.sidebar-category:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.ntab.focused-nav{
+  outline:2px solid rgba(255,255,255,.7);
+  outline-offset:2px;
 }
 
-/* RIGHT CONTENT (video + channel strip) */
-.content-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-width: 0;
+/* Right icons */
+.top-icons{
+  display:flex;align-items:center;gap:12px;
+  margin-left:24px;flex-shrink:0;
+}
+.top-icon{
+  width:40px;height:40px;
+  border-radius:50%;
+  background:rgba(255,255,255,.12);
+  border:none;cursor:pointer;outline:none;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--w);
+  transition:background var(--dur);
+}
+.top-icon svg{width:20px;height:20px;fill:currentColor}
+.top-icon:focus,.top-icon:hover{background:rgba(255,255,255,.24);outline:2px solid rgba(255,255,255,.5);outline-offset:1px}
+
+/* ════════════════════════════════════════════════════════════
+   BOTTOM PANEL  (two horizontal channel rows)
+   Auto-hides: slides DOWN off-screen after 3s idle
+════════════════════════════════════════════════════════════ */
+#bottomPanel{
+  position:absolute;bottom:0;left:0;right:0;
+  height:var(--bottom-h);
+  z-index:30;
+  padding:0 0 16px;
+  /* No background — vignette handles darkening */
+  will-change:transform,opacity;
+  transition:transform 320ms var(--spring), opacity 280ms;
+}
+#bottomPanel.hidden{
+  transform:translateY(calc(100% + 20px));
+  opacity:0;pointer-events:none;
 }
 
-/* VIDEO PLAYER HERO (JioTV+ featured style) */
-.video-hero {
-  background: #000000;
-  border-radius: 24px;
-  overflow: hidden;
-  aspect-ratio: 16 / 9;
-  position: relative;
-  box-shadow: 0 20px 35px -15px rgba(0,0,0,0.6);
-  border: 1px solid var(--border-light);
+/* Row wrapper */
+.ch-row{
+  padding:0 48px;
+  margin-bottom:4px;
 }
-#videoPlayer {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background: #000;
+.ch-row-label{
+  font-size:16px;font-weight:700;color:var(--w);
+  margin-bottom:12px;
+  display:flex;align-items:center;gap:10px;
 }
-.video-overlay {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(12px);
-  border-radius: 40px;
-  padding: 8px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  z-index: 5;
-}
-.live-badge {
-  background: #e50914;
-  border-radius: 20px;
-  padding: 2px 10px;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-#nowPlayingTitle {
-  font-size: 18px;
-  font-weight: 700;
-}
-#nowPlayingGroup {
-  font-size: 12px;
-  color: var(--text-secondary);
+.ch-row-label-count{
+  font-size:11px;font-weight:600;color:var(--w3);
+  background:rgba(255,255,255,.1);
+  border-radius:10px;padding:2px 8px;
 }
 
-/* CHANNEL STRIP (horizontal scrolling) */
-.channel-strip {
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(20px);
-  border-radius: 28px;
-  padding: 16px 0 16px 16px;
-  border: 1px solid var(--border-light);
-}
-.strip-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 0 16px 12px 8px;
-}
-.strip-header h3 {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.strip-header span {
-  font-size: 12px;
-  color: var(--accent);
-}
-.strip-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  white-space: nowrap;
-  scroll-behavior: smooth;
-}
-.strip-scroll::-webkit-scrollbar { height: 4px; }
-.strip-inner {
-  display: inline-flex;
-  gap: 14px;
-  padding-right: 30px;
+/* Horizontal strip — slides left/right via translateX */
+.tile-strip{
+  display:flex;gap:var(--cgap);
+  will-change:transform;
+  transition:transform 200ms var(--ease);
+  overflow:visible;
+  padding-bottom:4px; /* for focus glow */
 }
 
-/* Channel Tile (JioTV+ style) */
-.channel-tile {
-  width: 180px;
-  height: 110px;
-  background: var(--card-bg);
-  border-radius: 16px;
-  border: 2px solid transparent;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  overflow: hidden;
-  flex-shrink: 0;
-  backdrop-filter: blur(4px);
+/* ════════════════════════════════════════════════════════════
+   CHANNEL CARD  (190×110px, rounded 12px)
+   Logo centred, badges bottom-right, scale on focus.
+════════════════════════════════════════════════════════════ */
+.card{
+  width:var(--cw);
+  height:var(--ch);
+  border-radius:12px;
+  position:relative;flex-shrink:0;
+  cursor:pointer;outline:none;
+  background:#1a1a2e;
+  border:2px solid rgba(255,255,255,.06);
+  overflow:visible;
+  transition:transform 180ms var(--spring),
+             border-color 120ms,
+             box-shadow 120ms;
+  transform:scale(1) translateZ(0);
+  will-change:transform;
 }
-.channel-tile img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 12px;
-  background: rgba(0,0,0,0.4);
+/* Inner clip for image + bg */
+.card-inner{
+  position:absolute;inset:0;
+  border-radius:10px;
+  overflow:hidden;
 }
-.channel-tile .tile-name {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(transparent, rgba(0,0,0,0.9));
-  padding: 20px 6px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Blurred dominant-colour bg wash */
+.card-bg{
+  position:absolute;inset:-4px;
+  background-size:cover;background-position:center;
+  filter:blur(10px) brightness(.3) saturate(1.6);
+  opacity:0;transition:opacity 400ms;
 }
-.channel-tile .fav-star {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  font-size: 12px;
-  color: #fbbf24;
-  display: none;
-  z-index: 2;
+.card-bg.on{opacity:1}
+/* Logo */
+.card-img{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:contain;
+  padding:10px;
+  display:block;
+  image-rendering:-webkit-optimize-contrast;
 }
-.channel-tile.active {
-  border-color: var(--accent);
-  transform: scale(1.02);
-  box-shadow: var(--focus-glow);
+/* Fallback */
+.card-fb{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;color:rgba(255,255,255,.3);
 }
-.channel-tile.playing::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--accent-gradient);
+/* Bottom-right badges */
+.card-badges{
+  position:absolute;bottom:7px;right:7px;
+  display:flex;gap:4px;align-items:center;
+  z-index:4;
 }
-
-/* SEARCH BAR (floating) */
-.search-container {
-  position: fixed;
-  top: 90px;
-  right: 40px;
-  z-index: 100;
-  display: none;
-  background: rgba(0,0,0,0.85);
-  backdrop-filter: blur(20px);
-  border-radius: 60px;
-  padding: 8px 20px;
-  border: 1px solid var(--accent);
+.badge{
+  font-size:9px;font-weight:800;letter-spacing:.4px;
+  padding:2px 6px;border-radius:4px;line-height:14px;
 }
-.search-container.open { display: flex; gap: 10px; align-items: center; }
-#searchInput {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: white;
-  font-size: 16px;
-  width: 220px;
+.badge-live{background:var(--accent);color:#fff}
+.badge-hd{background:var(--green);color:#000}
+.badge-new{background:var(--yellow);color:#000}
+/* Channel number (top-left) */
+.card-num{
+  position:absolute;top:7px;left:8px;
+  font-size:10px;color:rgba(255,255,255,.22);
+  font-variant-numeric:tabular-nums;z-index:4;line-height:1;
+}
+/* Fav star */
+.card-fav{
+  position:absolute;top:7px;right:8px;
+  font-size:12px;color:#f5c518;
+  display:none;z-index:4;
+}
+/* Playing progress bar */
+.card.playing .card-inner::after{
+  content:'';
+  position:absolute;bottom:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--accent),var(--accent2));
 }
 
-/* OVERLAY (Settings & Sources) */
-.overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.95);
-  backdrop-filter: blur(28px);
-  z-index: 200;
-  display: none;
-  flex-direction: column;
-  padding: 40px;
-}
-.overlay.open { display: flex; }
-.overlay-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 32px;
-  border-bottom: 1px solid var(--border-light);
-  padding-bottom: 20px;
-}
-.overlay-body {
-  display: flex;
-  gap: 32px;
-  flex: 1;
-}
-.overlay-side {
-  width: 260px;
-}
-.overlay-main {
-  flex: 1;
-}
-.setting-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 16px;
-  border-bottom: 1px solid var(--border-light);
-}
-.toggle-switch {
-  width: 52px;
-  height: 28px;
-  background: rgba(255,255,255,0.2);
-  border-radius: 28px;
-  position: relative;
-  cursor: pointer;
-}
-.toggle-switch.active { background: var(--accent); }
-.toggle-switch::before {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  background: white;
-  border-radius: 50%;
-  top: 3px;
-  left: 3px;
-  transition: 0.2s;
-}
-.toggle-switch.active::before { transform: translateX(24px); }
-
-/* Volume HUD */
-#volumeHUD {
-  position: fixed;
-  bottom: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.9);
-  backdrop-filter: blur(16px);
-  border-radius: 40px;
-  padding: 12px 24px;
-  display: flex;
-  gap: 20px;
-  z-index: 300;
-  opacity: 0;
-  transition: 0.1s;
-  pointer-events: none;
-}
-#volumeHUD.visible { opacity: 1; }
-.volume-bar { width: 180px; height: 5px; background: #333; border-radius: 3px; }
-.volume-fill { height: 100%; background: var(--accent); width: 50%; border-radius: 3px; }
-
-/* Dialer Modal */
-.dialer-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.9);
-  backdrop-filter: blur(20px);
-  z-index: 250;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-.dialer-modal.open { display: flex; }
-.dialer-card {
-  background: #111;
-  border-radius: 36px;
-  padding: 32px;
-  width: 340px;
-}
-.dialer-number {
-  font-size: 48px;
-  text-align: center;
-  letter-spacing: 10px;
-  margin-bottom: 24px;
-}
-.dialer-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-.dialer-btn {
-  background: #222;
-  border: none;
-  border-radius: 60px;
-  padding: 16px;
-  font-size: 24px;
-  font-weight: 700;
-  color: white;
-  cursor: pointer;
-}
-.dialer-btn:focus { background: var(--accent); }
-
-/* Toast */
-#toastContainer {
-  position: fixed;
-  bottom: 100px;
-  right: 30px;
-  z-index: 400;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.toast {
-  background: rgba(0,0,0,0.85);
-  border-left: 3px solid var(--accent);
-  padding: 10px 20px;
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
-  animation: fadeIn 0.2s;
+/* ── FOCUSED card ─── */
+.card.sel{
+  border-color:rgba(255,255,255,.95);
+  transform:scale(1.1) translateZ(0);
+  z-index:10;
+  box-shadow:
+    0 0 0 3px rgba(255,255,255,.15),
+    0 12px 40px rgba(0,0,0,.8),
+    0 0 32px rgba(255,255,255,.08);
 }
 
-/* Splash */
-#splash {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  transition: 0.5s;
+/* Special "TV Guide" card — first card, blue bg */
+.card.tvguide .card-inner{background:#1565c0}
+.card.tvguide .card-guide-content{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
 }
-#splash.hide { opacity: 0; pointer-events: none; }
+.card.tvguide .guide-icon{font-size:28px;color:#fff}
+.card.tvguide .guide-label{font-size:13px;font-weight:700;color:#fff}
 
-/* responsive */
-@media (max-width: 1000px) {
-  .sidebar { width: 180px; }
-  .channel-tile { width: 150px; height: 95px; }
+/* Show card (row 2) — same structure, different default bg */
+.show-card{
+  width:var(--sw);height:var(--sh);
+  border-radius:10px;
+  position:relative;flex-shrink:0;
+  cursor:pointer;outline:none;
+  background:#222;
+  border:2px solid rgba(255,255,255,.05);
+  overflow:visible;
+  transition:transform 180ms var(--spring),border-color 120ms,box-shadow 120ms;
+  transform:scale(1) translateZ(0);
+  will-change:transform;
 }
+.show-card-inner{position:absolute;inset:0;border-radius:8px;overflow:hidden}
+.show-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.show-card-fb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:28px;color:rgba(255,255,255,.3)}
+.show-card-grad{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:24px 8px 7px;
+  background:linear-gradient(transparent,rgba(0,0,0,.85));
+  border-radius:0 0 8px 8px;
+}
+.show-card-name{font-size:11px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.show-card.sel{
+  border-color:rgba(255,255,255,.9);
+  transform:scale(1.1) translateZ(0);
+  z-index:10;
+  box-shadow:0 0 0 3px rgba(255,255,255,.15),0 12px 40px rgba(0,0,0,.8);
+}
+
+/* ════════════════════════════════════════════════════════════
+   NOW PLAYING — centre info (channel name, group)
+   Fades in when a channel is selected / playing
+════════════════════════════════════════════════════════════ */
+#nowInfo{
+  position:absolute;
+  bottom:calc(var(--bottom-h) + 16px);
+  left:48px;
+  z-index:20;
+  max-width:600px;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity 300ms,transform 300ms var(--ease);
+  transform:translateY(8px);
+}
+#nowInfo.visible{opacity:1;transform:none}
+#nowTag{
+  display:flex;align-items:center;gap:8px;
+  font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:rgba(255,255,255,.6);margin-bottom:8px;
+}
+.now-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--accent2);
+  animation:npulse 2s ease-in-out infinite;
+}
+@keyframes npulse{0%,100%{opacity:1}50%{opacity:.3}}
+#nowTitle{
+  font-size:40px;font-weight:900;
+  color:var(--w);line-height:1;
+  letter-spacing:-.02em;
+  text-shadow:0 4px 20px rgba(0,0,0,.8);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#nowMeta{
+  display:flex;align-items:center;gap:10px;
+  margin-top:10px;
+}
+.now-pill{
+  background:rgba(255,255,255,.15);
+  backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:5px;
+  padding:4px 12px;
+  font-size:12px;font-weight:700;color:var(--w);
+}
+.now-pill.live{
+  background:rgba(229,9,20,.25);
+  border-color:rgba(229,9,20,.5);
+  color:#ff6b6b;
+}
+
+/* ════════════════════════════════════════════════════════════
+   YELLOW KEY POPUP  (quick actions menu)
+   Opens on YELLOW remote key press.
+   Centred glass card with action buttons.
+════════════════════════════════════════════════════════════ */
+#yellowPopup{
+  position:absolute;inset:0;z-index:60;
+  background:rgba(0,0,0,.82);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  display:none;align-items:center;justify-content:center;
+}
+#yellowPopup.on{display:flex}
+.yp-card{
+  background:rgba(16,16,28,.98);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:20px;
+  padding:36px;
+  width:480px;
+  max-width:90vw;
+  animation:ypIn 150ms var(--spring);
+}
+@keyframes ypIn{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}
+.yp-header{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:28px;
+  padding-bottom:20px;
+  border-bottom:1px solid rgba(255,255,255,.1);
+}
+.yp-dot{
+  width:12px;height:12px;border-radius:50%;
+  background:var(--yellow);flex-shrink:0;
+}
+.yp-title{font-size:20px;font-weight:800;color:var(--w)}
+.yp-close{
+  margin-left:auto;
+  background:rgba(255,255,255,.1);border:none;
+  color:var(--w3);font-size:18px;cursor:pointer;outline:none;
+  width:32px;height:32px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  transition:background var(--dur);
+}
+.yp-close:focus,.yp-close:hover{background:rgba(255,255,255,.2);color:var(--w);outline:2px solid rgba(255,255,255,.4)}
+
+/* Action items */
+.yp-actions{display:flex;flex-direction:column;gap:8px}
+.yp-action{
+  display:flex;align-items:center;gap:16px;
+  padding:16px 18px;
+  border-radius:12px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.09);
+  cursor:pointer;outline:none;
+  transition:background var(--dur),border-color var(--dur),transform 80ms;
+  font-size:16px;font-weight:600;color:var(--w);
+  text-align:left;width:100%;
+}
+.yp-action:focus,.yp-action:hover{
+  background:rgba(255,255,255,.12);
+  border-color:rgba(255,255,255,.25);
+  outline:none;
+  transform:translateX(4px);
+}
+.yp-action:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:1px}
+.yp-action-icon{
+  width:40px;height:40px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;flex-shrink:0;
+}
+.yp-action-text{flex:1}
+.yp-action-title{font-size:15px;font-weight:700;color:var(--w)}
+.yp-action-desc{font-size:12px;color:var(--w3);margin-top:2px}
+.yp-action-arrow{color:var(--w3);font-size:18px}
+
+/* Add Source sub-form in popup */
+#ypAddForm{display:none;flex-direction:column;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)}
+#ypAddForm.open{display:flex}
+.yp-input{
+  width:100%;padding:12px 16px;border-radius:10px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+  color:var(--w);font-size:15px;outline:none;
+  -webkit-user-select:text !important;user-select:text !important;
+}
+.yp-input:focus{border-color:rgba(255,255,255,.4);outline:2px solid rgba(255,255,255,.3);outline-offset:1px}
+.yp-input::placeholder{color:var(--w3)}
+.yp-row{display:flex;gap:10px}
+.yp-btn{
+  flex:1;padding:12px 16px;border-radius:10px;
+  border:1px solid rgba(255,255,255,.2);
+  background:rgba(255,255,255,.08);color:var(--w);
+  font-size:14px;font-weight:700;cursor:pointer;outline:none;
+  transition:background var(--dur);
+}
+.yp-btn:focus,.yp-btn:hover{background:rgba(255,255,255,.18);outline:2px solid rgba(255,255,255,.4);outline-offset:1px}
+.yp-btn-prim{background:var(--accent);border-color:var(--accent)}
+.yp-btn-prim:focus,.yp-btn-prim:hover{background:var(--accent2);border-color:var(--accent2)}
+
+/* ════════════════════════════════════════════════════════════
+   SETTINGS OVERLAY
+════════════════════════════════════════════════════════════ */
+#settingsOverlay{
+  position:absolute;inset:0;z-index:55;
+  background:rgba(0,0,0,.88);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  display:none;flex-direction:column;
+}
+#settingsOverlay.on{display:flex}
+.so-hdr{
+  display:flex;align-items:center;
+  padding:28px 48px 20px;
+  border-bottom:1px solid rgba(255,255,255,.1);
+  flex-shrink:0;
+}
+.so-title{font-size:24px;font-weight:800;color:var(--w);flex:1}
+.so-close{
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
+  color:var(--w2);font-size:15px;font-weight:700;cursor:pointer;outline:none;
+  padding:8px 20px;border-radius:8px;
+  transition:background var(--dur);
+}
+.so-close:focus,.so-close:hover{background:rgba(255,255,255,.2);outline:2px solid rgba(255,255,255,.5);outline-offset:2px;color:var(--w)}
+.so-body{
+  display:flex;flex:1;overflow:hidden;
+}
+.so-side{
+  width:260px;flex-shrink:0;border-right:1px solid rgba(255,255,255,.1);
+  padding:16px 0;overflow-y:auto;scrollbar-width:none;
+}
+.so-side::-webkit-scrollbar{display:none}
+.so-main{flex:1;overflow-y:auto;padding:24px 48px;scrollbar-width:none}
+.so-main::-webkit-scrollbar{display:none}
+.so-nav{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 24px;cursor:pointer;outline:none;
+  font-size:15px;font-weight:600;color:var(--w3);
+  border-left:3px solid transparent;
+  transition:background var(--dur),color var(--dur);
+}
+.so-nav.on,.so-nav:focus,.so-nav:hover{
+  background:rgba(255,255,255,.07);color:var(--w);
+  border-left-color:var(--accent);
+}
+.so-nav:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:-2px}
+.so-nav svg{width:18px;height:18px;fill:currentColor;flex-shrink:0}
+.so-sect-label{font-size:11px;font-weight:700;color:var(--w3);letter-spacing:1px;text-transform:uppercase;padding:8px 24px 4px;margin-top:8px}
+
+/* Setting rows */
+.srow{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 0;border-bottom:1px solid rgba(255,255,255,.08);
+  cursor:pointer;outline:none;border-radius:6px;
+  padding-left:8px;padding-right:8px;
+}
+.srow:last-child{border-bottom:none}
+.srow:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:2px;background:rgba(255,255,255,.04)}
+.srow-l{flex:1;margin-right:20px}
+.srow-title{font-size:17px;font-weight:600;color:var(--w)}
+.srow-desc{font-size:12px;color:var(--w3);margin-top:3px;line-height:1.4}
+/* Toggle */
+.tog{position:relative;width:54px;height:28px;flex-shrink:0}
+.tog input{opacity:0;width:0;height:0;position:absolute}
+.tog-t{
+  position:absolute;inset:0;cursor:pointer;
+  background:rgba(255,255,255,.18);border-radius:14px;
+  transition:background 180ms;
+}
+.tog-t::before{
+  content:'';position:absolute;
+  width:20px;height:20px;top:4px;left:4px;
+  background:#fff;border-radius:50%;
+  box-shadow:0 1px 4px rgba(0,0,0,.4);
+  transition:transform 180ms var(--ease);will-change:transform;
+}
+.tog input:checked+.tog-t{background:var(--accent)}
+.tog input:checked+.tog-t::before{transform:translateX(26px)}
+.oui-sel{
+  width:100%;padding:11px 14px;margin-top:8px;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);
+  border-radius:8px;color:var(--w);font-size:15px;outline:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 14px center;
+}
+.oui-sel:focus{border-color:rgba(255,255,255,.4);outline:2px solid rgba(255,255,255,.4);outline-offset:2px}
+.so-btn{
+  display:flex;align-items:center;gap:10px;
+  width:100%;padding:14px 18px;border:1px solid rgba(255,255,255,.15);
+  background:rgba(255,255,255,.07);color:var(--w);
+  font-size:15px;font-weight:700;cursor:pointer;outline:none;
+  border-radius:10px;margin-top:8px;
+  transition:background var(--dur);
+}
+.so-btn:focus,.so-btn:hover{background:rgba(255,255,255,.14);outline:2px solid rgba(255,255,255,.4);outline-offset:2px}
+.so-btn-danger{border-color:rgba(229,9,20,.3);color:#ff7070}
+
+/* Sources list */
+.src-card{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08);
+  cursor:pointer;outline:none;
+}
+.src-card:focus{outline:2px solid rgba(255,255,255,.4);outline-offset:2px;background:rgba(255,255,255,.03)}
+.src-dot{width:8px;height:8px;border-radius:50%;background:var(--green);flex-shrink:0}
+.src-info{flex:1;min-width:0}
+.src-nm{font-size:15px;font-weight:700}
+.src-url{font-size:11px;color:var(--w3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-del{background:none;border:none;color:var(--w3);cursor:pointer;font-size:18px;padding:4px 8px;outline:none}
+.src-del:focus{color:#ff7070;outline:2px solid rgba(255,255,255,.4)}
+
+/* ════════════════════════════════════════════════════════════
+   DIALER MODAL
+════════════════════════════════════════════════════════════ */
+#mDial{
+  position:absolute;inset:0;z-index:65;
+  background:rgba(0,0,0,.85);backdrop-filter:blur(14px);
+  display:none;align-items:center;justify-content:center;
+}
+#mDial.on{display:flex}
+.dial-box{
+  background:rgba(14,14,24,.99);
+  border:1px solid rgba(255,255,255,.18);
+  padding:36px;width:320px;border-radius:20px;
+  animation:ypIn 150ms var(--spring);
+}
+.dial-screen{
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;padding:20px;text-align:center;margin-bottom:18px;
+}
+.dial-num{font-size:46px;font-weight:800;color:var(--w);letter-spacing:8px;min-height:58px;font-variant-numeric:tabular-nums}
+.dial-hint{font-size:11px;color:var(--w3);margin-top:4px}
+.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.dk{
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+  color:var(--w);padding:18px;border-radius:12px;
+  font-size:28px;font-weight:700;cursor:pointer;outline:none;
+  transition:background var(--dur);
+}
+.dk:focus,.dk:hover{background:var(--accent);color:#fff;border-color:var(--accent);outline:none}
+.dk.go{grid-column:span 2;background:rgba(229,9,20,.2);border-color:rgba(229,9,20,.4);color:#ff6b6b;font-size:16px}
+.dk.clr{color:#ff7070;font-size:20px}
+
+/* ════════════════════════════════════════════════════════════
+   VOLUME HUD
+════════════════════════════════════════════════════════════ */
+#volHud{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  z-index:70;
+  background:rgba(0,0,0,.92);
+  backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.2);
+  padding:20px 40px;border-radius:16px;
+  display:flex;align-items:center;gap:20px;
+  min-width:360px;
+  opacity:0;will-change:opacity;transition:opacity 180ms;
+  pointer-events:none;
+}
+#volHud.on{opacity:1}
+#volIco{font-size:28px;flex-shrink:0}
+.vol-track{flex:1;height:5px;background:rgba(255,255,255,.2);border-radius:3px;overflow:hidden}
+.vol-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width 80ms linear}
+#volPct{font-size:22px;font-weight:700;min-width:44px;text-align:right}
+
+/* ════════════════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════════════════ */
+#toasts{
+  position:absolute;top:90px;right:24px;z-index:9999;
+  display:flex;flex-direction:column;gap:8px;pointer-events:none;
+}
+.toast{
+  background:rgba(8,8,20,.96);
+  border:1px solid rgba(255,255,255,.15);
+  border-left:3px solid var(--accent);
+  padding:12px 20px;font-size:15px;color:var(--w);
+  max-width:340px;border-radius:10px;
+  animation:tIn 160ms ease forwards;
+  box-shadow:0 8px 32px rgba(0,0,0,.7);
+}
+.toast.ok{border-left-color:var(--green)}
+.toast.err{border-left-color:#cc3344}
+.toast.out{animation:tOut 140ms ease forwards}
+@keyframes tIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
+@keyframes tOut{from{opacity:1}to{transform:translateX(110%);opacity:0}}
+
+/* ── SPLASH ── */
+#splash{
+  position:absolute;inset:0;z-index:9500;
+  background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity 600ms ease;
+}
+#splash.off{opacity:0;pointer-events:none}
+.spl-logo{
+  font-size:20vw;font-weight:900;letter-spacing:-.03em;
+  color:var(--w);line-height:.9;
+}
+.spl-accent{color:var(--accent)}
+.spl-bar{width:20vw;height:2px;background:rgba(255,255,255,.1);margin-top:5vw;overflow:hidden;border-radius:1px}
+.spl-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--yellow));animation:sf 1s ease-in-out infinite}
+@keyframes sf{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+.spl-msg{font-size:1vw;color:var(--w3);margin-top:2vw;letter-spacing:.2em;text-transform:uppercase}
+
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
 </style>
 </head>
 <body>
 
 <div id="splash">
-  <div class="logo-icon" style="width:80px;height:80px;font-size:44px;margin-bottom:20px;">J</div>
-  <div style="font-size:32px;font-weight:800;">JioTV+ IPTV</div>
-  <div style="margin-top:20px;">Loading experience...</div>
+  <div class="spl-logo">S<span class="spl-accent">+</span></div>
+  <div class="spl-bar"><div class="spl-fill"></div></div>
+  <div class="spl-msg" id="splMsg">Initialising…</div>
 </div>
 
-<div id="app">
-  <!-- Top Bar -->
-  <div class="top-bar">
-    <div class="logo-area">
-      <div class="logo-icon">J+</div>
-      <div class="logo-text">JioTV+</div>
-    </div>
-    <div class="status-area">
-      <div class="network-badge">
-        <div class="network-dot" id="netDot"></div>
-        <span id="netStatus">Ready</span>
-      </div>
-      <div id="clock">--:--</div>
-    </div>
-  </div>
+<div id="root">
+  <!-- Full-screen video hero -->
+  <video id="video" playsinline autoplay></video>
 
-  <div class="main-content">
-    <!-- Sidebar categories -->
-    <div class="sidebar" id="sidebar">
-      <div class="sidebar-category active" data-cat="all">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg> All Channels
-      </div>
-      <div class="sidebar-category" data-cat="favs">
-        <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg> Favourites
-      </div>
-      <!-- dynamic categories will be injected -->
-      <div id="dynamicCats"></div>
-      <div style="margin-top: auto; padding-top: 24px;">
-        <div class="sidebar-category" data-cat="sources">
-          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg> Sources
-        </div>
-        <div class="sidebar-category" data-cat="settings">
-          <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg> Settings
-        </div>
-      </div>
+  <!-- Vignette -->
+  <div id="vignette"></div>
+
+  <!-- ══ TOP BAR ══════════════════════════════════════════ -->
+  <div id="topBar">
+    <!-- Brand -->
+    <div class="brand">
+      <span class="brand-jio">SAGA</span>
+      <span class="brand-tv">TV</span>
+      <span class="brand-plus">+</span>
     </div>
 
-    <!-- Right content -->
-    <div class="content-area">
-      <div class="video-hero">
-        <video id="videoPlayer" playsinline></video>
-        <div class="video-overlay">
-          <div class="live-badge">LIVE</div>
-          <span id="nowPlayingTitle">Select a channel</span>
-          <span id="nowPlayingGroup"></span>
-        </div>
-      </div>
+    <!-- Nav tabs (injected by JS from categories) -->
+    <div id="navTabs"></div>
 
-      <div class="channel-strip">
-        <div class="strip-header">
-          <h3>📺 Recommended for You</h3>
-          <span id="channelCount"></span>
-        </div>
-        <div class="strip-scroll" id="stripScroll">
-          <div class="strip-inner" id="stripInner"></div>
-        </div>
-      </div>
+    <!-- Right icons -->
+    <div class="top-icons">
+      <!-- Settings icon -->
+      <button class="top-icon" id="settingsBtn" tabindex="-1" title="Settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      </button>
     </div>
   </div>
 
-  <!-- Floating Search -->
-  <div class="search-container" id="searchContainer">
-    <span>🔍</span>
-    <input type="text" id="searchInput" placeholder="Search channels...">
-  </div>
-
-  <!-- Overlays -->
-  <div class="overlay" id="overlay">
-    <div class="overlay-header"><h2>Settings & Sources</h2><button id="closeOverlayBtn" style="background:none;border:none;color:white;font-size:24px;">✕</button></div>
-    <div class="overlay-body">
-      <div class="overlay-side" id="ovSide"></div>
-      <div class="overlay-main" id="ovMain"></div>
+  <!-- ══ NOW PLAYING INFO ═══════════════════════════════════ -->
+  <div id="nowInfo">
+    <div id="nowTag"><span class="now-dot"></span>NOW PLAYING</div>
+    <div id="nowTitle">Select a channel</div>
+    <div id="nowMeta">
+      <span class="now-pill live">● LIVE</span>
+      <span class="now-pill" id="nowGroup" style="display:none"></span>
+      <span class="now-pill" id="nowQ"     style="display:none"></span>
     </div>
   </div>
 
-  <div id="volumeHUD"><span>🔊</span><div class="volume-bar"><div class="volume-fill" id="volFill"></div></div><span id="volPercent">50</span></div>
-  <div class="dialer-modal" id="dialerModal">
-    <div class="dialer-card">
-      <div class="dialer-number" id="dialNumber">—</div>
-      <div class="dialer-grid" id="dialGrid"></div>
+  <!-- ══ BOTTOM PANEL (two rows) ═══════════════════════════ -->
+  <div id="bottomPanel">
+    <!-- Row 1: Live Channels -->
+    <div class="ch-row" id="row1Wrap">
+      <div class="ch-row-label">
+        Live Channels
+        <span class="ch-row-label-count" id="row1Count">0</span>
+      </div>
+      <div class="tile-strip" id="row1Strip"></div>
+    </div>
+
+    <!-- Row 2: Category / Shows -->
+    <div class="ch-row" id="row2Wrap" style="margin-top:8px">
+      <div class="ch-row-label">
+        <span id="row2Label">Live Shows to Watch</span>
+        <span class="ch-row-label-count" id="row2Count">0</span>
+      </div>
+      <div class="tile-strip" id="row2Strip"></div>
     </div>
   </div>
-  <div id="toastContainer"></div>
+
+  <!-- ══ YELLOW POPUP ══════════════════════════════════════ -->
+  <div id="yellowPopup">
+    <div class="yp-card" id="ypCard">
+      <div class="yp-header">
+        <div class="yp-dot"></div>
+        <div class="yp-title">Quick Actions</div>
+        <button class="yp-close" id="ypClose">✕</button>
+      </div>
+      <div class="yp-actions" id="ypActions">
+        <button class="yp-action" id="ypa-add" tabindex="0">
+          <div class="yp-action-icon" style="background:rgba(59,130,246,.2)">➕</div>
+          <div class="yp-action-text">
+            <div class="yp-action-title">Add M3U Source</div>
+            <div class="yp-action-desc">Add a new playlist URL</div>
+          </div>
+          <span class="yp-action-arrow">›</span>
+        </button>
+        <button class="yp-action" id="ypa-refresh" tabindex="0">
+          <div class="yp-action-icon" style="background:rgba(34,200,83,.2)">↺</div>
+          <div class="yp-action-text">
+            <div class="yp-action-title">Refresh All</div>
+            <div class="yp-action-desc">Re-fetch all playlists</div>
+          </div>
+          <span class="yp-action-arrow">›</span>
+        </button>
+        <button class="yp-action" id="ypa-dialer" tabindex="0">
+          <div class="yp-action-icon" style="background:rgba(245,197,24,.2)">📱</div>
+          <div class="yp-action-text">
+            <div class="yp-action-title">Channel Dialer</div>
+            <div class="yp-action-desc">Jump to channel by number</div>
+          </div>
+          <span class="yp-action-arrow">›</span>
+        </button>
+        <button class="yp-action" id="ypa-settings" tabindex="0">
+          <div class="yp-action-icon" style="background:rgba(229,9,20,.2)">⚙️</div>
+          <div class="yp-action-text">
+            <div class="yp-action-title">Settings</div>
+            <div class="yp-action-desc">Playback, quality, cache</div>
+          </div>
+          <span class="yp-action-arrow">›</span>
+        </button>
+        <button class="yp-action" id="ypa-favs" tabindex="0">
+          <div class="yp-action-icon" style="background:rgba(245,197,24,.18)">★</div>
+          <div class="yp-action-text">
+            <div class="yp-action-title">Favourites</div>
+            <div class="yp-action-desc">Show favourite channels</div>
+          </div>
+          <span class="yp-action-arrow">›</span>
+        </button>
+      </div>
+      <!-- Add source form (hidden by default) -->
+      <div id="ypAddForm">
+        <input class="yp-input" id="ypPlName" type="text"  placeholder="Playlist name" autocomplete="off">
+        <input class="yp-input" id="ypPlUrl"  type="url"   placeholder="https://…/playlist.m3u" autocomplete="off">
+        <div class="yp-row">
+          <button class="yp-btn yp-btn-prim" id="ypSave">Add &amp; Load</button>
+          <button class="yp-btn"             id="ypCancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ SETTINGS OVERLAY ══════════════════════════════════ -->
+  <div id="settingsOverlay">
+    <div class="so-hdr">
+      <span class="so-title">Settings</span>
+      <button class="so-close" id="soClose">✕ Close</button>
+    </div>
+    <div class="so-body">
+      <div class="so-side" id="soSide">
+        <div class="so-sect-label">Playback</div>
+        <div class="so-nav on" tabindex="0" data-s="playback">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Playback
+        </div>
+        <div class="so-sect-label">Display</div>
+        <div class="so-nav" tabindex="0" data-s="display">
+          <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2H6v2h12v-2h-2v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>Display
+        </div>
+        <div class="so-sect-label">Manage</div>
+        <div class="so-nav" tabindex="0" data-s="sources">
+          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>Sources
+        </div>
+      </div>
+      <div class="so-main" id="soMain"></div>
+    </div>
+  </div>
+
+  <!-- ══ DIALER ════════════════════════════════════════════ -->
+  <div id="mDial">
+    <div class="dial-box">
+      <div class="dial-screen">
+        <div class="dial-num" id="dnum">—</div>
+        <div class="dial-hint">Enter channel number · OK to jump</div>
+      </div>
+      <div class="dgrid">
+        <button class="dk" data-d="1">1</button><button class="dk" data-d="2">2</button><button class="dk" data-d="3">3</button>
+        <button class="dk" data-d="4">4</button><button class="dk" data-d="5">5</button><button class="dk" data-d="6">6</button>
+        <button class="dk" data-d="7">7</button><button class="dk" data-d="8">8</button><button class="dk" data-d="9">9</button>
+        <button class="dk clr" data-d="clr">⌫</button>
+        <button class="dk" data-d="0">0</button>
+        <button class="dk go" data-d="go">▶ Go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Volume HUD -->
+  <div id="volHud">
+    <span id="volIco">🔊</span>
+    <div class="vol-track"><div class="vol-fill" id="volFill" style="width:50%"></div></div>
+    <span id="volPct">50</span>
+  </div>
+
+  <div id="toasts"></div>
 </div>
+
+<canvas id="cc" width="8" height="8" style="display:none"></canvas>
 
 <script>
-// ==================== JioTV+ IPTV APP ====================
-// Default playlists
-const DEFAULT_PL = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
-const TELUGU_PL = { name: 'Telugu', url: 'https://iptv-org.github.io/iptv/languages/tel.m3u', builtIn: true };
-const JIO_PL = { name: 'Jio', url: DEFAULT_PL, builtIn: true };
+/*══════════════════════════════════════════════════════════════════
+  SAGA IPTV v35 — JioTV+ Style
+  ──────────────────────────────────────────────────────────────
+  Key behaviours:
+  · Full-screen video at all times
+  · Top nav tabs + bottom rows AUTO-HIDE after 3 seconds idle
+  · Any key/remote press shows UI again and resets timer
+  · YELLOW key → quick-action popup (no search, per requirement)
+  · RED key → cycle category tabs
+  · OK → play channel + fullscreen
+  · All v32 playback engine preserved (Shaka, stallSkip, HQ lock)
+  · Tizen tvaudiocontrol for volume
+══════════════════════════════════════════════════════════════════*/
+(function(){
+'use strict';
 
-// App state
-let allChannels = [];          // raw channels
-let filteredChannels = [];     // current filtered list
-let currentIndex = 0;
-let currentPlayingUrl = '';
-let isPlaying = false;
-let favs = new Set();
-let customPlaylists = [];
-let activeCategory = 'all';
-let searchQuery = '';
-let player = null;
-let aspectMode = 0;
-let currentVolume = 50;
-let zone = 'strip'; // strip, sidebar, search, overlay
-let dialString = '';
-
-// DOM elements
-const video = document.getElementById('videoPlayer');
-const stripInner = document.getElementById('stripInner');
-const nowPlayingTitle = document.getElementById('nowPlayingTitle');
-const nowPlayingGroup = document.getElementById('nowPlayingGroup');
-const netStatus = document.getElementById('netStatus');
-const netDot = document.getElementById('netDot');
-const clockDiv = document.getElementById('clock');
-const searchContainer = document.getElementById('searchContainer');
-const searchInput = document.getElementById('searchInput');
-const overlayDiv = document.getElementById('overlay');
-const volumeHUD = document.getElementById('volumeHUD');
-const volFill = document.getElementById('volFill');
-const volPercent = document.getElementById('volPercent');
-const dialerModal = document.getElementById('dialerModal');
-const dialNumber = document.getElementById('dialNumber');
-const toastContainer = document.getElementById('toastContainer');
-
-// helpers
-function toast(msg, type='') {
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.innerText = msg;
-  toastContainer.appendChild(t);
-  setTimeout(()=>t.remove(), 2500);
+/* ── Polyfill ── */
+if(typeof requestIdleCallback==='undefined'){
+  window.requestIdleCallback=cb=>setTimeout(()=>cb({timeRemaining:()=>50}),16);
+  window.cancelIdleCallback=clearTimeout;
 }
-function setStatus(txt, ok=true) {
-  netStatus.innerText = txt;
-  netDot.style.background = ok ? '#22c55e' : '#ef4444';
-}
-function saveFavs() { localStorage.setItem('jioplayer_favs', JSON.stringify([...favs])); }
-function loadFavs() { try{ const f = localStorage.getItem('jioplayer_favs'); if(f) favs = new Set(JSON.parse(f)); }catch(e){} }
 
-// Volume
-function setVolume(v) {
-  v = Math.min(100, Math.max(0, v));
-  currentVolume = v;
-  if(window.tizen?.tvaudiocontrol) tizen.tvaudiocontrol.setVolume(v);
-  else video.volume = v/100;
-  volFill.style.width = v+'%';
-  volPercent.innerText = v;
-  volumeHUD.classList.add('visible');
-  clearTimeout(window.volTimeout);
-  window.volTimeout = setTimeout(()=>volumeHUD.classList.remove('visible'), 1500);
-}
-function volUp() { setVolume(currentVolume + 5); }
-function volDown() { setVolume(currentVolume - 5); }
+/* ── Tizen key registration ── */
+(function(){
+  try{
+    if(!window.tizen||!tizen.tvinputdevice)return;
+    ['ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
+     'MediaPlay','MediaPause','MediaPlayPause','MediaStop',
+     'MediaFastForward','MediaRewind',
+     'ChannelUp','ChannelDown',
+     'VolumeUp','VolumeDown','VolumeMute',
+     '0','1','2','3','4','5','6','7','8','9',
+     'Exit','Return'
+    ].forEach(k=>{try{tizen.tvinputdevice.registerKey(k)}catch(e){}});
+  }catch(e){}
+})();
 
-// M3U parser
-function parseM3U(text) {
-  const lines = text.split(/\r?\n/);
-  const channels = [];
-  let cur = null;
-  for(let l of lines) {
-    l = l.trim();
-    if(l.startsWith('#EXTINF')) {
-      const nameMatch = l.match(/,([^,]+)$/);
-      let name = nameMatch ? nameMatch[1] : 'Channel';
-      name = name.replace(/\s*\([^)]*\)|\s*\[[^\]]*\]/g,'').trim() || 'Channel';
-      const logo = (l.match(/tvg-logo="([^"]*)"/i)||[])[1] || '';
-      const group = (l.match(/group-title="([^"]*)"/i)||[])[1] || 'General';
-      cur = { name, logo, group, url: '' };
-    } else if(l && !l.startsWith('#') && cur && l.startsWith('http')) {
-      cur.url = l;
-      channels.push(cur);
-      cur = null;
-    }
+/* ════════════════════════════════════════════════════════════
+   CONSTANTS
+════════════════════════════════════════════════════════════ */
+const CW=190, CH=110, CGAP=14;     /* card width/height/gap */
+const SW=190, SH=108;              /* show card size */
+const AUTO_HIDE_MS = 3000;         /* hide UI after 3s idle */
+const PLAY_DEB     = 80;
+const DEFAULT_PL   = 'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u';
+const TELUGU_PL    = {name:'Telugu', url:'https://iptv-org.github.io/iptv/languages/tel.m3u', builtIn:true};
+const JIO_PL       = {name:'Jio',    url:DEFAULT_PL, builtIn:true};
+const ASPECTS      = ['Contain','Fill','Stretch'];
+const LS           = {FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
+
+/* ── DOM ── */
+const $  = id => document.getElementById(id);
+const QA = (s,r) => [...(r||document).querySelectorAll(s)];
+
+const video      = $('video');
+const vignette   = $('vignette');
+const topBar     = $('topBar');
+const navTabs    = $('navTabs');
+const bottomPanel= $('bottomPanel');
+const nowInfo    = $('nowInfo');
+const nowTitle   = $('nowTitle');
+const nowGroup   = $('nowGroup');
+const nowQ       = $('nowQ');
+const row1Strip  = $('row1Strip');
+const row2Strip  = $('row2Strip');
+const row2Label  = $('row2Label');
+const row1Count  = $('row1Count');
+const row2Count  = $('row2Count');
+const yellowPopup= $('yellowPopup');
+const ypAddForm  = $('ypAddForm');
+const settingsOv = $('settingsOverlay');
+const soSide     = $('soSide');
+const soMain     = $('soMain');
+const mDial      = $('mDial');
+const dnum       = $('dnum');
+const volHudEl   = $('volHud');
+const volFill    = $('volFill');
+const volPct     = $('volPct');
+const volIco     = $('volIco');
+const cc         = $('cc');
+const ccx        = cc.getContext('2d',{willReadFrequently:true});
+const toasts     = $('toasts');
+
+/* ── State ── */
+let player=null, allChs=[], allGroups=[];
+let favOnly=false;
+let curUrl='', isPlaying=false, isMuted=false, aspectMode=0;
+let favs=new Set(), pls=[], searchQ='';
+let activeTab='all';    /* 'all' | group name */
+
+/* Row navigation */
+let focusRow=1;           /* 1=row1 (channels), 2=row2 (shows), 0=navtabs */
+let col1=0, col2=0;       /* current column in each row */
+let scroll1=0, scroll2=0; /* px offset of each strip */
+let row1Chs=[], row2Chs=[]; /* channels in each row */
+
+/* Auto-hide */
+let hideTimer=null;
+let uiVisible=true;
+
+/* Zone */
+let zone='rows';   /* 'rows'|'tabs'|'yp'|'settings'|'dialer' */
+let tabIdx=0;
+let ypIdx=0;       /* focused action in yellow popup */
+let soSideIdx=0, soMainIdx=0, soSideZone=true;
+let dialStr='', dialTimer=null;
+let rDialStr='', rDialTimer=null;
+let playTimer=null, volTimer=null;
+let currentVol=50;
+let cfg={hq:true,muteSwitch:false,buf:12,osd:true};
+
+/* ── Utils ── */
+const esc=s=>!s?'':String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const lsGet=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+function toast(msg,type='',ms=2600){
+  const el=document.createElement('div');
+  el.className='toast'+(type?' '+type:'');el.textContent=msg;
+  toasts.appendChild(el);
+  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),160)},ms);
+}
+
+/* ════════════════════════════════════════════════════════════
+   AUTO-HIDE SYSTEM
+   Every user interaction calls wakeUI().
+   After AUTO_HIDE_MS of silence, hideUI() fires.
+════════════════════════════════════════════════════════════ */
+function wakeUI(){
+  if(!uiVisible){
+    uiVisible=true;
+    topBar.classList.remove('hidden');
+    bottomPanel.classList.remove('hidden');
+    vignette.classList.remove('dim');
   }
-  return channels;
+  resetHideTimer();
+}
+function hideUI(){
+  /* Don't hide if any overlay is open */
+  if(zone==='yp'||zone==='settings'||zone==='dialer')return;
+  uiVisible=false;
+  topBar.classList.add('hidden');
+  bottomPanel.classList.add('hidden');
+  vignette.classList.add('dim');
+}
+function resetHideTimer(){
+  clearTimeout(hideTimer);
+  hideTimer=setTimeout(hideUI, AUTO_HIDE_MS);
+}
+/* Start the timer on boot */
+function startHideTimer(){
+  resetHideTimer();
 }
 
-// Cache (simple localStorage)
-const CACHE_KEY = 'jioplayer_m3u_';
-async function getCachedM3U(url) {
-  const cached = localStorage.getItem(CACHE_KEY+url);
-  if(cached && (Date.now() - JSON.parse(cached).ts < 3600000)) return JSON.parse(cached).data;
+/* ── Volume ── */
+function getSysVol(){
+  try{if(window.tizen&&tizen.tvaudiocontrol)return tizen.tvaudiocontrol.getVolume()}catch(e){}
+  return Math.round(video.volume*100);
+}
+function setSysVol(v){
+  v=Math.max(0,Math.min(100,v));
+  try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setVolume(v);return}}catch(e){}
+  video.volume=v/100;
+}
+function volUp(){currentVol=Math.min(100,getSysVol()+5);setSysVol(currentVol);showVol()}
+function volDown(){currentVol=Math.max(0,getSysVol()-5);setSysVol(currentVol);showVol()}
+function showVol(){
+  currentVol=getSysVol();
+  volFill.style.width=currentVol+'%';volPct.textContent=currentVol;
+  volIco.textContent=currentVol===0?'🔇':currentVol<40?'🔉':'🔊';
+  volHudEl.classList.add('on');clearTimeout(volTimer);
+  volTimer=setTimeout(()=>volHudEl.classList.remove('on'),1800);
+}
+
+/* ── Storage ── */
+function loadStore(){
+  try{const r=lsGet(LS.FAVS);if(r)favs=new Set(JSON.parse(r))}catch(e){}
+  try{const r=lsGet(LS.PL);  if(r)pls=JSON.parse(r)}catch(e){}
+  try{const r=lsGet(LS.CFG); if(r)Object.assign(cfg,JSON.parse(r))}catch(e){}
+}
+function saveFavs(){lsSet(LS.FAVS,JSON.stringify([...favs]))}
+function savePls() {lsSet(LS.PL,  JSON.stringify(pls.filter(p=>!p.builtIn)))}
+function saveCfg() {lsSet(LS.CFG, JSON.stringify(cfg))}
+
+/* ════════════════════════════════════════════════════════════
+   DOMINANT COLOUR
+════════════════════════════════════════════════════════════ */
+function extractColour(img,cb){
+  try{
+    ccx.clearRect(0,0,8,8);ccx.drawImage(img,0,0,8,8);
+    const d=ccx.getImageData(0,0,8,8).data;
+    let r=0,g=0,b=0,n=0;
+    for(let i=0;i<d.length;i+=4){
+      if(d[i+3]<40)continue;
+      const mx=Math.max(d[i],d[i+1],d[i+2]),mn=Math.min(d[i],d[i+1],d[i+2]);
+      const w=0.2+(mx?(mx-mn)/mx*.8:0);
+      r+=d[i]*w;g+=d[i+1]*w;b+=d[i+2]*w;n+=w;
+    }
+    if(n<1){cb(null);return}
+    cb(`rgba(${Math.round(r/n*.38)},${Math.round(g/n*.38)},${Math.round(b/n*.38)},.92)`);
+  }catch(e){cb(null)}
+}
+
+/* ════════════════════════════════════════════════════════════
+   M3U PARSER — chunked
+════════════════════════════════════════════════════════════ */
+function parseM3UChunked(txt,onDone){
+  const lines=txt.split(/\r?\n/);
+  const out=[];let cur=null,i=0;
+  function chunk(){
+    const end=Math.min(i+800,lines.length);
+    for(;i<end;i++){
+      const l=lines[i].trim();
+      if(l.startsWith('#EXTINF')){
+        const ci=l.lastIndexOf(',');
+        let name=ci>=0?l.slice(ci+1).trim():'Channel';
+        name=name.replace(/\s*\([^)]*\)|\s*\[[^\]]*\]/g,'').trim()||'Channel';
+        cur={name,_col:null,
+          logo:(l.match(/tvg-logo="([^"]*)"/i)||[])[1]||'',
+          group:(l.match(/group-title="([^"]*)"/i)||[])[1]||'General',
+          url:''};
+      }else if(l&&!l.startsWith('#')&&cur){
+        if(l.startsWith('http')){cur.url=l;out.push(cur);cur=null}
+      }
+    }
+    if(i<lines.length)requestIdleCallback(chunk,{timeout:50});
+    else onDone(out);
+  }
+  chunk();
+}
+
+/* ════════════════════════════════════════════════════════════
+   PLAYLIST LOAD
+════════════════════════════════════════════════════════════ */
+function loadPl(url,name,force=false){
+  return new Promise(resolve=>{
+    (async()=>{
+      try{
+        let txt=force?null:await AppCache.getM3U(url);
+        if(!txt){
+          const ctrl=new AbortController();
+          const tid=setTimeout(()=>ctrl.abort(),25000);
+          const resp=await fetch(url,{signal:ctrl.signal});
+          clearTimeout(tid);
+          if(!resp.ok)throw new Error('HTTP '+resp.status);
+          txt=await resp.text();
+          AppCache.setM3U(url,txt);
+        }
+        parseM3UChunked(txt,parsed=>{
+          if(!parsed.length){toast('No channels — '+name,'err');resolve([]);return}
+          const seen=new Set(allChs.map(c=>c.url));
+          const fresh=parsed.filter(c=>!seen.has(c.url));
+          if(name==='Jio')fresh.forEach(ch=>{ch._src='jio'});
+          allChs=allChs.concat(fresh);
+          lsSet('saga:last',url);
+          rebuildGroups();rebuildNavTabs();updateRows();
+          toast(parsed.length+' channels — '+name,'ok');
+          AppCache.preloadImages(parsed.slice(0,60).map(c=>c.logo).filter(Boolean),[]);
+          resolve(parsed);
+        });
+      }catch(e){
+        toast(e.message.slice(0,50),'err');resolve([]);
+      }
+    })();
+  });
+}
+
+async function loadAll(force=false){
+  allChs=[];
+  const snap=allChs.length;
+  await loadPl(TELUGU_PL.url,TELUGU_PL.name,force);
+  allChs.slice(snap).forEach(ch=>{ch._src='telugu'});
+  const ups=pls.filter(p=>!p.builtIn);
+  const srcs=ups.length?ups:[JIO_PL];
+  for(const p of srcs){
+    const before=allChs.length;
+    await loadPl(p.url,p.name,force);
+    if(p.name==='Jio')allChs.slice(before).forEach(ch=>{ch._src='jio'});
+  }
+  // Restore last channel highlight
+  const lastUrl=lsGet(LS.LCHU);
+  if(lastUrl){
+    const idx=getFilteredChs().findIndex(c=>c.url===lastUrl);
+    if(idx>=0){col1=idx;syncRow1Scroll()}
+  }
+  hideSplash();
+  startHideTimer();
+}
+
+/* ════════════════════════════════════════════════════════════
+   GROUPS + NAV TABS
+════════════════════════════════════════════════════════════ */
+function rebuildGroups(){
+  const raw=new Set(allChs.map(c=>c.group));
+  const hasTel=allChs.some(c=>c._src==='telugu');
+  const hasJio=allChs.some(c=>c._src==='jio');
+  const rest=[...raw].filter(g=>g!=='Jio'&&g!=='Telugu').sort((a,b)=>a.localeCompare(b)).slice(0,12);
+  allGroups=['For You'];
+  if(hasTel)allGroups.push('Telugu');
+  if(hasJio) allGroups.push('Jio');
+  allGroups.push(...rest);
+  if(hasTel||hasJio) allGroups.push('Favourites');
+}
+
+function rebuildNavTabs(){
+  navTabs.innerHTML='';
+  allGroups.forEach((g,i)=>{
+    const btn=document.createElement('button');
+    btn.className='ntab'+(g===activeTab?' on':'');
+    btn.textContent=g;
+    btn.dataset.g=g;
+    btn.tabIndex=-1;
+    btn.addEventListener('click',()=>setTab(g));
+    navTabs.appendChild(btn);
+  });
+}
+
+function setTab(g){
+  activeTab=g;
+  favOnly=(g==='Favourites');
+  QA('.ntab',navTabs).forEach(b=>b.classList.toggle('on',b.dataset.g===g));
+  col1=0;col2=0;scroll1=0;scroll2=0;
+  updateRows();
+  // Scroll active tab into view
+  const active=navTabs.querySelector('.ntab.on');
+  if(active)active.scrollIntoView({inline:'nearest',behavior:'smooth'});
+}
+
+/* ════════════════════════════════════════════════════════════
+   ROW DATA
+   Row 1: filtered channel list (the "live channels" row)
+   Row 2: another group or "Live Shows" from a different cat
+════════════════════════════════════════════════════════════ */
+function getFilteredChs(){
+  let arr=allChs;
+  if(favOnly)arr=arr.filter(c=>favs.has(c.url));
+  if(activeTab==='Telugu')      arr=allChs.filter(c=>c._src==='telugu');
+  else if(activeTab==='Jio')    arr=allChs.filter(c=>c._src==='jio');
+  else if(activeTab!=='For You'&&activeTab!=='Favourites')arr=allChs.filter(c=>c.group===activeTab);
+  if(searchQ){const q=searchQ.toLowerCase();arr=arr.filter(c=>c.name.toLowerCase().includes(q))}
+  return arr;
+}
+
+function updateRows(){
+  const chs=getFilteredChs();
+  row1Chs=chs;
+
+  // Row 2: pick a contrasting group
+  let r2=[];
+  if(activeTab==='For You'){
+    // Mix: favourites first, then other channels
+    r2=allChs.filter(c=>c._src==='jio').slice(0,40);
+    row2Label.textContent='Jio Channels';
+  }else if(activeTab==='Jio'){
+    r2=allChs.filter(c=>c._src==='telugu').slice(0,40);
+    row2Label.textContent='Telugu Channels';
+  }else{
+    r2=allChs.filter(c=>c.group!==activeTab).slice(0,40);
+    row2Label.textContent='Live Shows to Watch';
+  }
+  row2Chs=r2;
+
+  if(col1>=row1Chs.length)col1=Math.max(0,row1Chs.length-1);
+  if(col2>=row2Chs.length)col2=Math.max(0,row2Chs.length-1);
+
+  renderRow1();renderRow2();
+  updateNowInfo();
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER ROW 1 — channel cards (+ TV Guide first card)
+════════════════════════════════════════════════════════════ */
+function renderRow1(){
+  row1Strip.innerHTML='';
+  row1Count.textContent=row1Chs.length;
+
+  // TV Guide card always first
+  const guideCard=document.createElement('div');
+  guideCard.className='card tvguide';
+  guideCard.tabIndex=-1;
+  guideCard.innerHTML=`<div class="card-inner"><div class="card-guide-content"><div class="guide-icon">≡</div><div class="guide-label">TV Guide</div></div></div>`;
+  guideCard.addEventListener('click',()=>{toast('TV Guide coming soon');wakeUI()});
+  row1Strip.appendChild(guideCard);
+
+  // Channel cards
+  row1Chs.forEach((ch,ci)=>{
+    row1Strip.appendChild(makeCard(ch,ci));
+  });
+
+  updateRow1Focus();
+  syncRow1Scroll();
+}
+
+function makeCard(ch,ci){
+  const card=document.createElement('div');
+  card.className='card'+(ch.url===curUrl&&isPlaying?' playing':'');
+  card.dataset.ci=ci;card.tabIndex=-1;
+
+  const inner=document.createElement('div');inner.className='card-inner';
+  if(ch._col)inner.style.background=ch._col;
+
+  const bg=document.createElement('div');bg.className='card-bg';
+
+  if(ch.logo){
+    const img=document.createElement('img');
+    img.className='card-img';img.loading='lazy';img.decoding='async';
+    img.src=esc(ch.logo);
+    img.onload=()=>{
+      extractColour(img,col=>{
+        if(col){ch._col=col;inner.style.background=col;bg.style.backgroundImage=`url('${esc(ch.logo)}')`;bg.classList.add('on')}
+      });
+    };
+    img.onerror=()=>{img.style.display='none';const fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';inner.appendChild(fb)};
+    inner.appendChild(bg);inner.appendChild(img);
+  }else{
+    const fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';inner.appendChild(fb);
+  }
+
+  // Badges
+  const badges=document.createElement('div');badges.className='card-badges';
+  const liveB=document.createElement('span');liveB.className='badge badge-live';liveB.textContent='LIVE';
+  badges.appendChild(liveB);
+  inner.appendChild(badges);
+
+  const num=document.createElement('div');num.className='card-num';num.textContent=ci+1;
+  card.appendChild(inner);card.appendChild(num);
+
+  card.addEventListener('click',()=>{
+    col1=ci;updateRow1Focus();syncRow1Scroll();
+    focusRow=1;immediatePlay();wakeUI();
+  });
+  return card;
+}
+
+function updateRow1Focus(){
+  // +1 because TV Guide is index 0
+  const cards=[...row1Strip.children];
+  cards.forEach((c,i)=>{
+    if(i===0){c.classList.toggle('sel',focusRow===1&&col1===-1);c.tabIndex=(focusRow===1&&col1===-1)?0:-1;return}
+    const ci=i-1;
+    const sel=focusRow===1&&ci===col1;
+    c.classList.toggle('sel',sel);
+    c.tabIndex=sel?0:-1;
+    const ch=row1Chs[ci];
+    if(ch)c.classList.toggle('playing',ch.url===curUrl&&isPlaying);
+  });
+}
+
+function syncRow1Scroll(){
+  const ci=col1+1; /* +1 for TV Guide */
+  const cw=CW+CGAP;
+  const visW=window.innerWidth-96;
+  if(ci*cw<scroll1+cw)          scroll1=Math.max(0,(ci-1)*cw);
+  else if(ci*cw+CW>scroll1+visW)scroll1=ci*cw-visW+CW+CGAP;
+  scroll1=Math.max(0,scroll1);
+  row1Strip.style.transform=`translateX(${-scroll1}px)`;
+}
+
+/* ════════════════════════════════════════════════════════════
+   RENDER ROW 2 — show/channel cards (smaller)
+════════════════════════════════════════════════════════════ */
+function renderRow2(){
+  row2Strip.innerHTML='';
+  row2Count.textContent=row2Chs.length;
+  row2Chs.forEach((ch,ci)=>{
+    row2Strip.appendChild(makeShowCard(ch,ci));
+  });
+  updateRow2Focus();
+  syncRow2Scroll();
+}
+
+function makeShowCard(ch,ci){
+  const card=document.createElement('div');
+  card.className='show-card'+(ch.url===curUrl&&isPlaying?' playing':'');
+  card.dataset.ci=ci;card.tabIndex=-1;
+
+  const inner=document.createElement('div');inner.className='show-card-inner';
+  if(ch._col)inner.style.background=ch._col;
+
+  if(ch.logo){
+    const img=document.createElement('img');
+    img.className='show-card-img';img.loading='lazy';img.decoding='async';
+    img.style.objectFit='contain';img.style.padding='8px';
+    img.src=esc(ch.logo);
+    img.onload=()=>{extractColour(img,col=>{if(col){ch._col=col;inner.style.background=col}})};
+    img.onerror=()=>{img.style.display='none';const fb=document.createElement('div');fb.className='show-card-fb';fb.textContent='📺';inner.appendChild(fb)};
+    inner.appendChild(img);
+  }else{
+    const fb=document.createElement('div');fb.className='show-card-fb';fb.textContent='📺';inner.appendChild(fb);
+  }
+
+  const grad=document.createElement('div');grad.className='show-card-grad';
+  const nm=document.createElement('div');nm.className='show-card-name';nm.textContent=ch.name;
+  grad.appendChild(nm);inner.appendChild(grad);
+
+  card.appendChild(inner);
+  card.addEventListener('click',()=>{
+    col2=ci;updateRow2Focus();syncRow2Scroll();
+    // Swap to this channel's group tab
+    row1Chs=[ch,...allChs.filter(c=>c.group===ch.group&&c.url!==ch.url)];
+    col1=0;renderRow1();focusRow=1;
+    updateNowInfo(ch);immediatePlay();wakeUI();
+  });
+  return card;
+}
+
+function updateRow2Focus(){
+  const cards=[...row2Strip.children];
+  cards.forEach((c,i)=>{
+    const sel=focusRow===2&&i===col2;
+    c.classList.toggle('sel',sel);c.tabIndex=sel?0:-1;
+    const ch=row2Chs[i];
+    if(ch)c.classList.toggle('playing',ch.url===curUrl&&isPlaying);
+  });
+}
+
+function syncRow2Scroll(){
+  const ci=col2,cw=SW+CGAP;
+  const visW=window.innerWidth-96;
+  if(ci*cw<scroll2+cw)          scroll2=Math.max(0,(ci-1)*cw);
+  else if(ci*cw+SW>scroll2+visW)scroll2=ci*cw-visW+SW+CGAP;
+  scroll2=Math.max(0,scroll2);
+  row2Strip.style.transform=`translateX(${-scroll2}px)`;
+}
+
+/* ── Now playing info ── */
+function updateNowInfo(overrideCh=null){
+  const ch=overrideCh||(focusRow===1?row1Chs[col1]:row2Chs[col2]);
+  if(!ch){nowInfo.classList.remove('visible');return}
+  nowTitle.textContent=ch.name;
+  nowGroup.textContent=ch.group||'';
+  nowGroup.style.display=ch.group?'':'none';
+  nowInfo.classList.add('visible');
+}
+
+/* ════════════════════════════════════════════════════════════
+   SHAKA PLAYER
+════════════════════════════════════════════════════════════ */
+async function initPlayer(){
+  await shaka.polyfill.installAll();
+  if(!shaka.Player.isBrowserSupported()){toast('Shaka not supported','err');return}
+  player=new shaka.Player(video);recfg();
+
+  player.addEventListener('adaptation',   updateQ);
+  player.addEventListener('variantchanged',updateQ);
+  player.addEventListener('buffering',e=>{if(e.buffering){}});
+  player.addEventListener('error',e=>{
+    const msg=(e.detail?.message)||'Stream error';
+    toast(msg.slice(0,50),'err');isPlaying=false;
+    const u2=curUrl;
+    setTimeout(()=>{if(!isPlaying&&curUrl===u2)immediatePlay()},3000);
+  });
+  video.addEventListener('playing',()=>{
+    updateRow1Focus();updateRow2Focus();
+  });
+  video.addEventListener('error',()=>{toast('Video error','err');isPlaying=false});
+}
+function recfg(){
+  if(!player)return;
+  player.configure({
+    abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10_000_000,switchInterval:8,bandwidthUpgradeTarget:.8,bandwidthDowngradeTarget:.9},
+    streaming:{bufferingGoal:cfg.buf,rebufferingGoal:2,stallEnabled:true,stallThreshold:1,stallSkip:.1,
+      retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:.3,timeout:25000},safeSeekOffset:2},
+  });
+}
+function updateQ(){
+  if(!player)return;
+  try{
+    const a=player.getVariantTracks().find(t=>t.active);
+    if(a){const q=(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1e6).toFixed(1)+'M';nowQ.textContent=q;nowQ.style.display=''}
+  }catch(e){}
+}
+function lockHQ(){
+  if(!player||!isPlaying)return;
+  try{const t=player.getVariantTracks();if(!t.length)return;
+    player.selectVariantTrack(t.reduce((m,x)=>x.bandwidth>m.bandwidth?x:m,t[0]),false)}catch(e){}
+}
+
+function getFocusedCh(){
+  if(focusRow===1)return row1Chs[col1]||null;
+  if(focusRow===2)return row2Chs[col2]||null;
   return null;
 }
-async function setCachedM3U(url, data) {
-  localStorage.setItem(CACHE_KEY+url, JSON.stringify({ts: Date.now(), data}));
-}
 
-async function loadPlaylist(playlist) {
-  setStatus('Loading '+playlist.name+'...');
-  try {
-    let txt = await getCachedM3U(playlist.url);
-    if(!txt) {
-      const resp = await fetch(playlist.url, { signal: AbortSignal.timeout(20000) });
-      if(!resp.ok) throw new Error('HTTP '+resp.status);
-      txt = await resp.text();
-      await setCachedM3U(playlist.url, txt);
-    }
-    const channels = parseM3U(txt);
-    const existing = new Set(allChannels.map(c=>c.url));
-    const fresh = channels.filter(c=>!existing.has(c.url));
-    allChannels.push(...fresh);
-    toast(`➕ ${fresh.length} channels from ${playlist.name}`);
-    applyFiltersAndRender();
-    setStatus(`Ready · ${allChannels.length} channels`);
-  } catch(e) { setStatus('Error loading', false); toast(e.message, 'err'); }
+function immediatePlay(){
+  clearTimeout(playTimer);
+  playTimer=setTimeout(_doPlay,PLAY_DEB);
 }
-
-async function loadAllSources() {
-  allChannels = [];
-  await loadPlaylist(TELUGU_PL);
-  const saved = JSON.parse(localStorage.getItem('jioplayer_pls') || '[]');
-  customPlaylists = saved.filter(p=>!p.builtIn);
-  const sources = customPlaylists.length ? customPlaylists : [JIO_PL];
-  for(let src of sources) await loadPlaylist(src);
-  applyFiltersAndRender();
-  document.getElementById('splash').classList.add('hide');
-}
-
-// Filter & Render
-function applyFiltersAndRender() {
-  let filtered = [...allChannels];
-  if(activeCategory === 'favs') filtered = filtered.filter(c=>favs.has(c.url));
-  else if(activeCategory !== 'all') filtered = filtered.filter(c=>c.group === activeCategory);
-  if(searchQuery.trim()) {
-    const q = searchQuery.toLowerCase();
-    filtered = filtered.filter(c=>c.name.toLowerCase().includes(q));
-  }
-  filteredChannels = filtered;
-  if(currentIndex >= filteredChannels.length) currentIndex = Math.max(0, filteredChannels.length-1);
-  renderStrip();
-  updateSidebarActive();
-  document.getElementById('channelCount').innerText = filteredChannels.length+' channels';
-  if(filteredChannels.length && !isPlaying) updateNowPlaying(filteredChannels[currentIndex]);
-}
-function renderStrip() {
-  stripInner.innerHTML = '';
-  filteredChannels.forEach((ch, idx) => {
-    const tile = document.createElement('div');
-    tile.className = 'channel-tile';
-    if(idx === currentIndex) tile.classList.add('active');
-    if(ch.url === currentPlayingUrl && isPlaying) tile.classList.add('playing');
-    const img = document.createElement('img');
-    img.src = ch.logo || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"%3E%3Cpath d="M4 6h16v12H4z"/%3E%3C/svg%3E';
-    img.onerror = () => { img.style.display='none'; tile.style.background='#222'; tile.innerHTML += '<div style="font-size:32px;line-height:110px;text-align:center;">📺</div>'; };
-    tile.appendChild(img);
-    const nameDiv = document.createElement('div');
-    nameDiv.className = 'tile-name';
-    nameDiv.innerText = ch.name;
-    tile.appendChild(nameDiv);
-    const favStar = document.createElement('div');
-    favStar.className = 'fav-star';
-    favStar.innerText = '★';
-    if(favs.has(ch.url)) favStar.style.display = 'block';
-    tile.appendChild(favStar);
-    tile.onclick = () => { currentIndex = idx; updateStripFocus(); playChannel(filteredChannels[currentIndex]); };
-    stripInner.appendChild(tile);
-  });
-  scrollToTile();
-}
-function updateStripFocus() {
-  const tiles = document.querySelectorAll('.channel-tile');
-  tiles.forEach((t,i)=>{
-    t.classList.toggle('active', i===currentIndex);
-    if(filteredChannels[i]) {
-      const star = t.querySelector('.fav-star');
-      if(star) star.style.display = favs.has(filteredChannels[i].url) ? 'block' : 'none';
-      t.classList.toggle('playing', filteredChannels[i].url === currentPlayingUrl && isPlaying);
-    }
-  });
-  if(filteredChannels[currentIndex]) updateNowPlaying(filteredChannels[currentIndex]);
-}
-function scrollToTile() {
-  const tile = document.querySelector('.channel-tile.active');
-  if(tile) tile.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-}
-function updateNowPlaying(ch) {
-  nowPlayingTitle.innerText = ch.name;
-  nowPlayingGroup.innerText = ch.group || '';
-}
-function updateSidebarActive() {
-  document.querySelectorAll('.sidebar-category').forEach(el=>el.classList.remove('active'));
-  const selector = `[data-cat="${activeCategory}"]`;
-  const activeEl = document.querySelector(selector);
-  if(activeEl) activeEl.classList.add('active');
-  else document.querySelector('[data-cat="all"]').classList.add('active');
-}
-
-// Shaka Player
-async function initShaka() {
-  await shaka.polyfill.installAll();
-  if(shaka.Player.isBrowserSupported()) {
-    player = new shaka.Player(video);
-    player.configure({ abr: { enabled: true }, streaming: { bufferingGoal: 12 } });
-    player.addEventListener('error', (e) => { setStatus('Stream error', false); isPlaying=false; });
-    video.addEventListener('playing', ()=>{ isPlaying=true; updateStripFocus(); setStatus('Playing'); });
-  } else toast('Shaka not supported','err');
-}
-async function playChannel(ch) {
-  if(!player || !ch?.url) return;
-  if(ch.url === currentPlayingUrl && isPlaying) return;
-  currentPlayingUrl = ch.url;
-  localStorage.setItem('jioplayer_last', ch.url);
-  setStatus('Connecting...');
-  try {
+async function _doPlay(){
+  const ch=getFocusedCh();if(!ch?.url||!player)return;
+  if(ch.url===curUrl&&isPlaying)return;
+  curUrl=ch.url;lsSet(LS.LCHU,ch.url);
+  if(cfg.muteSwitch&&isPlaying)video.muted=true;
+  isPlaying=false;
+  updateNowInfo(ch);
+  try{
     await player.load(ch.url);
     await video.play();
-    isPlaying = true;
-    setStatus('Streaming');
-    updateStripFocus();
-  } catch(e) { setStatus('Failed', false); toast(e.message.slice(0,60),'err'); isPlaying=false; }
+    isPlaying=true;
+    if(cfg.muteSwitch)setTimeout(()=>{video.muted=isMuted},700);
+    if(cfg.hq)setTimeout(lockHQ,4000);
+    updateQ();
+    updateRow1Focus();updateRow2Focus();
+    // Auto-hide now info after 5s
+    if(cfg.osd)setTimeout(()=>nowInfo.classList.remove('visible'),5000);
+  }catch(err){
+    toast('Load failed: '+err.message.slice(0,40),'err');
+    isPlaying=false;if(cfg.muteSwitch)video.muted=isMuted;
+  }
 }
-function toggleFav() {
-  const ch = filteredChannels[currentIndex];
-  if(!ch) return;
-  if(favs.has(ch.url)) { favs.delete(ch.url); toast('Removed from favs'); }
-  else { favs.add(ch.url); toast('Added to favourites','ok'); }
+
+/* Aspect */
+function cycleAspect(){
+  aspectMode=(aspectMode+1)%ASPECTS.length;
+  video.classList.remove('contain','stretch');
+  if(aspectMode===1)video.classList.add('contain');
+  if(aspectMode===2)video.classList.add('stretch');
+  toast(ASPECTS[aspectMode]);
+}
+/* Fav */
+function toggleFav(){
+  const ch=getFocusedCh();if(!ch)return;
+  if(favs.has(ch.url)){favs.delete(ch.url);toast('Removed from favourites')}
+  else{favs.add(ch.url);toast('Added to favourites','ok')}
   saveFavs();
-  if(activeCategory === 'favs') applyFiltersAndRender();
-  else updateStripFocus();
-}
-function cycleAspect() {
-  aspectMode = (aspectMode+1)%3;
-  video.style.objectFit = aspectMode===0 ? 'contain' : aspectMode===1 ? 'cover' : 'fill';
-  toast(['Contain','Cover','Fill'][aspectMode]);
 }
 
-// UI Events & Navigation
-function openSearch() { searchContainer.classList.add('open'); searchInput.focus(); zone='search'; }
-function closeSearch() { searchContainer.classList.remove('open'); searchQuery=''; searchInput.value=''; applyFiltersAndRender(); zone='strip'; }
-searchInput.addEventListener('input', ()=>{ searchQuery = searchInput.value; applyFiltersAndRender(); });
+/* ════════════════════════════════════════════════════════════
+   YELLOW POPUP
+════════════════════════════════════════════════════════════ */
+const YP_ACTIONS=['ypa-add','ypa-refresh','ypa-dialer','ypa-settings','ypa-favs'];
 
-function openOverlay() { overlayDiv.classList.add('open'); zone='overlay'; }
-function closeOverlay() { overlayDiv.classList.remove('open'); zone='strip'; }
-document.getElementById('closeOverlayBtn').onclick = closeOverlay;
-
-// Dialer
-function openDialer() { dialerModal.classList.add('open'); zone='modal'; dialString=''; dialNumber.innerText='—'; }
-function closeDialer() { dialerModal.classList.remove('open'); zone='strip'; }
-function dialKey(d) {
-  if(d==='clr') dialString = dialString.slice(0,-1);
-  else if(d==='go') {
-    const n = parseInt(dialString,10);
-    closeDialer();
-    if(!isNaN(n) && n>=1 && n<=filteredChannels.length) {
-      currentIndex = n-1;
-      scrollToTile(); updateStripFocus();
-      playChannel(filteredChannels[currentIndex]);
-    } else toast('Invalid number','err');
-    return;
-  } else if(dialString.length<4) dialString+=d;
-  dialNumber.innerText = dialString||'—';
+function openYP(){
+  yellowPopup.classList.add('on');zone='yp';ypIdx=0;
+  ypAddForm.classList.remove('open');
+  $('ypAddForm').style.display='none';
+  // Show action list
+  $('ypActions').style.display='flex';
+  wakeUI();clearTimeout(hideTimer); /* keep UI visible while popup open */
+  setTimeout(()=>focusYP(),50);
 }
-// build dialer grid
-const dialGrid = document.getElementById('dialGrid');
-dialGrid.innerHTML = '123456789'.split('').map(d=>`<button class="dialer-btn" data-d="${d}">${d}</button>`).join('') +
-  `<button class="dialer-btn" data-d="clr">⌫</button><button class="dialer-btn" data-d="0">0</button><button class="dialer-btn" data-d="go">▶ Go</button>`;
-document.querySelectorAll('.dialer-btn').forEach(btn=>btn.addEventListener('click',()=>dialKey(btn.dataset.d)));
+function closeYP(){
+  yellowPopup.classList.remove('on');zone='rows';
+  resetHideTimer();
+  syncFocusInRows();
+}
+function focusYP(){
+  const items=QA('.yp-action',$('ypActions'));
+  if(items[ypIdx])items[ypIdx].focus({preventScroll:true});
+}
+$('ypClose').addEventListener('click',closeYP);
 
-// Sidebar category click
-document.querySelectorAll('.sidebar-category').forEach(el=>{
-  el.addEventListener('click', ()=>{
-    const cat = el.dataset.cat;
-    if(cat === 'settings') openOverlay();
-    else if(cat === 'sources') openOverlay();
-    else { activeCategory = cat; searchQuery=''; searchInput.value=''; closeSearch(); applyFiltersAndRender(); zone='strip'; }
+$('ypa-add').addEventListener('click',()=>{
+  $('ypActions').style.display='none';
+  ypAddForm.classList.add('open');
+  $('ypAddForm').style.display='flex';
+  setTimeout(()=>$('ypPlName').focus(),50);
+});
+$('ypa-refresh').addEventListener('click',()=>{
+  closeYP();AppCache.clearAllM3U();allChs=[];toast('Refreshing playlists…');loadAll(true);
+});
+$('ypa-dialer').addEventListener('click',()=>{closeYP();openDial()});
+$('ypa-settings').addEventListener('click',()=>{closeYP();openSettings()});
+$('ypa-favs').addEventListener('click',()=>{closeYP();setTab('Favourites')});
+$('ypCancel').addEventListener('click',()=>{
+  ypAddForm.classList.remove('open');$('ypAddForm').style.display='none';
+  $('ypActions').style.display='flex';setTimeout(()=>focusYP(),30);
+});
+$('ypSave').addEventListener('click',()=>{
+  const name=$('ypPlName').value.trim(),url=$('ypPlUrl').value.trim();
+  if(!name||!url){toast('Enter name and URL','err');return}
+  if(pls.some(p=>p.url===url)){toast('Already added','err');return}
+  pls.push({name,url});savePls();
+  $('ypPlName').value='';$('ypPlUrl').value='';
+  ypAddForm.classList.remove('open');$('ypAddForm').style.display='none';
+  $('ypActions').style.display='flex';
+  closeYP();loadPl(url,name);
+});
+
+/* ════════════════════════════════════════════════════════════
+   SETTINGS OVERLAY
+════════════════════════════════════════════════════════════ */
+function openSettings(){
+  settingsOv.classList.add('on');zone='settings';
+  soSideIdx=0;soMainIdx=0;soSideZone=true;
+  renderSettingsSect('playback');
+  wakeUI();clearTimeout(hideTimer);
+  setTimeout(()=>QA('.so-nav',soSide)[0]?.focus({preventScroll:true}),50);
+}
+function closeSettings(){
+  settingsOv.classList.remove('on');zone='rows';
+  resetHideTimer();syncFocusInRows();
+}
+$('soClose').addEventListener('click',closeSettings);
+$('settingsBtn').addEventListener('click',openSettings);
+
+QA('.so-nav',soSide).forEach(n=>{
+  n.addEventListener('click',()=>{
+    QA('.so-nav',soSide).forEach(x=>x.classList.remove('on'));n.classList.add('on');
+    renderSettingsSect(n.dataset.s);soMainIdx=0;
+    setTimeout(()=>{const it=QA('[tabindex="0"]',soMain);it[0]?.focus({preventScroll:true})},30);
   });
 });
 
-// Keyboard navigation (TV remote)
-window.addEventListener('keydown', (e)=>{
-  const key = e.key;
-  if(key === 'ArrowLeft' && zone==='strip') {
-    if(filteredChannels.length) currentIndex = (currentIndex-1+filteredChannels.length)%filteredChannels.length;
-    scrollToTile(); updateStripFocus(); e.preventDefault();
-  } else if(key === 'ArrowRight' && zone==='strip') {
-    if(filteredChannels.length) currentIndex = (currentIndex+1)%filteredChannels.length;
-    scrollToTile(); updateStripFocus(); e.preventDefault();
-  } else if(key === 'ArrowUp' && zone==='strip') { zone='sidebar'; document.querySelector('.sidebar-category.active')?.focus(); e.preventDefault(); }
-  else if(key === 'ArrowDown' && zone==='sidebar') { zone='strip'; updateStripFocus(); e.preventDefault(); }
-  else if(key === 'Enter' && zone==='strip') { if(filteredChannels[currentIndex]) playChannel(filteredChannels[currentIndex]); e.preventDefault(); }
-  else if(key === 'Escape') {
-    if(document.fullscreenElement) document.exitFullscreen();
-    else if(zone==='search') closeSearch();
-    else if(zone==='overlay') closeOverlay();
-    else if(zone==='modal') closeDialer();
+function renderSettingsSect(s){
+  if(s==='playback'){
+    soMain.innerHTML=`
+      <div class="srow" tabindex="0">
+        <div class="srow-l"><div class="srow-title">Force Highest Quality</div><div class="srow-desc">Lock max bitrate — prevents freeze</div></div>
+        <label class="tog"><input type="checkbox" id="cfgHQ" ${cfg.hq?'checked':''}><span class="tog-t"></span></label>
+      </div>
+      <div class="srow" tabindex="0">
+        <div class="srow-l"><div class="srow-title">Mute on Channel Switch</div><div class="srow-desc">Silence during zap, restore after 700ms</div></div>
+        <label class="tog"><input type="checkbox" id="cfgMute" ${cfg.muteSwitch?'checked':''}><span class="tog-t"></span></label>
+      </div>
+      <div class="srow-title" style="margin-top:20px;margin-bottom:8px;color:rgba(255,255,255,.7);font-size:15px">Buffer Goal</div>
+      <select class="oui-sel" id="cfgBuf" tabindex="0">
+        <option value="6" ${cfg.buf==6?'selected':''}>6 s — Ultra Low Latency</option>
+        <option value="8" ${cfg.buf==8?'selected':''}>8 s — Low Latency</option>
+        <option value="12" ${cfg.buf==12?'selected':''}>12 s — Balanced</option>
+        <option value="20" ${cfg.buf==20?'selected':''}>20 s — Stable</option>
+      </select>`;
+    wireSettings();
+  }else if(s==='display'){
+    soMain.innerHTML=`
+      <div class="srow" tabindex="0">
+        <div class="srow-l"><div class="srow-title">OSD Auto-hide</div><div class="srow-desc">Channel info fades after 5 seconds</div></div>
+        <label class="tog"><input type="checkbox" id="cfgOsd" ${cfg.osd?'checked':''}><span class="tog-t"></span></label>
+      </div>`;
+    wireSettings();
+  }else if(s==='sources'){
+    const dp=[...pls];
+    let html='';
+    if(!dp.length)html='<p style="color:rgba(255,255,255,.4);padding:16px">No custom sources added</p>';
+    else html=dp.map((p,i)=>`
+      <div class="src-card" tabindex="0" data-i="${i}">
+        <div class="src-dot" style="${p.builtIn?'':'background:var(--accent)'}"></div>
+        <div class="src-info">
+          <div class="src-nm">${esc(p.name)}${p.builtIn?' <small style="opacity:.5">(built-in)</small>':''}</div>
+          <div class="src-url">${esc(p.url)}</div>
+        </div>
+        ${p.builtIn?'':`<button class="src-del" data-del="${i}">🗑</button>`}
+      </div>`).join('');
+    soMain.innerHTML=html+`<button class="so-btn" id="refreshSoBtnSo" tabindex="0">↺ Refresh All</button>`;
+    soMain.querySelectorAll('.src-card').forEach(el=>{
+      el.addEventListener('click',e=>{
+        if(e.target.closest('[data-del]'))return;
+        const p=dp[+el.dataset.i];if(p){loadPl(p.url,p.name);closeSettings()}
+      });
+    });
+    soMain.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.addEventListener('click',e=>{e.stopPropagation();const i=+btn.dataset.del;pls.splice(i,1);savePls();renderSettingsSect('sources')});
+    });
+    $('refreshSoBtnSo')?.addEventListener('click',()=>{AppCache.clearAllM3U();allChs=[];loadAll(true);closeSettings()});
   }
-  else if(key === 'f' || key === 'F') { toggleFav(); e.preventDefault(); }
-  else if(key === 'd') { openDialer(); e.preventDefault(); }
-  else if(key === 's') { openSearch(); e.preventDefault(); }
-  // color keys simulation (red, green, yellow, blue)
-  if(e.keyCode === 403) { activeCategory = (activeCategory==='all'?'favs':'all'); applyFiltersAndRender(); e.preventDefault(); }
-  if(e.keyCode === 404) { openSearch(); e.preventDefault(); }
-  if(e.keyCode === 405) { cycleAspect(); e.preventDefault(); }
-  if(e.keyCode === 406) { video.requestFullscreen(); e.preventDefault(); }
-});
-// volume keys
-window.addEventListener('keydown', (e)=>{
-  if(e.key === 'VolumeUp' || e.keyCode === 447) { volUp(); e.preventDefault(); }
-  if(e.key === 'VolumeDown' || e.keyCode === 448) { volDown(); e.preventDefault(); }
-  if(e.key === 'VolumeMute' || e.keyCode === 449) { video.muted = !video.muted; setVolume(currentVolume); e.preventDefault(); }
-});
-
-// Clock
-function updateClock() {
-  const d = new Date();
-  clockDiv.innerText = d.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true});
 }
-setInterval(updateClock, 1000); updateClock();
+function wireSettings(){
+  const hq=$('cfgHQ');const mu=$('cfgMute');const bu=$('cfgBuf');const os=$('cfgOsd');
+  if(hq)hq.onchange=function(){cfg.hq=this.checked;saveCfg();recfg()};
+  if(mu)mu.onchange=function(){cfg.muteSwitch=this.checked;saveCfg()};
+  if(bu)bu.onchange=function(){cfg.buf=+this.value;saveCfg();recfg()};
+  if(os)os.onchange=function(){cfg.osd=this.checked;saveCfg()};
+}
 
-// Boot
-(async function boot() {
-  loadFavs();
-  customPlaylists = JSON.parse(localStorage.getItem('jioplayer_pls') || '[]');
-  await initShaka();
-  await loadAllSources();
-  // restore last channel
-  const last = localStorage.getItem('jioplayer_last');
-  if(last) {
-    const idx = filteredChannels.findIndex(c=>c.url===last);
-    if(idx>=0) { currentIndex = idx; updateStripFocus(); playChannel(filteredChannels[currentIndex]); }
+/* ── Dialer ── */
+function openDial(){mDial.classList.add('on');zone='dialer';wakeUI();clearTimeout(hideTimer);setTimeout(()=>dnum.parentElement?.focus(),50)}
+function closeDial(){mDial.classList.remove('on');zone='rows';resetHideTimer();syncFocusInRows()}
+QA('.dk',$('mDial')).forEach(b=>b.addEventListener('click',()=>dialPush(b.dataset.d)));
+function dialPush(d){
+  if(d==='clr')dialStr=dialStr.slice(0,-1);
+  else if(d==='go'){dialGo();return}
+  else if(dialStr.length<4)dialStr+=d;
+  dnum.textContent=dialStr||'—';clearTimeout(dialTimer);
+  if(dialStr.length>=3)dialTimer=setTimeout(dialGo,1400);
+}
+function dialGo(){
+  const n=parseInt(dialStr,10);dialStr='';dnum.textContent='—';closeDial();
+  if(!isNaN(n)&&n>=1&&n<=row1Chs.length){col1=n-1;focusRow=1;updateRow1Focus();syncRow1Scroll();immediatePlay()}
+  else toast('Channel not found','err');
+}
+function remoteDigit(d){
+  rDialStr+=d;clearTimeout(rDialTimer);
+  rDialTimer=setTimeout(()=>{
+    const n=parseInt(rDialStr,10);rDialStr='';
+    if(!isNaN(n)&&n>=1&&n<=row1Chs.length){col1=n-1;focusRow=1;updateRow1Focus();syncRow1Scroll();immediatePlay()}
+    else toast('Not found','err');
+  },1200);
+}
+
+/* ── Focus helpers ── */
+function syncFocusInRows(){
+  if(focusRow===0){
+    const tabs=QA('.ntab',navTabs);tabs[tabIdx]?.focus({preventScroll:true})}
+  else if(focusRow===1){
+    const cards=[...row1Strip.children];const idx=col1+1;
+    if(cards[idx]){cards[idx].tabIndex=0;cards[idx].focus({preventScroll:true})}
+  }else{
+    const cards=[...row2Strip.children];
+    if(cards[col2]){cards[col2].tabIndex=0;cards[col2].focus({preventScroll:true})}
   }
-  setVolume(50);
+}
+
+/* Clock */
+function tick(){
+  const t=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+  /* Show in top-bar as right-most item — injected into brand area by updating brand-jio */
+}
+tick();setInterval(tick,30000);
+
+function hideSplash(){$('splash').classList.add('off');setTimeout(()=>{$('splash').style.display='none'},600)}
+
+/* ════════════════════════════════════════════════════════════
+   KEYMAP — Tizen OS 9 / BN59-01199F
+════════════════════════════════════════════════════════════ */
+const KC={
+  UP:38,DN:40,LT:37,RT:39,TUP:48888,TDN:48889,TLT:48886,TRT:48887,
+  ENTER:13,BACK:10009,
+  PLAY:415,PAUSE:19,PP:10252,STOP:413,FF:417,REW:412,
+  RED:403,GREEN:404,YELLOW:405,BLUE:406,
+  CHUP:427,CHDN:428,VOL_UP:447,VOL_DN:448,MUTE:449,
+};
+const isUp =(kc,k)=>kc===KC.UP ||kc===KC.TUP||k==='ArrowUp'  ||k==='Up';
+const isDn =(kc,k)=>kc===KC.DN ||kc===KC.TDN||k==='ArrowDown' ||k==='Down';
+const isLt =(kc,k)=>kc===KC.LT ||kc===KC.TLT||k==='ArrowLeft' ||k==='Left';
+const isRt =(kc,k)=>kc===KC.RT ||kc===KC.TRT||k==='ArrowRight'||k==='Right';
+const isOK =(kc,k)=>kc===KC.ENTER||k==='Enter';
+const isBack=(kc,k)=>kc===KC.BACK||k==='Escape';
+const isDig =(e)=>{const kc=e.keyCode;return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key?.length===1&&e.key>='0'&&e.key<='9')};
+const getDig=(e)=>{if(e.key?.length===1&&e.key>='0'&&e.key<='9')return e.key;if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);return String(e.keyCode-48)};
+
+window.addEventListener('keydown',e=>{
+  const kc=e.keyCode,k=e.key;
+
+  /* Volume — always first, always wake UI */
+  if(kc===KC.VOL_UP){e.preventDefault();volUp();wakeUI();return}
+  if(kc===KC.VOL_DN){e.preventDefault();volDown();wakeUI();return}
+  if(kc===KC.MUTE||k==='VolumeMute'){
+    e.preventDefault();wakeUI();
+    try{if(window.tizen&&tizen.tvaudiocontrol){tizen.tvaudiocontrol.setMute(!tizen.tvaudiocontrol.isMute());showVol();return}}catch(ex){}
+    isMuted=!isMuted;video.muted=isMuted;return;
+  }
+
+  /* Any key wakes UI */
+  wakeUI();
+
+  /* Input fields in YP form */
+  if(document.activeElement===$('ypPlName')||document.activeElement===$('ypPlUrl')){
+    if(isBack(kc,k)){e.preventDefault();$('ypCancel').click()}
+    return;
+  }
+
+  /* ── DIALER ── */
+  if(zone==='dialer'){
+    if(isDig(e)){e.preventDefault();dialPush(getDig(e));return}
+    if(isOK(kc,k)){e.preventDefault();dialGo();return}
+    if(isBack(kc,k)){e.preventDefault();closeDial();return}
+    return;
+  }
+
+  /* ── YELLOW POPUP ── */
+  if(zone==='yp'){
+    if(isBack(kc,k)){e.preventDefault();closeYP();return}
+    const showingForm=ypAddForm.classList.contains('open');
+    if(!showingForm){
+      const items=QA('.yp-action',$('ypActions'));
+      if(isUp(kc,k)){e.preventDefault();ypIdx=Math.max(0,ypIdx-1);focusYP();return}
+      if(isDn(kc,k)){e.preventDefault();ypIdx=Math.min(items.length-1,ypIdx+1);focusYP();return}
+      if(isOK(kc,k)){e.preventDefault();items[ypIdx]?.click();return}
+    }
+    return;
+  }
+
+  /* ── SETTINGS ── */
+  if(zone==='settings'){
+    if(isBack(kc,k)){e.preventDefault();closeSettings();return}
+    const sideItems=QA('.so-nav',soSide);
+    const mainItems=QA('[tabindex="0"]',soMain);
+    if(isUp(kc,k)){
+      e.preventDefault();
+      if(soSideZone){soSideIdx=Math.max(0,soSideIdx-1);sideItems[soSideIdx]?.focus({preventScroll:true})}
+      else{soMainIdx=Math.max(0,soMainIdx-1);mainItems[soMainIdx]?.focus({preventScroll:true});mainItems[soMainIdx]?.scrollIntoView({block:'nearest'})}
+      return;
+    }
+    if(isDn(kc,k)){
+      e.preventDefault();
+      if(soSideZone){soSideIdx=Math.min(sideItems.length-1,soSideIdx+1);sideItems[soSideIdx]?.focus({preventScroll:true})}
+      else{soMainIdx=Math.min(mainItems.length-1,soMainIdx+1);mainItems[soMainIdx]?.focus({preventScroll:true});mainItems[soMainIdx]?.scrollIntoView({block:'nearest'})}
+      return;
+    }
+    if(isRt(kc,k)&&soSideZone){e.preventDefault();soSideZone=false;soMainIdx=0;mainItems[0]?.focus({preventScroll:true});return}
+    if(isLt(kc,k)&&!soSideZone){e.preventDefault();soSideZone=true;sideItems[soSideIdx]?.focus({preventScroll:true});return}
+    if(isOK(kc,k)){
+      e.preventDefault();
+      const f=document.activeElement;
+      if(f?.classList.contains('srow')){const cb=f.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}))}}
+      else if(f?.classList.contains('so-nav'))f.click();
+      else f?.click();
+      return;
+    }
+    return;
+  }
+
+  /* ── NAV TABS ZONE ── */
+  if(zone==='tabs'){
+    const tabs=QA('.ntab',navTabs);
+    if(isLt(kc,k)){e.preventDefault();tabIdx=Math.max(0,tabIdx-1);tabs[tabIdx]?.focus({preventScroll:true});tabs[tabIdx]?.scrollIntoView({inline:'nearest'});return}
+    if(isRt(kc,k)){e.preventDefault();tabIdx=Math.min(tabs.length-1,tabIdx+1);tabs[tabIdx]?.focus({preventScroll:true});tabs[tabIdx]?.scrollIntoView({inline:'nearest'});return}
+    if(isOK(kc,k)){e.preventDefault();tabs[tabIdx]?.click();zone='rows';focusRow=1;syncFocusInRows();return}
+    if(isDn(kc,k)){e.preventDefault();zone='rows';focusRow=1;syncFocusInRows();return}
+    if(isBack(kc,k)){e.preventDefault();zone='rows';focusRow=1;syncFocusInRows();return}
+    return;
+  }
+
+  /* ── MAIN ROWS ZONE ── */
+  if(zone==='rows'){
+    if(isUp(kc,k)){
+      e.preventDefault();
+      if(focusRow===2){focusRow=1;updateRow1Focus();syncRow1Scroll();syncFocusInRows()}
+      else if(focusRow===1){
+        zone='tabs';focusRow=0;
+        const tabs=QA('.ntab',navTabs);
+        tabIdx=Math.max(0,allGroups.indexOf(activeTab));
+        tabs[tabIdx]?.focus({preventScroll:true});
+        tabs[tabIdx]?.classList.add('focused-nav');
+      }
+      return;
+    }
+    if(isDn(kc,k)){
+      e.preventDefault();
+      if(focusRow===1&&row2Chs.length>0){focusRow=2;updateRow2Focus();syncRow2Scroll();syncFocusInRows()}
+      else if(focusRow===2){/* already at bottom */}
+      return;
+    }
+    if(isLt(kc,k)){
+      e.preventDefault();
+      if(focusRow===1){
+        if(col1>0){col1--;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}
+      }else if(focusRow===2){
+        if(col2>0){col2--;updateRow2Focus();syncRow2Scroll()}
+      }
+      return;
+    }
+    if(isRt(kc,k)){
+      e.preventDefault();
+      if(focusRow===1){
+        if(col1<row1Chs.length-1){col1++;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}
+      }else if(focusRow===2){
+        if(col2<row2Chs.length-1){col2++;updateRow2Focus();syncRow2Scroll()}
+      }
+      return;
+    }
+    if(isOK(kc,k)){e.preventDefault();immediatePlay();return}
+    if(isBack(kc,k)){
+      /* If playing fullscreen — nothing to do (video IS fullscreen always) */
+      return;
+    }
+  }
+
+  /* Universal keys */
+  switch(true){
+    case kc===KC.RED:
+      e.preventDefault();
+      {const i=allGroups.indexOf(activeTab);setTab(allGroups[(i+1)%allGroups.length])}break;
+    case kc===KC.GREEN:
+      /* Green = cycle aspect ratio */
+      e.preventDefault();cycleAspect();break;
+    case kc===KC.YELLOW:
+      /* YELLOW = quick-action popup (per requirement) */
+      e.preventDefault();openYP();break;
+    case kc===KC.BLUE:
+      e.preventDefault();toggleFav();break;
+    case kc===KC.PLAY:  e.preventDefault();video.play().catch(()=>{});break;
+    case kc===KC.PAUSE: e.preventDefault();video.pause();break;
+    case kc===KC.PP:    e.preventDefault();video.paused?video.play().catch(()=>{}):video.pause();break;
+    case kc===KC.STOP:  e.preventDefault();if(player){player.unload();isPlaying=false;curUrl=''}break;
+    case kc===KC.CHUP||k==='PageUp':
+      e.preventDefault();
+      if(focusRow===1&&col1>0){col1--;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}break;
+    case kc===KC.CHDN||k==='PageDown':
+      e.preventDefault();
+      if(focusRow===1&&col1<row1Chs.length-1){col1++;updateRow1Focus();syncRow1Scroll();syncFocusInRows();updateNowInfo()}break;
+    case k==='f'||k==='F': e.preventDefault();toggleFav();break;
+    case k==='d'||k==='D': e.preventDefault();openDial();break;
+    case isDig(e): e.preventDefault();remoteDigit(getDig(e));break;
+  }
+});
+
+/* Clicking on video area wakes UI */
+$('root').addEventListener('click',wakeUI);
+
+/* ── BOOT ── */
+(async function boot(){
+  loadStore();
+  pls=pls.filter(p=>p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url);
+  pls.unshift(JIO_PL);pls.unshift(TELUGU_PL);
+
+  $('splMsg').textContent='Initialising player…';
+  await initPlayer();
+  $('splMsg').textContent='Loading channels…';
+
+  /* Initial tabs with placeholder */
+  allGroups=['For You','Telugu','Jio','Entertainment','News','Movies'];
+  rebuildNavTabs();setTab('For You');
+
+  const snap=allChs.length;
+  await loadPl(TELUGU_PL.url,TELUGU_PL.name,false);
+  allChs.slice(snap).forEach(ch=>{ch._src='telugu'});
+
+  const ups=pls.filter(p=>!p.builtIn);
+  const srcs=ups.length?ups:[JIO_PL];
+  for(const p of srcs){
+    const before=allChs.length;
+    await loadPl(p.url,p.name,false);
+    if(p.name==='Jio')allChs.slice(before).forEach(ch=>{ch._src='jio'});
+  }
+
+  rebuildGroups();rebuildNavTabs();setTab('For You');
+
+  /* Restore last channel */
+  const lastUrl=lsGet(LS.LCHU);
+  if(lastUrl){
+    const idx=row1Chs.findIndex(c=>c.url===lastUrl);
+    if(idx>=0){col1=idx;focusRow=1;updateRow1Focus();syncRow1Scroll();updateNowInfo()}
+  }
+
+  hideSplash();
+  startHideTimer();
+  currentVol=getSysVol();
+})();
+
 })();
 </script>
 </body>
