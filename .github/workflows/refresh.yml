@@ -34,8 +34,8 @@ jobs:
       - name: Create new 'latest' release
         run: |
           gh release create latest \
-            --title "Latest YuppTV Playlist" \
-            --notes "Automatically refreshed weekly" \
+            --title "Cache" \
+            --notes "" \
             --repo ${{ github.repository }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
