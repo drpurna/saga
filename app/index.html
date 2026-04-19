@@ -485,7 +485,7 @@ var CW=200,CH=118,CGAP=14,AUTO_HIDE_MS=3000,PLAY_DEB=80;
 /* Built-in playlists */
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,src:'telugu'};
 var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,src:'jio'};
-var YUPP_PL  ={name:'YuppTV',url:'https://raw.githubusercontent.com/drpurna/saga/main/app/yuppTV_playlist.m3u',builtIn:true,src:'yupp'};
+var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev',builtIn:true,src:'yupp'};
 
 var ASPECTS=['Contain','Fill','Stretch'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -568,6 +568,7 @@ var activeTab='Telugu',showFavs=false;
 var col=0,scrollOff=0;       /* col=0: TV Guide, col>=1: viewChs[col-1] */
 var hideTimer=null,uiVisible=true;
 var channelLoaded=false;      /* tracks if any channel has ever played */
+var initialLoading=true;      /* suppress re-renders during boot load */
 
 /* Zone system */
 var zone='rows'; /* 'rows'|'tabs'|'icon'|'yp'|'settings'|'dialer' */
@@ -700,9 +701,11 @@ function loadPl(url,name,src,force){
         }
         allChs=allChs.concat(fresh);
         lsSet('saga:last',url);
-        rebuildNavTabs();
-        viewChs=getViewChs();
-        renderStrip();
+        if(!initialLoading){
+          rebuildNavTabs();
+          viewChs=getViewChs();
+          renderStrip();
+        }
         setSt(allChs.length+' channels loaded','ok');
         var logos=[];
         for(var k=0;k<Math.min(60,parsed.length);k++){if(parsed[k].logo)logos.push(parsed[k].logo)}
@@ -715,11 +718,23 @@ function loadPl(url,name,src,force){
       var ctrl=new AbortController(),tid=setTimeout(function(){ctrl.abort()},25000);
       fetch(url,{signal:ctrl.signal}).then(function(r){
         clearTimeout(tid);if(!r.ok)throw new Error('HTTP '+r.status);return r.text();
-      }).then(function(txt){AppCache.setM3U(url,txt);process(txt)
+      }).then(function(txt){try{AppCache.setM3U(url,txt)}catch(e){}process(txt)
       }).catch(function(e){setSt(name+': '+e.message.slice(0,50),'err');resolve([])});
     }
-    if(!force){AppCache.getM3U(url).then(function(c){if(c)process(c);else doFetch()})}
-    else doFetch();
+    /* Always resolve within 30s even if network hangs */
+    var _resolved=false;
+    var _safeResolve=function(v){if(!_resolved){_resolved=true;resolve(v)}};
+    var _globalTimeout=setTimeout(function(){_safeResolve([])},30000);
+    var _origResolve=resolve;
+    resolve=function(v){clearTimeout(_globalTimeout);_safeResolve(v)};
+
+    if(!force){
+      try{
+        AppCache.getM3U(url).then(function(c){
+          if(c&&c.length>50)process(c);else doFetch();
+        }).catch(function(){doFetch()});
+      }catch(e){doFetch()}
+    }else{doFetch()}
   });
 }
 
@@ -744,7 +759,6 @@ async function loadAll(force){
       if(viewChs[li].url===lastUrl){col=li+1;updateStripFocus();syncScroll();break}
     }
   }
-  hideSplash();
   resetHideTimer();
   currentVol=getSysVol();
   setSt(allChs.length+' channels ready','ok');
@@ -1360,7 +1374,7 @@ window.addEventListener('keydown',function(e){
 $('root').addEventListener('click',wakeUI);
 
 /* ════ BOOT ════ */
-(async function boot(){
+(async function boot(){try{
   loadStore();
 
   /* Remove built-in duplicates from stored pls */
@@ -1369,7 +1383,7 @@ $('root').addEventListener('click',wakeUI);
   });
 
   $('splMsg').textContent='Initialising player…';
-  await initPlayer();
+  try{await initPlayer()}catch(e){setSt('Player init failed: '+e.message.slice(0,40),'err')}
   $('splMsg').textContent='Loading channels…';
 
   /* Show initial nav skeleton */
@@ -1378,9 +1392,25 @@ $('root').addEventListener('click',wakeUI);
   /* Load all 3 built-in playlists */
   await loadAll(false);
 
+  /* Final rebuild now that all playlists are loaded */
+  initialLoading=false;
+  rebuildNavTabs();
+  /* Default to first tab that has channels */
+  var _firstTab=null;
+  var _tabOrder=['Telugu','Jio','YuppTV','News','Sports','Entertainment'];
+  for(var _ti=0;_ti<_tabOrder.length;_ti++){
+    for(var _ci=0;_ci<allChs.length;_ci++){
+      if(canonicalTab(allChs[_ci])===_tabOrder[_ti]){_firstTab=_tabOrder[_ti];break}
+    }
+    if(_firstTab)break;
+  }
+  if(_firstTab)setTab(_firstTab);
+  else{viewChs=getViewChs();renderStrip()}
+
   hideSplash();
   resetHideTimer();
   currentVol=getSysVol();
+}catch(e){hideSplash();setSt('Boot error: '+e.message,'err')}
 })();
 
 })();
