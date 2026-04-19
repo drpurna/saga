@@ -9,7 +9,7 @@
 <script src="./js/cache.js"></script>
 <style>
 /*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v42 — CricHd+YuppTV HTML scraper source
+  SAGA IPTV v43 — CricHd+YuppTV HTML scraper source
   ─────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome theme (Samsung design system)
@@ -672,7 +672,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v42 — CricHd+YuppTV HTML scraper source
+  SAGA IPTV v43 — CricHd+YuppTV HTML scraper source
   ──────────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome design — white accents, dark surfaces
@@ -966,12 +966,10 @@ function parseHtmlChannels(html, srcTag, group){
   for(var i=0;i<anchors.length;i++){
     var a=anchors[i];
     var href=a.getAttribute('href')||'';
-    // Extract dtv= param
-    var dtvMatch=href.match(/[?&]dtv=([^&]+)/);
-    if(!dtvMatch) continue;
-    var streamUrl;
-    try{ streamUrl=decodeURIComponent(dtvMatch[1]); }
-    catch(e){ streamUrl=dtvMatch[1]; }
+    // Must have dtv= param to be a valid channel link
+    if(href.indexOf('dtv=') < 0) continue;
+    // Use the FULL href as stream URL — the indexind wrapper IS the working stream
+    var streamUrl=href;
     if(!streamUrl||streamUrl.indexOf('http')<0) continue;
     // Channel name: try img alt, then h3, then h2, then full text
     var img=a.querySelector('img');
@@ -1484,12 +1482,10 @@ function resolveStreamUrl(proxyUrl){
                (j.data&&(j.data.url||j.data.stream||j.data.m3u8))||null;
         if(u&&u.indexOf('http')===0){resolve(u);return;}
       }catch(e){}
-      // Scan text for any .m3u8 URL (handles HTML/JS responses)
+      // Scan for .m3u8 URL in response
       var m=txt.match(/https?:\/\/[^"'\s,<>]+\.m3u8[^"'\s,<>]*/);
       if(m){resolve(m[0]);return;}
-      // Look for quoted stream URLs even without .m3u8 extension
-      var m2=txt.match(/["']source["']\s*:\s*["'](https?:\/\/[^"']+)["']/);
-      if(m2){resolve(m2[1]);return;}
+      // No extraction possible — return null so caller uses original URL
       resolve(null);
     }).catch(function(){clearTimeout(tid);resolve(null)});
   });
@@ -1593,8 +1589,7 @@ function _doPlay(){
   updateNowInfo(ch);
   setSt('Connecting…','buf');
   /* CrichD worker URLs need resolving to actual m3u8 first */
-  var isCrichd=(ch.url.indexOf('crichd.uhd2026.workers.dev')>=0||
-                ch.url.indexOf('crichdhome.uhd2026.workers.dev')>=0);
+  var isCrichd=(ch.url.indexOf('calm-sun-04d5.rojoni9589.workers.dev')>=0||ch.url.indexOf('crichd.uhd2026.workers.dev')>=0);
   var playPromise;
   if(isCrichd){
     setSt('Resolving stream…','buf');
@@ -1847,7 +1842,7 @@ function renderSettingsSect(s){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
         '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 42 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 43 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
         '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
           '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
           '↑↓←→ — Navigate · OK — Play<br>'+
