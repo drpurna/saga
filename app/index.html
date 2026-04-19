@@ -9,7 +9,7 @@
 <script src="./js/cache.js"></script>
 <style>
 /*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v41 — CricHd+YuppTV HTML scraper source
+  SAGA IPTV v42 — CricHd+YuppTV HTML scraper source
   ─────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome theme (Samsung design system)
@@ -672,7 +672,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v41 — CricHd+YuppTV HTML scraper source
+  SAGA IPTV v42 — CricHd+YuppTV HTML scraper source
   ──────────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome design — white accents, dark surfaces
@@ -722,7 +722,7 @@ var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.
 var JIO_PL={name:'Jio',url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
 /* CricHd sports worker page */
-var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/refs/heads/main/ALL.m3u',builtIn:true,_src:'crichd'};
+var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
 
 var ASPECTS=['Cover','Contain','Stretch'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1460,6 +1460,41 @@ function updateNowInfo(ch){
   }
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   STREAM RESOLVER — for proxy/redirect stream URLs
+   CrichD worker pages return JSON or HTML containing the real
+   m3u8 URL. We fetch the proxy URL, extract the m3u8, then
+   pass that to Shaka instead of the proxy URL directly.
+════════════════════════════════════════════════════════════ */
+function resolveStreamUrl(proxyUrl){
+  return new Promise(function(resolve){
+    var ctrl=new AbortController();
+    var tid=setTimeout(function(){try{ctrl.abort()}catch(e){}; resolve(null)},8000);
+    fetch(proxyUrl,{signal:ctrl.signal}).then(function(resp){
+      clearTimeout(tid);
+      if(!resp.ok){resolve(null);return;}
+      return resp.text();
+    }).then(function(txt){
+      if(!txt){resolve(null);return;}
+      // Try JSON first
+      try{
+        var j=JSON.parse(txt);
+        var u=j.url||j.stream||j.m3u8||j.link||j.hls||j.source||
+               (j.data&&(j.data.url||j.data.stream||j.data.m3u8))||null;
+        if(u&&u.indexOf('http')===0){resolve(u);return;}
+      }catch(e){}
+      // Scan text for any .m3u8 URL (handles HTML/JS responses)
+      var m=txt.match(/https?:\/\/[^"'\s,<>]+\.m3u8[^"'\s,<>]*/);
+      if(m){resolve(m[0]);return;}
+      // Look for quoted stream URLs even without .m3u8 extension
+      var m2=txt.match(/["']source["']\s*:\s*["'](https?:\/\/[^"']+)["']/);
+      if(m2){resolve(m2[1]);return;}
+      resolve(null);
+    }).catch(function(){clearTimeout(tid);resolve(null)});
+  });
+}
+
 /* ════════════════════════════════════════════════════════════
    SHAKA PLAYER
 ════════════════════════════════════════════════════════════ */
@@ -1557,7 +1592,22 @@ function _doPlay(){
   isPlaying=false;
   updateNowInfo(ch);
   setSt('Connecting…','buf');
-  player.load(ch.url).then(function(){
+  /* CrichD worker URLs need resolving to actual m3u8 first */
+  var isCrichd=(ch.url.indexOf('crichd.uhd2026.workers.dev')>=0||
+                ch.url.indexOf('crichdhome.uhd2026.workers.dev')>=0);
+  var playPromise;
+  if(isCrichd){
+    setSt('Resolving stream…','buf');
+    playPromise=resolveStreamUrl(ch.url).then(function(resolved){
+      var finalUrl=resolved||ch.url;
+      if(resolved)setSt('Stream resolved, loading…','buf');
+      else setSt('Using direct URL…','buf');
+      return player.load(finalUrl);
+    });
+  }else{
+    playPromise=player.load(ch.url);
+  }
+  playPromise.then(function(){
     return video.play();
   }).then(function(){
     isPlaying=true;
@@ -1797,7 +1847,7 @@ function renderSettingsSect(s){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
         '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 41 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 42 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
         '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
           '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
           '↑↓←→ — Navigate · OK — Play<br>'+
