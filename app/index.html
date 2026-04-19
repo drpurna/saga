@@ -9,7 +9,7 @@
 <script src="./js/cache.js"></script>
 <style>
 /*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v39 — CricHd JSON built-in source
+  SAGA IPTV v40 — CricHd+YuppTV HTML scraper source
   ─────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome theme (Samsung design system)
@@ -672,7 +672,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v39 — CricHd JSON built-in source
+  SAGA IPTV v40 — CricHd+YuppTV HTML scraper source
   ──────────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome design — white accents, dark surfaces
@@ -720,9 +720,9 @@ var PLAY_DEB=80;
 /* Three built-in playlists */
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,_src:'telugu'};
 var JIO_PL={name:'Jio',url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
-var YUPP_PL={name:'YuppTV',url:'https://github.com/drpurna/saga/releases/latest/download/channels.m3u',builtIn:true,_src:'yupp'};
-/* Embedded CricHd JSON source */
-var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/refs/heads/main/api.json',builtIn:true,_src:'crichd'};
+var YUPP_PL={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
+/* CricHd sports worker page */
+var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
 
 var ASPECTS=['Cover','Contain','Stretch'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -947,6 +947,55 @@ function parseJsonChannels(jsonText, srcTag){
   return channels;
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   HTML CHANNEL PAGE PARSER — for CricHd/YuppTV worker pages
+   Finds all <a href="...?dtv=URL"> links and extracts:
+     - Channel name from alt text or link text (h3/strong/span)
+     - Stream URL from the dtv= query param (decoded)
+     - Logo from the first <img> inside the link
+   The dtv= value may itself be a redirect URL (CricHd) or a
+   direct m3u8 URL (YuppTV). Both work fine with Shaka Player.
+════════════════════════════════════════════════════════════ */
+function parseHtmlChannels(html, srcTag, group){
+  var channels=[];
+  // Use a temporary DOM element for safe parsing
+  var tmp=document.createElement('div');
+  tmp.innerHTML=html;
+  var anchors=tmp.querySelectorAll('a[href]');
+  for(var i=0;i<anchors.length;i++){
+    var a=anchors[i];
+    var href=a.getAttribute('href')||'';
+    // Extract dtv= param
+    var dtvMatch=href.match(/[?&]dtv=([^&]+)/);
+    if(!dtvMatch) continue;
+    var streamUrl;
+    try{ streamUrl=decodeURIComponent(dtvMatch[1]); }
+    catch(e){ streamUrl=dtvMatch[1]; }
+    if(!streamUrl||streamUrl.indexOf('http')<0) continue;
+    // Channel name: try img alt, then h3, then h2, then full text
+    var img=a.querySelector('img');
+    var logo=img?img.getAttribute('src'):'';
+    var name='';
+    var h=a.querySelector('h3,h2,h1,strong,span');
+    if(h) name=h.textContent.trim();
+    if(!name&&img) name=img.getAttribute('alt')||'';
+    if(!name) name=a.textContent.trim().replace(/\s+/g,' ').slice(0,60);
+    if(!name) name='Channel';
+    // Strip badge suffixes like "PROMO", "Premium", "News" etc appended by page
+    name=name.replace(/\s*(PROMO|Premium|HD|SD|Free|Paid|Live)$/i,'').trim();
+    channels.push({
+      name:name,
+      url:streamUrl,
+      logo:logo||'',
+      group:group||'Sports',
+      _src:srcTag,
+      _col:null
+    });
+  }
+  return channels;
+}
+
 /* ════════════════════════════════════════════════════════════
    M3U PARSER — chunked
 ════════════════════════════════════════════════════════════ */
@@ -1039,11 +1088,22 @@ function loadPl(url,name,force,srcTag){
       });
     };
     var process=function(txt){
-      // Detect JSON: trim and check first char
+      // Detect format: HTML, JSON, or M3U
       var trimmed=txt.trim();
-      var isJson=(trimmed.startsWith('[') || trimmed.startsWith('{'));
+      var isHtml=(trimmed.charAt(0)==='<');
+      var isJson=(!isHtml&&(trimmed.charAt(0)==='['||trimmed.charAt(0)==='{'));
       var parsedChannels=null;
-      if(isJson){
+
+      if(isHtml){
+        /* HTML channel page (CricHd / YuppTV worker pages) */
+        var grp=(srcTag==='crichd')?'Sports':(srcTag==='yupp')?'Entertainment':'General';
+        parsedChannels=parseHtmlChannels(txt, srcTag||name.toLowerCase(), grp);
+        if(!parsedChannels.length){
+          setSt('No channels found in '+name+' page','err');
+          resolve([]);
+          return;
+        }
+      }else if(isJson){
         try{
           parsedChannels=parseJsonChannels(txt, srcTag || name.toLowerCase());
         }catch(je){
@@ -1052,8 +1112,9 @@ function loadPl(url,name,force,srcTag){
           return;
         }
       }
+
       if(parsedChannels){
-        // JSON path
+        // HTML or JSON path — merge into allChs
         var fresh=[];
         var seen=new Set(allChs.map(function(c){return c.url}));
         for(var i=0;i<parsedChannels.length;i++){
@@ -1727,7 +1788,7 @@ function renderSettingsSect(s){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
         '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 39 · Samsung Tizen OS9 · CricHd JSON built-in</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 40 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
         '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
           '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
           '↑↓←→ — Navigate · OK — Play<br>'+
