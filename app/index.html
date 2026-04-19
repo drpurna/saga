@@ -18,6 +18,7 @@
   · Custom playlist add/remove fully wired
   · Crash-free: no ?. / default params / numeric separators
   · All zones (rows/tabs/yp/settings/dialer) fully navigable
+  · NEW: JSON playlist support (CricHd style)
 ═══════════════════════════════════════════════════════════════*/
 *,*::before,*::after{
   margin:0;padding:0;box-sizing:border-box;
@@ -522,7 +523,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
   <div id="topBar">
     <div class="brand">
       <span class="brand-s">SAGA IPTV</span>
-      <span class="brand-tag">v37</span>
+      <span class="brand-tag">v38</span>
     </div>
     <div id="navTabs"></div>
     <div class="top-right">
@@ -577,7 +578,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
       <div class="yp-acts" id="ypActs">
         <button class="yp-act" id="ypa-add">
           <div class="yp-act-ico">➕</div>
-          <div class="yp-act-txt"><div class="yp-act-t">Add Custom Playlist</div><div class="yp-act-d">Add a new M3U URL source</div></div>
+          <div class="yp-act-txt"><div class="yp-act-t">Add Custom Playlist</div><div class="yp-act-d">Add a new M3U or JSON URL source</div></div>
           <span class="yp-act-arr">›</span>
         </button>
         <button class="yp-act" id="ypa-refresh">
@@ -603,7 +604,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
       </div>
       <div id="ypForm">
         <input class="yp-inp" id="ypName" type="text"  placeholder="Playlist name (e.g. My IPTV)" autocomplete="off">
-        <input class="yp-inp" id="ypUrl"  type="url"   placeholder="https://…/playlist.m3u" autocomplete="off">
+        <input class="yp-inp" id="ypUrl"  type="url"   placeholder="https://…/playlist.m3u or .json" autocomplete="off">
         <div class="yp-brow">
           <button class="yp-btn yp-btn-ok" id="ypSave">Add &amp; Load</button>
           <button class="yp-btn"           id="ypCancel">Cancel</button>
@@ -671,15 +672,15 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v37
+  SAGA IPTV v38 — JSON playlist support added
   ──────────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome design — white accents, dark surfaces
   · Channel tiles: dominant-colour tint extracted from logo
   · Settings opens via MENU/INFO remote key (keyCode 457/10133)
   · Custom playlist: add via Yellow popup, manage in Settings→Sources
-  · Stable: no ?. / no default params / no numeric separators
-  · All zones navigable via D-pad: rows → tabs → yp → settings → dialer
+  · NEW: Auto-detects JSON (array of channels) and converts to M3U style
+  · Supports fields: name/title, m3u8/url/stream_url, logo/logo_url, group
 ══════════════════════════════════════════════════════════════════*/
 (function(){
 'use strict';
@@ -904,6 +905,46 @@ function extractColour(img,cb){
 }
 
 /* ════════════════════════════════════════════════════════════
+   JSON PARSER — for CricHd style API
+   Expects array of objects with at least 'name' and a stream URL.
+   Recognised URL fields: m3u8, url, stream_url, stream.
+   Logo fields: logo, logo_url, image.
+   Group field: group, category.
+════════════════════════════════════════════════════════════ */
+function parseJsonChannels(jsonText, srcTag){
+  var data;
+  try{
+    data=JSON.parse(jsonText);
+  }catch(e){
+    throw new Error('Invalid JSON');
+  }
+  if(!Array.isArray(data)) data=[data]; // allow single object wrap
+  var channels=[];
+  for(var i=0;i<data.length;i++){
+    var item=data[i];
+    if(!item) continue;
+    // Extract name
+    var name=item.name||item.title||item.channel_name||'Unnamed';
+    // Extract stream URL
+    var url=item.m3u8||item.url||item.stream_url||item.stream;
+    if(!url) continue;
+    // Extract logo
+    var logo=item.logo||item.logo_url||item.image||'';
+    // Extract group
+    var group=item.group||item.category||item.genre||'General';
+    channels.push({
+      name:String(name).trim(),
+      url:url,
+      logo:logo,
+      group:group,
+      _src:srcTag,
+      _col:null
+    });
+  }
+  return channels;
+}
+
+/* ════════════════════════════════════════════════════════════
    M3U PARSER — chunked
 ════════════════════════════════════════════════════════════ */
 function parseM3UChunked(txt,onDone){
@@ -970,7 +1011,7 @@ function getViewChs(){
 }
 
 /* ════════════════════════════════════════════════════════════
-   PLAYLIST LOAD
+   PLAYLIST LOAD — auto-detects JSON vs M3U
 ════════════════════════════════════════════════════════════ */
 function loadPl(url,name,force,srcTag){
   if(force===undefined)force=false;
@@ -994,15 +1035,26 @@ function loadPl(url,name,force,srcTag){
       });
     };
     var process=function(txt){
-      parseM3UChunked(txt,function(parsed){
-        if(!parsed.length){setSt('No channels in '+name,'err');resolve([]);return}
-        /* Tag source + deduplicate */
-        var seen=new Set(allChs.map(function(c){return c.url}));
+      // Detect JSON: trim and check first char
+      var trimmed=txt.trim();
+      var isJson=(trimmed.startsWith('[') || trimmed.startsWith('{'));
+      var parsedChannels=null;
+      if(isJson){
+        try{
+          parsedChannels=parseJsonChannels(txt, srcTag || name.toLowerCase());
+        }catch(je){
+          setSt('JSON parse error for '+name,'err');
+          resolve([]);
+          return;
+        }
+      }
+      if(parsedChannels){
+        // JSON path
         var fresh=[];
-        for(var i=0;i<parsed.length;i++){
-          if(!seen.has(parsed[i].url)){
-            parsed[i]._src=srcTag||parsed[i]._src||name.toLowerCase();
-            fresh.push(parsed[i]);
+        var seen=new Set(allChs.map(function(c){return c.url}));
+        for(var i=0;i<parsedChannels.length;i++){
+          if(!seen.has(parsedChannels[i].url)){
+            fresh.push(parsedChannels[i]);
           }
         }
         allChs=allChs.concat(fresh);
@@ -1011,14 +1063,40 @@ function loadPl(url,name,force,srcTag){
         viewChs=getViewChs();
         renderStrip();
         setSt(''+allChs.length+' channels loaded','ok');
-        /* Preload first 60 logos */
+        /* Preload logos */
         var logos=[];
-        for(var k=0;k<Math.min(60,parsed.length);k++){
-          if(parsed[k].logo)logos.push(parsed[k].logo);
+        for(var k=0;k<Math.min(60,parsedChannels.length);k++){
+          if(parsedChannels[k].logo)logos.push(parsedChannels[k].logo);
         }
         if(typeof AppCache!=='undefined')AppCache.preloadImages(logos,[]);
-        resolve(parsed);
-      });
+        resolve(parsedChannels);
+      }else{
+        // M3U path
+        parseM3UChunked(txt,function(parsed){
+          if(!parsed.length){setSt('No channels in '+name,'err');resolve([]);return}
+          var seen=new Set(allChs.map(function(c){return c.url}));
+          var fresh=[];
+          for(var i=0;i<parsed.length;i++){
+            if(!seen.has(parsed[i].url)){
+              parsed[i]._src=srcTag||parsed[i]._src||name.toLowerCase();
+              fresh.push(parsed[i]);
+            }
+          }
+          allChs=allChs.concat(fresh);
+          lsSet('saga:last',url);
+          rebuildNavTabs();
+          viewChs=getViewChs();
+          renderStrip();
+          setSt(''+allChs.length+' channels loaded','ok');
+          /* Preload first 60 logos */
+          var logos=[];
+          for(var k=0;k<Math.min(60,parsed.length);k++){
+            if(parsed[k].logo)logos.push(parsed[k].logo);
+          }
+          if(typeof AppCache!=='undefined')AppCache.preloadImages(logos,[]);
+          resolve(parsed);
+        });
+      }
     };
     if(!force&&typeof AppCache!=='undefined'){
       AppCache.getM3U(url).then(function(cached){
@@ -1645,7 +1723,7 @@ function renderSettingsSect(s){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
         '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 37 · Samsung Tizen OS9</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 38 · Samsung Tizen OS9 · JSON support added</div>'+
         '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
           '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
           '↑↓←→ — Navigate · OK — Play<br>'+
@@ -1659,7 +1737,7 @@ function renderSettingsSect(s){
           'BACK — Close / go back'+
         '</div>'+
         '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.25)">'+
-          'Built-in: Telugu · Jio · YuppTV<br>Custom playlists stored on device'+
+          'Built-in: Telugu · Jio · YuppTV<br>Custom playlists (M3U or JSON) stored on device'+
         '</div>'+
       '</div>';
   }
