@@ -1,4 +1,4 @@
-name: Refresh YuppTV Playlist
+name: Refresh Playlist
 
 on:
   schedule:
