@@ -9,7 +9,7 @@
 <script src="./js/cache.js"></script>
 <style>
 /*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v37 — One UI Monochrome + Colorized Tiles
+  SAGA IPTV v39 — CricHd JSON built-in source
   ─────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome theme (Samsung design system)
@@ -18,7 +18,7 @@
   · Custom playlist add/remove fully wired
   · Crash-free: no ?. / default params / numeric separators
   · All zones (rows/tabs/yp/settings/dialer) fully navigable
-  · NEW: JSON playlist support (CricHd style)
+  · NEW: CricHd JSON playlist embedded as built-in source
 ═══════════════════════════════════════════════════════════════*/
 *,*::before,*::after{
   margin:0;padding:0;box-sizing:border-box;
@@ -523,7 +523,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
   <div id="topBar">
     <div class="brand">
       <span class="brand-s">SAGA IPTV</span>
-      <span class="brand-tag">v38</span>
+      <span class="brand-tag">v39</span>
     </div>
     <div id="navTabs"></div>
     <div class="top-right">
@@ -672,7 +672,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v38 — JSON playlist support added
+  SAGA IPTV v39 — CricHd JSON built-in source
   ──────────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome design — white accents, dark surfaces
@@ -681,6 +681,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
   · Custom playlist: add via Yellow popup, manage in Settings→Sources
   · NEW: Auto-detects JSON (array of channels) and converts to M3U style
   · Supports fields: name/title, m3u8/url/stream_url, logo/logo_url, group
+  · EMBEDDED: CricHd JSON playlist as built-in source
 ══════════════════════════════════════════════════════════════════*/
 (function(){
 'use strict';
@@ -720,6 +721,8 @@ var PLAY_DEB=80;
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,_src:'telugu'};
 var JIO_PL={name:'Jio',url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL={name:'YuppTV',url:'https://github.com/drpurna/saga/releases/latest/download/channels.m3u',builtIn:true,_src:'yupp'};
+/* Embedded CricHd JSON source */
+var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/refs/heads/main/api.json',builtIn:true,_src:'crichd'};
 
 var ASPECTS=['Cover','Contain','Stretch'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -907,7 +910,7 @@ function extractColour(img,cb){
 /* ════════════════════════════════════════════════════════════
    JSON PARSER — for CricHd style API
    Expects array of objects with at least 'name' and a stream URL.
-   Recognised URL fields: m3u8, url, stream_url, stream.
+   Recognised URL fields: m3u8, url, stream_url, stream, link.
    Logo fields: logo, logo_url, image.
    Group field: group, category.
 ════════════════════════════════════════════════════════════ */
@@ -926,7 +929,7 @@ function parseJsonChannels(jsonText, srcTag){
     // Extract name
     var name=item.name||item.title||item.channel_name||'Unnamed';
     // Extract stream URL
-    var url=item.m3u8||item.url||item.stream_url||item.stream;
+    var url=item.m3u8||item.url||item.stream_url||item.stream||item.link;
     if(!url) continue;
     // Extract logo
     var logo=item.logo||item.logo_url||item.image||'';
@@ -979,6 +982,7 @@ function canonicalTab(ch){
   if(ch._src==='telugu')return'Telugu';
   if(ch._src==='jio')return'Jio';
   if(ch._src==='yupp')return'YuppTV';
+  if(ch._src==='crichd')return'CricHd';
   /* Custom playlist — use group mapping */
   var g=(ch.group||'').toLowerCase().trim();
   if(GROUP_MAP[g])return GROUP_MAP[g];
@@ -987,7 +991,7 @@ function canonicalTab(ch){
   if(g.indexOf('entertain')>=0||g.indexOf('movie')>=0||
      g.indexOf('music')>=0||g.indexOf('kids')>=0)return'Entertainment';
   /* Custom playlist channels fallback to a tab named after the playlist */
-  if(ch._src&&ch._src!=='telugu'&&ch._src!=='jio'&&ch._src!=='yupp')return ch._src;
+  if(ch._src&&ch._src!=='telugu'&&ch._src!=='jio'&&ch._src!=='yupp'&&ch._src!=='crichd')return ch._src;
   return null;
 }
 
@@ -1116,7 +1120,7 @@ function getAvailableTabs(){
   /* Build ordered tab list from channels */
   var tabSet={};
   /* Built-in order */
-  var builtIns=['Telugu','Jio','YuppTV','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','Favourites'];
   for(var bi=0;bi<builtIns.length;bi++)tabSet[builtIns[bi]]=true;
   /* Custom playlist source tabs */
   for(var i=0;i<allChs.length;i++){
@@ -1130,7 +1134,7 @@ function getAvailableTabs(){
 }
 
 function rebuildNavTabs(){
-  var tabOrder=['Telugu','Jio','YuppTV'];
+  var tabOrder=['Telugu','Jio','YuppTV','CricHd'];
   /* Add custom playlist tabs */
   var customNames=[];
   for(var pi=0;pi<pls.length;pi++){
@@ -1149,7 +1153,7 @@ function rebuildNavTabs(){
     /* Check if tab has channels */
     var hasChs=false;
     if(g==='Favourites'){hasChs=favs.size>0}
-    else if(g==='Telugu'||g==='Jio'||g==='YuppTV'){hasChs=true} /* always show built-ins */
+    else if(g==='Telugu'||g==='Jio'||g==='YuppTV'||g==='CricHd'){hasChs=true} /* always show built-ins */
     else{
       for(var j=0;j<allChs.length;j++){
         if(canonicalTab(allChs[j])===g){hasChs=true;break}
@@ -1654,7 +1658,7 @@ function renderSettingsSect(s){
     wireSettings();
   }else if(s==='sources'){
     /* Built-ins + custom playlists */
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     if(!allSrc.length)html='<p style="color:rgba(255,255,255,.35);padding:14px 0">No sources configured.</p>';
     else{
@@ -1691,8 +1695,8 @@ function renderSettingsSect(s){
       btn.addEventListener('click',function(e){
         e.stopPropagation();
         var idx=parseInt(btn.dataset.del);
-        /* idx in allSrc: 0,1,2 = built-ins; 3+ = custom */
-        var customIdx=idx-3;
+        /* idx in allSrc: 0,1,2,3 = built-ins; 4+ = custom */
+        var customIdx=idx-4;
         if(customIdx>=0&&customIdx<pls.filter(function(p){return!p.builtIn}).length){
           var customPls=pls.filter(function(p){return!p.builtIn});
           var removed=customPls[customIdx];
@@ -1723,7 +1727,7 @@ function renderSettingsSect(s){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
         '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 38 · Samsung Tizen OS9 · JSON support added</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 39 · Samsung Tizen OS9 · CricHd JSON built-in</div>'+
         '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
           '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
           '↑↓←→ — Navigate · OK — Play<br>'+
@@ -1737,7 +1741,7 @@ function renderSettingsSect(s){
           'BACK — Close / go back'+
         '</div>'+
         '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.25)">'+
-          'Built-in: Telugu · Jio · YuppTV<br>Custom playlists (M3U or JSON) stored on device'+
+          'Built-in: Telugu · Jio · YuppTV · CricHd<br>Custom playlists (M3U or JSON) stored on device'+
         '</div>'+
       '</div>';
   }
@@ -2038,7 +2042,7 @@ window.addEventListener('keydown',function(e){
 $('root').addEventListener('click',wakeUI);
 
 /* ════════════════════════════════════════════════════════════
-   LOAD ALL — three built-in playlists + user custom
+   LOAD ALL — three built-in playlists + user custom + CricHd
 ════════════════════════════════════════════════════════════ */
 function loadAll(force){
   if(force===undefined)force=false;
@@ -2047,6 +2051,7 @@ function loadAll(force){
     .then(function(){return loadPl(TELUGU_PL.url,TELUGU_PL.name,force,'telugu')})
     .then(function(){return loadPl(JIO_PL.url,JIO_PL.name,force,'jio')})
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
+    .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
     .then(function(){
       /* Load custom playlists */
       var customs=pls.filter(function(p){return!p.builtIn});
@@ -2081,7 +2086,7 @@ function loadAll(force){
   loadStore();
   /* Strip built-in duplicates from saved custom pls */
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url;
   });
 
   $('splMsg').textContent='Initialising player…';
