@@ -9,7 +9,7 @@
 <script src="./js/cache.js"></script>
 <style>
 /*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v40 — CricHd+YuppTV HTML scraper source
+  SAGA IPTV v41 — CricHd+YuppTV HTML scraper source
   ─────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome theme (Samsung design system)
@@ -672,7 +672,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v40 — CricHd+YuppTV HTML scraper source
+  SAGA IPTV v41 — CricHd+YuppTV HTML scraper source
   ──────────────────────────────────────────────────────────────────
   · Three built-in playlists: Telugu, Jio, YuppTV
   · One UI monochrome design — white accents, dark surfaces
@@ -722,7 +722,7 @@ var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.
 var JIO_PL={name:'Jio',url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
 /* CricHd sports worker page */
-var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
+var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/refs/heads/main/ALL.m3u',builtIn:true,_src:'crichd'};
 
 var ASPECTS=['Cover','Contain','Stretch'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1470,6 +1470,15 @@ function initPlayer(){
       setSt('Shaka Player not supported','err');resolve();return;
     }
     player=new shaka.Player(video);
+    /* Inject required headers per stream source */
+    player.getNetworkingEngine().registerRequestFilter(function(type,request){
+      var u=request.uris&&request.uris[0]?request.uris[0]:'';
+      /* CricHd streams (sanwalyaarpya CDN) require Referer */
+      if(u.indexOf('sanwalyaarpya.com')>=0||u.indexOf('profamouslife')>=0){
+        request.headers['Referer']='https://profamouslife.com/';
+        request.headers['Origin']='https://profamouslife.com';
+      }
+    });
     recfg();
     player.addEventListener('adaptation',updateQ);
     player.addEventListener('variantchanged',updateQ);
@@ -1788,7 +1797,7 @@ function renderSettingsSect(s){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
         '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 40 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
+        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 41 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
         '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
           '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
           '↑↓←→ — Navigate · OK — Play<br>'+
