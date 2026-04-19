@@ -1,0 +1,49 @@
+name: Refresh YuppTV Playlist
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:         # manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run extraction script
+        run: python extract.py
+
+      - name: Delete existing 'latest' release (if any)
+        run: |
+          gh release delete latest --yes --repo ${{ github.repository }} || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create new 'latest' release
+        run: |
+          gh release create latest \
+            --title "Latest YuppTV Playlist" \
+            --notes "Automatically refreshed every 6 hours" \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload channels.m3u to release
+        run: |
+          gh release upload latest channels.m3u \
+            --clobber \
+            --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
