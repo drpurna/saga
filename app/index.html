@@ -41,9 +41,9 @@
   --info:#0a84ff;
   /* layout */
   --topH:76px;
-  --botH:218px;
-  --cw:228px;
-  --ch:136px;
+  --botH:230px;
+  --cw:248px;
+  --ch:148px;
   --gap:14px;
   /* animation */
   --fast:80ms;
@@ -301,7 +301,7 @@ html,body{
   border-radius:0 0 12.5px 12.5px;z-index:3;
 }
 .card-name{
-  font-size:12.5px;font-weight:700;color:var(--w0);
+  font-size:13px;font-weight:700;color:var(--w0);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   text-align:center;
 }
@@ -322,13 +322,14 @@ html,body{
 /* FOCUSED */
 .card.sel{
   border:3px solid rgba(255,255,255,.98);
-  transform:scale(1.10) translateZ(0);z-index:10;
+  transform:scale(1.16) translateZ(0);z-index:10;
   box-shadow:
-    0 0 0 5px rgba(255,255,255,.18),
-    0 0 0 7px rgba(255,255,255,.06),
-    0 24px 64px rgba(0,0,0,.98),
-    0 0 60px rgba(255,255,255,.08);
-  transition:transform 100ms var(--spring),border-color 60ms;
+    0 0 0 5px rgba(255,255,255,.22),
+    0 0 0 9px rgba(255,255,255,.08),
+    0 0 0 14px rgba(255,255,255,.03),
+    0 28px 70px rgba(0,0,0,.99),
+    0 0 70px rgba(255,255,255,.10);
+  transition:transform 120ms var(--spring),border-color 60ms;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -988,7 +989,7 @@ if(typeof requestIdleCallback==='undefined'){
 /* ════════════════════════════════════════════════════════════
    CONSTANTS
 ════════════════════════════════════════════════════════════ */
-var CW=228, CH=136, CGAP=14;
+var CW=248, CH=148, CGAP=14;
 var AUTO_HIDE_MS=4200;
 var PLAY_DEB=120;
 
@@ -997,6 +998,7 @@ var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.
 var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
 var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
+var MOVIES_PL={name:'Movies',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'movies'};
 
 var ASPECTS=['Contain','Stretch','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1004,7 +1006,7 @@ var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
   'sports':'Sports','live sports':'Sports','cricket':'Sports','football':'Sports',
   'entertainment':'Entertainment','general entertainment':'Entertainment',
-  'movies':'Entertainment','kids':'Entertainment','music':'Entertainment'
+  'movies':'Movies','kids':'Entertainment','music':'Entertainment','movie':'Movies','films':'Movies','vod':'Movies'
 };
 
 /* ── DOM refs ── */
@@ -1077,7 +1079,7 @@ function wakeUI(){
   resetHideTimer();
 }
 function hideUI(){
-  if(zone==='yp'||zone==='settings'||zone==='dialer'||zone==='search')return;
+  if(zone==='yp'||zone==='settings'||zone==='dialer'||zone==='search'||zone==='exit')return;
   uiVisible=false;
   topBar.classList.add('hide');
   bottomPanel.classList.add('hide');
@@ -1220,6 +1222,7 @@ function canonicalTab(ch){
   if(ch._src==='jio')return'Jio';
   if(ch._src==='yupp')return'YuppTV';
   if(ch._src==='crichd')return'CricHd';
+  if(ch._src==='movies')return'Movies';
   var g=(ch.group||'').toLowerCase().trim();
   if(GROUP_MAP[g])return GROUP_MAP[g];
   if(g.indexOf('news')>=0)return'News';
@@ -1249,7 +1252,7 @@ function getViewChs(){
    Stored as JSON. Restored before network fetch for instant UI.
 ════════════════════════════════════════════════════════════ */
 var CH_CACHE_KEY='saga:chCache';
-var CH_CACHE_TTL=4*60*60*1000; /* 4 hours */
+var CH_CACHE_TTL=24*60*60*1000; /* 24 hours — matches daily refresh */
 
 function saveChCache(){
   requestIdleCallback(function(){
@@ -1353,11 +1356,11 @@ function loadPl(url,name,force,srcTag){
    NAV TABS
 ════════════════════════════════════════════════════════════ */
 function rebuildNavTabs(){
-  var builtIns=['Telugu','Jio','YuppTV','CricHd','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','Favourites'];
   var cats=['News','Sports','Entertainment'];
   var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
   var seen=new Set();
-  var order=['Telugu','Jio','YuppTV','CricHd'];
+  var order=['Telugu','Jio','YuppTV','CricHd','Movies'];
   allChs.forEach(function(ch){
     var t=canonicalTab(ch);
     if(t&&!builtIns.includes(t)&&!cats.includes(t))order.push(t);
@@ -1366,7 +1369,7 @@ function rebuildNavTabs(){
     var hasChs=allChs.some(function(ch){return canonicalTab(ch)===c});
     if(hasChs)order.push(c);
   });
-  if(favs.size>0)order.push('Favourites');
+  order.push('Favourites'); /* always show Favourites tab */
   customNames.forEach(function(n){if(!order.includes(n))order.push(n)});
   var tabs=[];
   order.forEach(function(t){if(!seen.has(t)){seen.add(t);tabs.push(t)}});
@@ -1394,7 +1397,7 @@ function setTab(t){
 /* ════════════════════════════════════════════════════════════
    VIRTUAL SCROLL STRIP RENDERER
 ════════════════════════════════════════════════════════════ */
-var VPORT=8; /* cards rendered at once — wider tiles */
+var VPORT=7; /* 7 × (248+14) = 1834px fits 1920px screen */
 var renderFrom=0;
 
 function renderStrip(){
@@ -1841,6 +1844,37 @@ function recfg(){
    PLAY DEBOUNCE + MAIN ENTRY
 ════════════════════════════════════════════════════════════ */
 function immediatePlay(){clearTimeout(playTimer);playTimer=setTimeout(_doPlay,PLAY_DEB)}
+function resolveCrichdUrl(ch, cb){
+  /* Extract crichd.uhd2026.workers.dev/?v=X from the calm-sun wrapper */
+  var href = ch.url || '';
+  var dtvMatch = href.match(/[?&]dtv=([^&\s]+)/);
+  var innerUrl = dtvMatch ? dtvMatch[1] : '';
+  /* If it already looks like a direct m3u8, use it */
+  if(innerUrl.indexOf('.m3u8') >= 0){ cb(innerUrl); return; }
+  /* Fetch the inner URL and scan for m3u8 in the response */
+  if(!innerUrl || innerUrl.indexOf('http') < 0){ cb(ch.url); return; }
+  var ctrl = new AbortController();
+  var tid = setTimeout(function(){try{ctrl.abort()}catch(e){}}, 6000);
+  fetch(innerUrl, {signal:ctrl.signal}).then(function(r){
+    clearTimeout(tid);
+    if(!r.ok){ cb(ch.url); return; }
+    return r.text();
+  }).then(function(txt){
+    if(!txt){ cb(ch.url); return; }
+    /* Look for m3u8 URL in JSON or JS */
+    var m = txt.match(/https?:\/\/[^"'\s<>]+\.m3u8[^"'\s<>]*/);
+    if(m){ cb(m[0]); return; }
+    /* Try JSON stream fields */
+    try{
+      var j = JSON.parse(txt);
+      var u = j.url||j.stream||j.m3u8||j.hls||j.source||
+              (j.data&&(j.data.url||j.data.m3u8))||null;
+      if(u && u.indexOf('http')===0){ cb(u); return; }
+    }catch(e){}
+    cb(ch.url); /* fallback */
+  }).catch(function(){ clearTimeout(tid); cb(ch.url); });
+}
+
 function _doPlay(){
   var ch=getFocusedCh();
   if(!ch||!ch.url)return;
@@ -1849,6 +1883,23 @@ function _doPlay(){
   if(cfg.muteSwitch&&isPlaying)video.muted=true;
   isPlaying=false;nowQ.style.display='none';
   updateNowInfo(ch);
+
+  /* CrichD: resolve the actual m3u8 from the proxy wrapper before playing */
+  if(ch._src==='crichd' && ch.url.indexOf('dtv=')>=0){
+    setSt('Resolving CricHd stream…','buf');
+    bufSpinner.classList.add('on');
+    resolveCrichdUrl(ch, function(resolvedUrl){
+      bufSpinner.classList.remove('on');
+      var playableCh = {name:ch.name,url:resolvedUrl,logo:ch.logo,group:ch.group,_src:ch._src,_col:ch._col};
+      setSt('Connecting CricHd…','buf');
+      if(cfg.engine==='shaka'){playWithShaka(playableCh,false);return}
+      if(cfg.engine==='avplay'&&avReady){playWithAVPlay(playableCh);return}
+      if(avReady)playWithAVPlay(playableCh);
+      else playWithShaka(playableCh,false);
+    });
+    return;
+  }
+
   /* Engine selection */
   if(cfg.engine==='shaka'){playWithShaka(ch,false);return}
   if(cfg.engine==='avplay'&&avReady){playWithAVPlay(ch);return}
@@ -2045,7 +2096,7 @@ function renderSettingsSect(s){
     var ab=$('soAspect');
     if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     allSrc.forEach(function(p,i){
       html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
@@ -2098,7 +2149,7 @@ function renderSettingsSect(s){
         'BACK Close / go back'+
       '</div>'+
       '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
-        'Built-in: Telugu · Jio · YuppTV · CricHd<br>'+
+        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies (VOD)<br>'+
         'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · Direct (last resort)'+
       '</div></div>';
   }
@@ -2401,6 +2452,32 @@ window.addEventListener('keydown',function(e){
 
 $('root').addEventListener('click',wakeUI);
 
+
+/* ════════════════════════════════════════════════════════════
+   DAILY AUTO-REFRESH — refresh all playlists once per day
+   Stores last-refresh timestamp in localStorage.
+   Only fires once after 24h gap, not on every boot.
+════════════════════════════════════════════════════════════ */
+var REFRESH_KEY='saga:lastRefresh';
+var REFRESH_INTERVAL=24*60*60*1000; /* 24 hours */
+
+function checkDailyRefresh(){
+  var last=parseInt(lsGet(REFRESH_KEY)||'0',10);
+  var now=Date.now();
+  if(now-last >= REFRESH_INTERVAL){
+    /* Due for refresh — wait 30s after boot so UI is fully loaded first */
+    setTimeout(function(){
+      if(typeof AppCache!=='undefined')AppCache.clearAllM3U();
+      lsSet(REFRESH_KEY,String(now));
+      allChs=[];
+      setSt('Daily auto-refresh…','buf');
+      loadAll(true).then(function(){
+        setSt('Auto-refresh complete — '+allChs.length+' channels','ok');
+      });
+    },30000);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════
    LOAD ALL
 ════════════════════════════════════════════════════════════ */
@@ -2412,6 +2489,7 @@ function loadAll(force){
     .then(function(){return loadPl(JIO_PL.url,JIO_PL.name,force,'jio')})
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
     .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
+    .then(function(){return loadPl(MOVIES_PL.url,MOVIES_PL.name,force,'movies')})
     .then(function(){
       var customs=pls.filter(function(p){return!p.builtIn});
       function loadNext(i){
@@ -2432,6 +2510,7 @@ function loadAll(force){
       hideSplash();resetHideTimer();
       currentVol=getSysVol();
       setSt('Ready — '+allChs.length+' channels','ok');
+      checkDailyRefresh();
     });
 }
 
@@ -2442,7 +2521,7 @@ function loadAll(force){
   loadStore();
   initChHud();
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url;
   });
   $('splMsg').textContent='Initialising player…';
 
@@ -2451,7 +2530,26 @@ function loadAll(force){
   initShaka().then(function(){
     $('splMsg').textContent='Loading channels…';
     rebuildNavTabs();
-    return loadAll(false);
+    /* Try channel cache first for instant display */
+    return loadChCache().then(function(cached){
+      if(cached && cached.chs && cached.chs.length > 0){
+        allChs = cached.chs;
+        var savedTab = cached.tab || 'Telugu';
+        rebuildNavTabs();
+        setTab(savedTab);
+        hideSplash();
+        setSt('Ready — '+allChs.length+' channels (cached)','ok');
+        checkDailyRefresh();
+        /* Background refresh after 2s to get fresh streams */
+        setTimeout(function(){
+          setSt('Refreshing in background…','buf');
+          loadAll(true);
+        }, 2000);
+        return Promise.resolve();
+      }
+      /* No cache — fresh load */
+      return loadAll(false);
+    });
   }).catch(function(err){
     setSt('Boot error: '+String(err),'err');hideSplash();
   });
