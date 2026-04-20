@@ -1,32 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://sagaiptv.app/SAGAiptv"
-        version="1.0.0"
+        id="http://sagaiptv.app/SAGAiptvWeb"
+        version="2.0.0"
         viewmodes="fullscreen">
 
-  <!-- ═══ Application Identity ═══════════════════════════════════ -->
-  <tizen:application id="SAGAiptv.App"
-                     package="SAGAiptv"
+  <tizen:application id="SAGAiptv.Web"
+                     package="SAGAiptvW"
                      required_version="6.0"
                      launch_mode="single"/>
 
-  <name>SAGA IPTV</name>
+  <n>SAGA IPTV</n>
   <icon src="icon.png"/>
   <content src="index.html"/>
-  <description>Enterprise IPTV Player — Shaka Player, M3U, HLS/DASH, 55-inch TV</description>
+  <description>SAGA IPTV — Shaka Player, Samsung Tizen OS9, M3U/HLS/DASH</description>
 
-  <!-- ═══ Content Security Policy ════════════════════════════════
-       Inline scripts + styles (entire app is inline in index.html)
-       All streaming origins via connect-src: *
-       Media blobs for Shaka MSE segments
-       All image origins for channel logos
-  ═══════════════════════════════════════════════════════════════ -->
   <tizen:content-security-policy>
     default-src 'self';
-    script-src  'self' 'unsafe-inline'
-                https://cdn.jsdelivr.net
-                https://cdnjs.cloudflare.com;
+    script-src  'self' 'unsafe-inline';
     style-src   'self' 'unsafe-inline';
     media-src   * blob: data:;
     img-src     * data: blob:;
@@ -36,26 +27,18 @@
     object-src  'none';
   </tizen:content-security-policy>
 
-  <!-- ═══ Features (hardware access declarations) ═════════════════ -->
   <feature name="http://tizen.org/feature/network.internet"/>
   <feature name="http://tizen.org/feature/tv.display"/>
 
-  <!-- ═══ Privileges ═════════════════════════════════════════════ -->
-  <!-- Network access for fetching M3U playlists and streaming     -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
-  <!-- Fullscreen video rendering                                  -->
   <tizen:privilege name="http://tizen.org/privilege/fullscreen"/>
-  <!-- TV remote input device key registration                     -->
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
-  <!-- System volume control via tvaudiocontrol API                -->
   <tizen:privilege name="http://tizen.org/privilege/volume.set"/>
-  <!-- Audio / video capture (required by some Shaka builds)       -->
   <tizen:privilege name="http://tizen.org/privilege/mediacapture"/>
+  <tizen:privilege name="http://tizen.org/privilege/tv.audio"/>
 
-  <!-- ═══ Target Platform ════════════════════════════════════════ -->
   <tizen:profile name="tv"/>
 
-  <!-- ═══ App Settings ═══════════════════════════════════════════ -->
   <tizen:setting
     screen-orientation="landscape"
     context-menu="disable"
@@ -64,19 +47,10 @@
     install-location="auto"
     hwkey-event="true"/>
 
-  <!-- ═══ Metadata ════════════════════════════════════════════════
-       prelaunch      — keep app in memory after first launch (faster zap)
-       screen.off     — prevent TV screen saver during playback
-       background     — keep running when user briefly leaves app
-  ═══════════════════════════════════════════════════════════════ -->
-  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch"
-                  value="true"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/screen.off.enable"
-                  value="false"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/background.enable"
-                  value="true"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch"   value="true"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/screen.off.enable" value="false"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/background.enable" value="true"/>
 
-  <!-- Default app-control operation so Tizen can launch the app  -->
   <tizen:app-control>
     <tizen:src name="index.html"/>
     <tizen:operation name="http://tizen.org/appcontrol/operation/default"/>

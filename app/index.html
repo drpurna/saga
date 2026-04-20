@@ -8,213 +8,279 @@
 <script src="./js/shaka.js"></script>
 <script src="./js/cache.js"></script>
 <style>
-/*═══════════════════════════════════════════════════════════════
-  SAGA IPTV v44 — CricHd+YuppTV HTML scraper source
-  ─────────────────────────────────────────────────────────────
-  · Three built-in playlists: Telugu, Jio, YuppTV
-  · One UI monochrome theme (Samsung design system)
-  · Channel tiles get dominant-colour tint from logo
-  · Settings button mapped to remote MENU/INFO key
-  · Custom playlist add/remove fully wired
-  · Crash-free: no ?. / default params / numeric separators
-  · All zones (rows/tabs/yp/settings/dialer) fully navigable
-  · NEW: CricHd JSON playlist embedded as built-in source
-═══════════════════════════════════════════════════════════════*/
+/*══════════════════════════════════════════════════════
+  SAGA IPTV — Native Edition v1.0
+  AVPlay-first · Shaka fallback · Samsung Tizen OS9
+  One UI design language · GPU-composited layers
+══════════════════════════════════════════════════════*/
 *,*::before,*::after{
   margin:0;padding:0;box-sizing:border-box;
   user-select:none;-webkit-user-select:none;
   -webkit-tap-highlight-color:transparent;
 }
 :root{
-  /* ─── One UI Monochrome palette ─── */
-  --bg:#0d0d0d;
-  --surface:#1a1a1a;
-  --surface2:#242424;
-  --surface3:#2e2e2e;
-  --border:rgba(255,255,255,.10);
-  --border2:rgba(255,255,255,.18);
-  --w:#ffffff;
-  --w2:rgba(255,255,255,.72);
-  --w3:rgba(255,255,255,.44);
+  --bg:#080808;
+  --s1:#111111;
+  --s2:#1c1c1c;
+  --s3:#262626;
+  --s4:#303030;
+  --b1:rgba(255,255,255,.08);
+  --b2:rgba(255,255,255,.15);
+  --b3:rgba(255,255,255,.25);
+  --w0:#ffffff;
+  --w1:rgba(255,255,255,.88);
+  --w2:rgba(255,255,255,.60);
+  --w3:rgba(255,255,255,.38);
   --w4:rgba(255,255,255,.16);
-  /* accent: pure white highlight — One UI style */
-  --accent:#ffffff;
-  --accent-bg:rgba(255,255,255,.12);
-  --accent-act:rgba(255,255,255,.22);
-  /* semantic colours */
-  --live:#ef4444;
-  --live-bg:rgba(239,68,68,.18);
-  --ok:#22c55e;
-  --ok-bg:rgba(34,197,94,.15);
-  --warn:#f59e0b;
-  --warn-bg:rgba(245,158,11,.15);
-  /* card dims */
-  --cw:200px;
-  --ch:118px;
-  --cgap:14px;
-  --topbar-h:68px;
-  --bottom-h:192px;
-  --dur:100ms;
-  --ease:cubic-bezier(.4,0,.2,1);
+  --acc:#ffffff;
+  --acc-bg:rgba(255,255,255,.11);
+  --acc-hi:rgba(255,255,255,.20);
+  --live:#ff3b30;
+  --ok:#30d158;
+  --warn:#ff9f0a;
+  --info:#0a84ff;
+  /* layout */
+  --topH:76px;
+  --botH:218px;
+  --cw:228px;
+  --ch:136px;
+  --gap:14px;
+  /* animation */
+  --fast:80ms;
+  --mid:160ms;
+  --slow:300ms;
   --spring:cubic-bezier(.22,1,.36,1);
+  --ease:cubic-bezier(.4,0,.2,1);
+  --sharp:cubic-bezier(.4,0,1,1);
 }
-html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:var(--w);
-  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
 
-#root{width:100vw;height:100vh;position:relative;overflow:hidden;transform:translateZ(0);contain:strict}
+html,body{
+  width:100vw;height:100vh;overflow:hidden;
+  background:var(--bg);color:var(--w0);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  font-size:16px;
+}
 
-/* ── VIDEO ── */
-#video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;
-  transform:translateZ(0);will-change:transform;z-index:1;background:#000}
-#video.vid-stretch{object-fit:fill}
-#video.vid-cover{object-fit:cover}
+/* ── ROOT ── */
+#root{
+  width:100vw;height:100vh;position:relative;overflow:hidden;
+  transform:translateZ(0);contain:strict;
+}
 
-/* ── VIGNETTE ── */
-#vig{position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:linear-gradient(to bottom,
-    rgba(0,0,0,.72) 0%,rgba(0,0,0,0) 22%,
-    rgba(0,0,0,0) 52%,rgba(0,0,0,.78) 74%,rgba(0,0,0,.96) 100%);
-  transition:opacity 350ms}
-#vig.dim{opacity:.2}
+/* ══════════════════════════════════════════════════════
+   PLAYER LAYER — AVPlay occupies this div, Shaka uses <video>
+══════════════════════════════════════════════════════ */
+#playerWrap{
+  position:absolute;inset:0;z-index:1;background:#000;
+  transform:translateZ(0);
+}
+#video{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:contain;display:block;background:#000;
+  transform:translateZ(0);will-change:transform;
+}
+#video.stretch{object-fit:fill}
+#video.cover{object-fit:cover}
 
-/* ════════════════════════════════════════════════════════════
-   TOP BAR — One UI style
-════════════════════════════════════════════════════════════ */
+/* AVPlay placeholder — AVPlay renders outside DOM but needs a rect */
+#avContainer{
+  position:absolute;inset:0;width:100%;height:100%;
+  background:transparent;display:none;
+}
+#avContainer.active{display:block}
+
+/* ── PLAYER ENGINE BADGE ── */
+#engBadge{
+  position:absolute;top:8px;left:8px;z-index:6;
+  font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+  padding:2px 7px;border-radius:4px;
+  background:rgba(0,0,0,.7);color:rgba(255,255,255,.35);
+  opacity:0;transition:opacity var(--slow);pointer-events:none;
+}
+#engBadge.show{opacity:1}
+
+/* ══════════════════════════════════════════════════════
+   VIGNETTE
+══════════════════════════════════════════════════════ */
+#vig{
+  position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:linear-gradient(
+    to bottom,
+    rgba(0,0,0,.78) 0%,
+    rgba(0,0,0,0) 20%,
+    rgba(0,0,0,0) 54%,
+    rgba(0,0,0,.75) 74%,
+    rgba(0,0,0,.97) 100%);
+  transition:opacity var(--slow) var(--ease);
+}
+#vig.dim{opacity:.15}
+
+/* ══════════════════════════════════════════════════════
+   TOP BAR
+══════════════════════════════════════════════════════ */
 #topBar{
-  position:absolute;top:0;left:0;right:0;height:var(--topbar-h);
-  z-index:30;display:flex;align-items:center;padding:0 40px;gap:0;
-  background:linear-gradient(to bottom,rgba(0,0,0,.88) 0%,transparent 100%);
+  position:absolute;top:0;left:0;right:0;
+  height:var(--topH);z-index:30;
+  display:flex;align-items:center;padding:0 44px;gap:0;
+  background:linear-gradient(to bottom,rgba(0,0,0,.92) 0%,transparent 100%);
   will-change:transform,opacity;
-  transition:transform 320ms var(--spring),opacity 280ms;
+  transition:transform var(--slow) var(--spring),opacity var(--mid);
 }
-#topBar.hide{transform:translateY(-110%);opacity:0;pointer-events:none}
+#topBar.hide{transform:translateY(-115%);opacity:0;pointer-events:none}
 
 /* Brand */
-.brand{display:flex;align-items:center;gap:6px;margin-right:32px;flex-shrink:0}
-.brand-s{font-size:21px;font-weight:800;color:var(--w);letter-spacing:-.3px}
-.brand-tag{font-size:10px;font-weight:700;color:var(--w3);letter-spacing:1.5px;
-  text-transform:uppercase;background:rgba(255,255,255,.1);padding:2px 7px;border-radius:20px;
-  border:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:8px;margin-right:36px;flex-shrink:0}
+.brand-name{font-size:24px;font-weight:900;color:var(--w0);letter-spacing:-.5px}
 
-/* Nav tabs — One UI pill style */
-#navTabs{display:flex;align-items:center;gap:6px;flex:1;overflow:hidden}
+
+/* Nav tabs */
+#navTabs{display:flex;align-items:center;gap:5px;flex:1;overflow:hidden;min-width:0}
 .ntab{
-  height:34px;padding:0 18px;border:1px solid transparent;border-radius:17px;
+  height:40px;padding:0 22px;border:1px solid transparent;border-radius:20px;
   background:transparent;color:var(--w3);
-  font-size:14px;font-weight:600;cursor:pointer;outline:none;
+  font-size:15px;font-weight:600;cursor:pointer;outline:none;
   white-space:nowrap;flex-shrink:0;
-  transition:background var(--dur),color var(--dur),border-color var(--dur);
+  transition:background var(--fast),color var(--fast),border-color var(--fast),
+             transform var(--fast);
+  transform:translateZ(0);
 }
-.ntab.on{
-  background:var(--w);color:#111;font-weight:700;
-  border-color:transparent;
-}
-.ntab:focus{outline:2px solid rgba(255,255,255,.5);outline-offset:2px}
-
-/* Right: clock + settings */
-.top-right{display:flex;align-items:center;gap:10px;margin-left:16px;flex-shrink:0}
-#topClock{font-size:15px;font-weight:700;color:var(--w2);font-variant-numeric:tabular-nums;
-  letter-spacing:.5px}
-.top-icon{
-  width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.10);
-  border:1px solid var(--border);cursor:pointer;outline:none;
-  display:flex;align-items:center;justify-content:center;color:var(--w2)
-}
-.top-icon svg{width:19px;height:19px;fill:currentColor}
-.top-icon:focus,.top-icon:hover{background:rgba(255,255,255,.20);color:var(--w);
-  border-color:var(--border2);outline:2px solid rgba(255,255,255,.45);outline-offset:1px}
-#settingsBtn.active-focus{
-  background:var(--w);color:#111;border-color:transparent;
+.ntab.on{background:var(--w0);color:#111;font-weight:700;border-color:transparent}
+.ntab.focused{
+  background:var(--acc-hi);color:var(--w0);
+  border-color:rgba(255,255,255,.4);
+  outline:none;
+  transform:scale(1.04) translateZ(0);
 }
 
-/* ════════════════════════════════════════════════════════════
+/* Top-right icons */
+.top-right{display:flex;align-items:center;gap:8px;margin-left:20px;flex-shrink:0}
+#topClock{
+  font-size:15px;font-weight:700;color:var(--w2);
+  font-variant-numeric:tabular-nums;letter-spacing:.5px;
+  margin-right:4px;
+}
+.tip-btn{
+  width:40px;height:40px;border-radius:50%;
+  background:var(--b1);border:1px solid var(--b1);
+  cursor:pointer;outline:none;
+  display:flex;align-items:center;justify-content:center;
+  color:var(--w2);flex-shrink:0;
+  transition:background var(--fast),border-color var(--fast),
+             transform var(--fast),color var(--fast);
+  transform:translateZ(0);
+}
+.tip-btn svg{width:20px;height:20px;fill:currentColor}
+.tip-btn.focused,.tip-btn:focus{
+  background:var(--acc-hi);color:var(--w0);
+  border-color:rgba(255,255,255,.45);
+  transform:scale(1.12) translateZ(0);
+  outline:none;
+}
+.tip-btn.active{background:var(--w0);color:#111;border-color:transparent}
+
+/* ══════════════════════════════════════════════════════
    NOW PLAYING INFO
-════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════ */
 #nowInfo{
-  position:absolute;left:40px;bottom:calc(var(--bottom-h) + 16px);
-  z-index:20;max-width:660px;
+  position:absolute;left:44px;bottom:calc(var(--botH) + 20px);
+  z-index:20;max-width:680px;
   opacity:0;pointer-events:none;
-  transition:opacity 280ms,transform 280ms var(--ease);
-  transform:translateY(8px);
+  transition:opacity var(--mid) var(--ease),transform var(--mid) var(--ease);
+  transform:translateY(10px);
 }
 #nowInfo.vis{opacity:1;transform:translateY(0)}
-#nowTag{font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;
-  color:var(--w3);margin-bottom:8px;
-  display:flex;align-items:center;gap:8px}
-.now-pulse{width:6px;height:6px;border-radius:50%;background:var(--live);flex-shrink:0;
-  animation:np 2s ease-in-out infinite}
-@keyframes np{0%,100%{opacity:1}50%{opacity:.25}}
-#nowName{font-size:36px;font-weight:800;color:var(--w);line-height:1.05;
-  letter-spacing:-.02em;text-shadow:0 4px 24px rgba(0,0,0,.9);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#nowMeta{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
-.np{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:4px;
-  padding:3px 9px;font-size:10px;font-weight:700;color:var(--w);letter-spacing:.4px}
-.np-live{background:var(--live-bg);border-color:rgba(239,68,68,.4);color:#f87171}
-#epgRow{margin-top:8px;font-size:12px;color:var(--w3);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:600px}
-.epg-prog{color:var(--w2);font-weight:600}
+
+#nowTag{
+  font-size:10px;font-weight:700;letter-spacing:2.8px;text-transform:uppercase;
+  color:var(--w3);margin-bottom:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--live);flex-shrink:0;
+  box-shadow:0 0 8px var(--live);
+  animation:livePulse 2s ease-in-out infinite;
+}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}
+
+#nowName{
+  font-size:42px;font-weight:900;color:var(--w0);line-height:1.02;
+  letter-spacing:-.03em;
+  text-shadow:0 4px 28px rgba(0,0,0,.95),0 2px 8px rgba(0,0,0,.8);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#nowMeta{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+.np{
+  background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.16);
+  border-radius:4px;padding:3px 10px;font-size:10px;font-weight:700;
+  color:var(--w0);letter-spacing:.5px;
+}
+.np-live{background:rgba(255,59,48,.18);border-color:rgba(255,59,48,.4);color:#ff6b63}
+.np-engine{background:rgba(10,132,255,.15);border-color:rgba(10,132,255,.35);color:#5eb5ff}
+#epgRow{
+  margin-top:10px;font-size:12px;color:var(--w3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:620px;
+}
 .epg-time{color:var(--w3);margin-right:6px}
+.epg-prog{color:var(--w2);font-weight:600}
 
-/* ════════════════════════════════════════════════════════════
-   BOTTOM PANEL — single horizontal channel row
-════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   BOTTOM PANEL
+══════════════════════════════════════════════════════ */
 #bottomPanel{
-  position:absolute;bottom:0;left:0;right:0;height:var(--bottom-h);
-  z-index:30;padding:0 0 14px;
+  position:absolute;bottom:0;left:0;right:0;
+  height:var(--botH);z-index:30;padding-bottom:16px;
   will-change:transform,opacity;
-  transition:transform 320ms var(--spring),opacity 280ms;
+  transition:transform var(--slow) var(--spring),opacity var(--mid);
 }
-#bottomPanel.hide{transform:translateY(calc(100% + 20px));opacity:0;pointer-events:none}
+#bottomPanel.hide{transform:translateY(calc(100% + 24px));opacity:0;pointer-events:none}
 
-.row-wrap{padding:0 40px}
-.row-label{font-size:14px;font-weight:700;color:var(--w);
-  margin-bottom:12px;display:flex;align-items:center;gap:10px}
-.row-label-n{font-size:10px;font-weight:600;color:var(--w3);
-  background:var(--accent-bg);border-radius:10px;padding:2px 8px;
-  border:1px solid var(--border)}
+.row-wrap{padding:0 44px}
+.row-label{
+  font-size:15px;font-weight:700;color:var(--w1);
+  margin-bottom:10px;display:flex;align-items:center;gap:10px;
+}
+.row-count{
+  font-size:10px;font-weight:600;color:var(--w3);
+  background:var(--b1);border-radius:10px;padding:2px 9px;
+  border:1px solid var(--b1);
+}
 
-/* Strip */
+/* Strip — GPU-composited horizontal scroll */
 .tile-strip{
-  display:flex;gap:var(--cgap);
-  will-change:transform;transition:transform 120ms linear;
-  overflow:visible;padding-bottom:6px;
-  transform:translateZ(0);backface-visibility:hidden;
+  display:flex;gap:var(--gap);overflow:visible;padding-bottom:4px;
+  transform:translateZ(0);will-change:transform;
+  transition:transform 90ms linear;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
 }
 
-/* ════════════════════════════════════════════════════════════
-   CHANNEL CARD — 200×118px  (One UI + dominant-colour tint)
-════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   CHANNEL CARD
+══════════════════════════════════════════════════════ */
 .card{
   width:var(--cw);height:var(--ch);
-  border-radius:14px;
-  position:relative;flex-shrink:0;
+  border-radius:14px;position:relative;flex-shrink:0;
   cursor:pointer;outline:none;
-  /* default neutral bg — JS overrides with channel colour */
-  background:var(--surface2);
-  border:1px solid var(--border);
+  background:var(--s2);border:1.5px solid var(--b1);
   overflow:visible;
-  transition:transform 80ms linear,border-color 60ms;
-  transform:scale(1) translateZ(0);will-change:transform;contain:layout style;
+  transition:transform 70ms linear,border-color 60ms linear;
+  transform:scale(1) translateZ(0);will-change:transform;
+  contain:layout style;
 }
-.card-inner{position:absolute;inset:0;border-radius:13px;overflow:hidden}
-
-/* Blurred logo wash — colour tint backdrop */
+.card-inner{
+  position:absolute;inset:0;border-radius:12.5px;overflow:hidden;
+  background:var(--s2);
+}
+/* Blurred colour wash */
 .card-bg{
-  position:absolute;inset:-6px;
+  position:absolute;inset:-8px;
   background-size:cover;background-position:center;
-  filter:blur(14px) brightness(.22) saturate(2.2);
-  opacity:0;transition:opacity 500ms;
+  filter:blur(16px) brightness(.20) saturate(2.5);
+  opacity:0;transition:opacity 400ms;
+  transform:translateZ(0);
 }
 .card-bg.on{opacity:1}
-
-/* Solid colour fill for channels with no logo but extracted colour */
-.card-clr{
-  position:absolute;inset:0;
-  opacity:0;transition:opacity 400ms;
-}
-.card-clr.on{opacity:1}
-
 /* Logo */
 .card-img{
   position:absolute;inset:0;width:100%;height:100%;
@@ -222,330 +288,524 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
   image-rendering:-webkit-optimize-contrast;
   position:relative;z-index:2;
 }
-.card-fb{position:absolute;inset:0;display:flex;align-items:center;
-  justify-content:center;font-size:28px;color:rgba(255,255,255,.3);z-index:2}
-
+.card-fb{
+  position:absolute;inset:0;display:flex;
+  align-items:center;justify-content:center;
+  font-size:26px;color:rgba(255,255,255,.25);z-index:2;
+}
 /* Bottom gradient + name */
 .card-grad{
   position:absolute;bottom:0;left:0;right:0;
-  padding:26px 8px 7px;
-  background:linear-gradient(transparent,rgba(0,0,0,.88));
-  border-radius:0 0 13px 13px;
-  z-index:3;
+  padding:28px 9px 7px;
+  background:linear-gradient(transparent,rgba(0,0,0,.90));
+  border-radius:0 0 12.5px 12.5px;z-index:3;
 }
-.card-name{font-size:11px;font-weight:700;color:var(--w);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
-
+.card-name{
+  font-size:12.5px;font-weight:700;color:var(--w0);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-align:center;
+}
 /* Badges */
 .card-badges{position:absolute;top:7px;right:7px;display:flex;gap:3px;z-index:5}
-.badge{font-size:8px;font-weight:800;letter-spacing:.3px;
-  padding:2px 5px;border-radius:3px;line-height:14px}
-.b-live{background:var(--live-bg);color:#f87171;border:1px solid rgba(239,68,68,.35)}
-.b-hd{background:rgba(34,197,94,.18);color:#4ade80;border:1px solid rgba(34,197,94,.35)}
-
-/* Channel number */
-.card-num{position:absolute;top:7px;left:8px;
-  font-size:9px;color:rgba(255,255,255,.20);
-  font-variant-numeric:tabular-nums;z-index:5;font-weight:700}
-
-/* Fav star */
-.card-fav{position:absolute;top:6px;right:7px;
-  font-size:10px;color:var(--warn);display:none;z-index:5}
-
+.badge{font-size:9px;font-weight:800;letter-spacing:.3px;padding:3px 6px;border-radius:4px;line-height:15px}
+.b-live{background:rgba(255,59,48,.2);color:#ff6b63;border:1px solid rgba(255,59,48,.35)}
+.b-hd{background:rgba(48,209,88,.18);color:#5ce07e;border:1px solid rgba(48,209,88,.35)}
+/* Number */
+.card-num{position:absolute;top:7px;left:8px;font-size:9px;color:rgba(255,255,255,.18);font-variant-numeric:tabular-nums;z-index:5;font-weight:700}
+/* Fav */
+.card-fav{position:absolute;top:6px;right:7px;font-size:11px;color:var(--warn);display:none;z-index:5}
 /* Playing bar */
 .card.playing .card-inner::after{
   content:'';position:absolute;bottom:0;left:0;right:0;height:3px;
-  background:var(--w);border-radius:0;z-index:10}
-
-/* ── FOCUSED card ── */
+  background:var(--w0);border-radius:0;z-index:10;
+}
+/* FOCUSED */
 .card.sel{
-  border-color:rgba(255,255,255,.90);
-  transform:scale(1.09) translateZ(0);z-index:10;
-  box-shadow:0 0 0 3px rgba(255,255,255,.14),
-             0 16px 52px rgba(0,0,0,.88),
-             0 0 40px rgba(255,255,255,.06);
+  border:3px solid rgba(255,255,255,.98);
+  transform:scale(1.10) translateZ(0);z-index:10;
+  box-shadow:
+    0 0 0 5px rgba(255,255,255,.18),
+    0 0 0 7px rgba(255,255,255,.06),
+    0 24px 64px rgba(0,0,0,.98),
+    0 0 60px rgba(255,255,255,.08);
+  transition:transform 100ms var(--spring),border-color 60ms;
 }
 
-/* TV Guide card */
-.card.tvg{background:var(--surface3) !important}
-.card.tvg .card-inner{background:var(--surface3)}
-.card-tvg-content{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:6px;z-index:3}
-.card-tvg-icon{font-size:24px;color:var(--w2)}
-.card-tvg-label{font-size:12px;font-weight:700;color:var(--w2);letter-spacing:.3px}
-
-/* EPG progress bar */
-.card-epg-bar{
-  position:absolute;bottom:0;left:0;right:0;height:3px;
-  background:rgba(255,255,255,.08);border-radius:0 0 13px 13px;overflow:hidden;z-index:6;
-}
-.card-epg-fill{height:100%;background:rgba(255,255,255,.5);transition:width 1s linear}
-
-/* ════════════════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════
    STATUS BAR
-════════════════════════════════════════════════════════════ */
+══════════════════════════════════════════════════════ */
 #statusBar{
   position:absolute;bottom:0;left:0;right:0;
-  height:26px;z-index:35;
+  height:28px;z-index:35;
   display:flex;align-items:center;gap:10px;
-  padding:0 40px;
-  background:rgba(0,0,0,.75);
-  font-size:10px;color:var(--w3);
-  will-change:opacity;transition:opacity 250ms;
+  padding:0 44px;
+  background:rgba(0,0,0,.80);
+  font-size:11px;color:var(--w3);
+  will-change:opacity;transition:opacity var(--mid);
 }
 #statusBar.hide{opacity:0}
-.sdot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.25);flex-shrink:0}
+.sdot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.2);flex-shrink:0}
 .sdot.ok{background:var(--ok)}
 .sdot.err{background:var(--live)}
-.sdot.buf{background:var(--warn);animation:np 1s ease-in-out infinite}
+.sdot.buf{background:var(--warn);animation:livePulse 1s ease-in-out infinite}
 #sTxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #sBw{color:var(--w3);flex-shrink:0;font-variant-numeric:tabular-nums}
-#sClock{color:rgba(255,255,255,.28);flex-shrink:0;font-variant-numeric:tabular-nums}
+#sClock{color:rgba(255,255,255,.22);flex-shrink:0;font-variant-numeric:tabular-nums}
 
-/* ════════════════════════════════════════════════════════════
-   QUICK ACTIONS POPUP — One UI card
-════════════════════════════════════════════════════════════ */
-#yellowPopup{position:absolute;inset:0;z-index:60;
-  background:rgba(0,0,0,.80);
-  background:rgba(0,0,0,.92);
-  display:none;align-items:center;justify-content:center}
+/* ══════════════════════════════════════════════════════
+   SEARCH OVERLAY
+══════════════════════════════════════════════════════ */
+#searchOv{
+  position:absolute;top:0;left:0;right:0;z-index:50;
+  display:none;align-items:center;gap:14px;
+  padding:16px 44px;
+  background:rgba(0,0,0,.96);
+  border-bottom:1px solid var(--b1);
+  transform:translateY(-100%);
+  transition:transform var(--mid) var(--spring),opacity var(--mid);
+  opacity:0;
+}
+#searchOv.open{display:flex;transform:translateY(0);opacity:1}
+.srch-ico{width:20px;height:20px;fill:var(--w3);flex-shrink:0}
+#searchInp{
+  flex:1;background:var(--s2);border:1.5px solid var(--b2);
+  border-radius:10px;padding:11px 16px;color:var(--w0);
+  font-size:16px;outline:none;
+  -webkit-user-select:text!important;user-select:text!important;
+  transition:border-color var(--fast);
+}
+#searchInp:focus{border-color:rgba(255,255,255,.5)}
+#searchInp::placeholder{color:var(--w3)}
+#searchCount{color:var(--w3);font-size:12px;font-weight:600;white-space:nowrap;min-width:80px;text-align:right}
+.srch-close{
+  background:var(--s2);border:1px solid var(--b2);
+  color:var(--w1);border-radius:8px;padding:9px 16px;
+  font-size:12px;font-weight:700;cursor:pointer;outline:none;
+  transition:background var(--fast),transform var(--fast);
+  transform:translateZ(0);
+}
+.srch-close.focused,.srch-close:focus{
+  background:var(--s3);outline:2px solid rgba(255,255,255,.4);outline-offset:1px;
+  transform:scale(1.05) translateZ(0);
+}
+
+/* ══════════════════════════════════════════════════════
+   QUICK ACTIONS POPUP
+══════════════════════════════════════════════════════ */
+#yellowPopup{
+  position:absolute;inset:0;z-index:60;
+  background:rgba(0,0,0,.88);
+  display:none;align-items:center;justify-content:center;
+}
 #yellowPopup.on{display:flex}
 .yp-card{
-  background:var(--surface);border:1px solid var(--border2);
-  border-radius:20px;padding:28px;width:460px;max-width:90vw;
-  animation:popIn 140ms var(--spring);
+  background:var(--s1);border:1px solid var(--b2);
+  border-radius:22px;padding:30px;width:480px;max-width:90vw;
+  animation:popIn 120ms var(--spring);
 }
-@keyframes popIn{from{transform:scale(.93);opacity:0}to{transform:none;opacity:1}}
-.yp-hdr{display:flex;align-items:center;gap:12px;margin-bottom:22px;
-  padding-bottom:16px;border-bottom:1px solid var(--border)}
-.yp-title{font-size:18px;font-weight:800;color:var(--w);flex:1;letter-spacing:-.3px}
-.yp-x{margin-left:auto;background:var(--accent-bg);border:1px solid var(--border);
-  color:var(--w2);font-size:15px;cursor:pointer;outline:none;
+@keyframes popIn{from{transform:scale(.90) translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.yp-hdr{
+  display:flex;align-items:center;gap:12px;margin-bottom:22px;
+  padding-bottom:16px;border-bottom:1px solid var(--b1);
+}
+.yp-title{font-size:19px;font-weight:800;color:var(--w0);flex:1;letter-spacing:-.3px}
+.yp-x{
+  background:var(--b1);border:1px solid var(--b1);
+  color:var(--w2);font-size:14px;cursor:pointer;outline:none;
   width:32px;height:32px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center}
-.yp-x:focus,.yp-x:hover{background:var(--accent-act);color:var(--w);
-  outline:2px solid rgba(255,255,255,.4)}
-.yp-acts{display:flex;flex-direction:column;gap:6px}
+  display:flex;align-items:center;justify-content:center;
+  transition:background var(--fast),transform var(--fast);
+}
+.yp-x.focused,.yp-x:focus{background:var(--acc-hi);color:var(--w0);transform:scale(1.1);outline:none}
+.yp-acts{display:flex;flex-direction:column;gap:5px}
 .yp-act{
   display:flex;align-items:center;gap:14px;padding:13px 14px;
-  border-radius:12px;background:var(--surface2);
-  border:1px solid var(--border);
+  border-radius:12px;background:var(--s2);
+  border:1px solid var(--b1);
   cursor:pointer;outline:none;width:100%;text-align:left;
-  transition:background var(--dur),border-color var(--dur),transform 80ms;
-  font-size:14px;font-weight:600;color:var(--w);
+  transition:background var(--fast),border-color var(--fast),transform var(--fast);
+  font-size:14px;font-weight:600;color:var(--w0);
+  transform:translateZ(0);
 }
-.yp-act:focus,.yp-act:hover{background:var(--surface3);
-  border-color:var(--border2);outline:none;transform:translateX(2px)}
-.yp-act:focus{outline:2px solid rgba(255,255,255,.35);outline-offset:1px}
-.yp-act-ico{width:36px;height:36px;border-radius:10px;background:var(--surface3);
-  display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.yp-act.focused,.yp-act:focus{
+  background:var(--s3);border-color:var(--b3);
+  transform:translateX(3px) translateZ(0);
+  outline:none;
+}
+.yp-act-ico{width:38px;height:38px;border-radius:10px;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .yp-act-txt{flex:1}
-.yp-act-t{font-size:13px;font-weight:700;color:var(--w)}
+.yp-act-t{font-size:13px;font-weight:700;color:var(--w0)}
 .yp-act-d{font-size:10px;color:var(--w3);margin-top:2px}
-.yp-act-arr{color:var(--w3);font-size:16px}
+.yp-act-arr{color:var(--w3);font-size:17px;font-weight:300}
 
-/* Add source form */
-#ypForm{display:none;flex-direction:column;gap:10px;
-  margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+#ypForm{display:none;flex-direction:column;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--b1)}
 #ypForm.on{display:flex}
-.yp-inp{width:100%;padding:11px 14px;border-radius:10px;
-  background:var(--surface2);border:1px solid var(--border2);
-  color:var(--w);font-size:13px;outline:none;
-  -webkit-user-select:text!important;user-select:text!important}
-.yp-inp:focus{border-color:rgba(255,255,255,.5);
-  outline:2px solid rgba(255,255,255,.25);outline-offset:1px}
+.yp-inp{
+  width:100%;padding:12px 14px;border-radius:10px;
+  background:var(--s2);border:1.5px solid var(--b2);
+  color:var(--w0);font-size:13px;outline:none;
+  -webkit-user-select:text!important;user-select:text!important;
+  transition:border-color var(--fast);
+}
+.yp-inp:focus{border-color:rgba(255,255,255,.5)}
 .yp-inp::placeholder{color:var(--w3)}
 .yp-brow{display:flex;gap:8px}
-.yp-btn{flex:1;padding:11px 14px;border-radius:10px;
-  border:1px solid var(--border2);
-  background:var(--surface2);color:var(--w);
-  font-size:13px;font-weight:700;cursor:pointer;outline:none}
-.yp-btn:focus,.yp-btn:hover{background:var(--surface3);
-  outline:2px solid rgba(255,255,255,.35);outline-offset:1px}
-.yp-btn-ok{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3)}
-.yp-btn-ok:focus,.yp-btn-ok:hover{background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.5)}
+.yp-btn{
+  flex:1;padding:12px;border-radius:10px;
+  border:1px solid var(--b2);background:var(--s2);color:var(--w0);
+  font-size:13px;font-weight:700;cursor:pointer;outline:none;
+  transition:background var(--fast),transform var(--fast);
+}
+.yp-btn.focused,.yp-btn:focus{background:var(--s3);outline:2px solid rgba(255,255,255,.4);outline-offset:1px;transform:scale(1.02)}
+.yp-btn-ok{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.28)}
+.yp-btn-ok.focused,.yp-btn-ok:focus{background:rgba(255,255,255,.22)}
 
-/* ════════════════════════════════════════════════════════════
-   SETTINGS OVERLAY — One UI full-panel
-════════════════════════════════════════════════════════════ */
-#settingsOv{position:absolute;inset:0;z-index:55;
-  background:rgba(13,13,13,.95);
-  background:rgba(13,13,13,.97);
-  display:none;flex-direction:column}
+/* ══════════════════════════════════════════════════════
+   SETTINGS OVERLAY
+══════════════════════════════════════════════════════ */
+#settingsOv{
+  position:absolute;inset:0;z-index:55;
+  background:rgba(8,8,8,.97);
+  display:none;flex-direction:column;
+}
 #settingsOv.on{display:flex}
-.so-hdr{display:flex;align-items:center;padding:24px 48px 16px;
-  border-bottom:1px solid var(--border);flex-shrink:0}
-.so-title{font-size:21px;font-weight:800;color:var(--w);flex:1;letter-spacing:-.3px}
-.so-close{background:var(--accent-bg);border:1px solid var(--border2);
-  color:var(--w2);font-size:13px;font-weight:700;cursor:pointer;outline:none;
-  padding:7px 18px;border-radius:8px}
-.so-close:focus,.so-close:hover{background:var(--accent-act);color:var(--w);
-  outline:2px solid rgba(255,255,255,.45);outline-offset:2px}
+.so-hdr{
+  display:flex;align-items:center;padding:26px 50px 18px;
+  border-bottom:1px solid var(--b1);flex-shrink:0;gap:16px;
+}
+.so-title{font-size:22px;font-weight:900;color:var(--w0);flex:1;letter-spacing:-.4px}
+.so-close{
+  background:var(--b1);border:1px solid var(--b2);
+  color:var(--w1);font-size:13px;font-weight:700;cursor:pointer;outline:none;
+  padding:9px 22px;border-radius:10px;
+  transition:background var(--fast),transform var(--fast);
+}
+.so-close.focused,.so-close:focus{
+  background:var(--acc-hi);color:var(--w0);
+  outline:2px solid rgba(255,255,255,.45);outline-offset:2px;
+  transform:scale(1.04);
+}
 .so-body{display:flex;flex:1;overflow:hidden}
-.so-side{width:230px;flex-shrink:0;border-right:1px solid var(--border);
-  padding:12px 0;overflow-y:auto;scrollbar-width:none}
+.so-side{
+  width:240px;flex-shrink:0;border-right:1px solid var(--b1);
+  padding:14px 0;overflow-y:auto;scrollbar-width:none;
+}
 .so-side::-webkit-scrollbar{display:none}
-.so-main{flex:1;overflow-y:auto;padding:22px 44px;scrollbar-width:none}
+.so-main{flex:1;overflow-y:auto;padding:24px 48px;scrollbar-width:none}
 .so-main::-webkit-scrollbar{display:none}
-.so-nav{display:flex;align-items:center;gap:12px;padding:13px 22px;
+.so-slbl{
+  font-size:10px;font-weight:700;color:var(--w3);
+  letter-spacing:1.4px;text-transform:uppercase;padding:10px 24px 5px;
+}
+.so-nav{
+  display:flex;align-items:center;gap:12px;padding:14px 24px;
   cursor:pointer;outline:none;font-size:13px;font-weight:600;color:var(--w3);
-  border-left:3px solid transparent;transition:background var(--dur),color var(--dur)}
-.so-nav.on,.so-nav:focus,.so-nav:hover{background:rgba(255,255,255,.06);
-  color:var(--w);border-left-color:var(--w)}
-.so-nav:focus{outline:2px solid rgba(255,255,255,.35);outline-offset:-2px}
-.so-nav svg{width:16px;height:16px;fill:currentColor;flex-shrink:0}
-.so-slbl{font-size:10px;font-weight:700;color:var(--w3);
-  letter-spacing:1.2px;text-transform:uppercase;padding:8px 22px 4px;margin-top:6px}
-.srow{display:flex;align-items:center;justify-content:space-between;
-  padding:15px 8px;border-bottom:1px solid var(--border);
-  cursor:pointer;outline:none;border-radius:6px}
+  border-left:3px solid transparent;
+  transition:background var(--fast),color var(--fast),border-left-color var(--fast);
+}
+.so-nav.on{color:var(--w0);background:rgba(255,255,255,.05);border-left-color:var(--w0)}
+.so-nav.focused,.so-nav:focus{
+  background:rgba(255,255,255,.09);color:var(--w0);
+  outline:none;border-left-color:rgba(255,255,255,.5);
+}
+.so-nav svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
+
+/* Settings rows */
+.srow{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 10px;border-bottom:1px solid var(--b1);
+  cursor:pointer;outline:none;border-radius:8px;
+  transition:background var(--fast);
+}
 .srow:last-child{border-bottom:none}
-.srow:focus{outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
-  background:rgba(255,255,255,.03)}
-.srow-l{flex:1;margin-right:18px}
-.srow-t{font-size:15px;font-weight:600;color:var(--w)}
-.srow-d{font-size:10px;color:var(--w3);margin-top:3px;line-height:1.4}
+.srow.focused,.srow:focus{
+  background:rgba(255,255,255,.05);
+  outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
+}
+.srow-l{flex:1;margin-right:20px}
+.srow-t{font-size:16px;font-weight:600;color:var(--w0)}
+.srow-d{font-size:10px;color:var(--w3);margin-top:3px;line-height:1.5}
 
 /* One UI toggle */
-.tog{position:relative;width:50px;height:26px;flex-shrink:0}
+.tog{position:relative;width:52px;height:28px;flex-shrink:0}
 .tog input{opacity:0;width:0;height:0;position:absolute}
-.tog-t{position:absolute;inset:0;cursor:pointer;
-  background:rgba(255,255,255,.20);border-radius:13px;transition:background 180ms}
-.tog-t::before{content:'';position:absolute;width:18px;height:18px;top:4px;left:4px;
-  background:#fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.4);
-  transition:transform 180ms var(--ease);will-change:transform}
-.tog input:checked+.tog-t{background:rgba(255,255,255,.85)}
+.tog-t{
+  position:absolute;inset:0;cursor:pointer;
+  background:rgba(255,255,255,.18);border-radius:14px;
+  transition:background 200ms;
+}
+.tog-t::before{
+  content:'';position:absolute;width:20px;height:20px;top:4px;left:4px;
+  background:#fff;border-radius:50%;
+  box-shadow:0 1px 5px rgba(0,0,0,.5);
+  transition:transform 200ms var(--spring);
+  will-change:transform;
+}
+.tog input:checked+.tog-t{background:rgba(255,255,255,.82)}
 .tog input:checked+.tog-t::before{transform:translateX(24px);background:#111}
 
-.oui-sel{width:100%;padding:11px 13px;margin-top:8px;
-  background:var(--surface2);border:1px solid var(--border2);
-  border-radius:8px;color:var(--w);font-size:13px;outline:none;appearance:none;
+.oui-sel{
+  width:100%;padding:12px 14px;margin-top:8px;
+  background:var(--s2);border:1px solid var(--b2);
+  border-radius:10px;color:var(--w0);font-size:13px;outline:none;appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 12px center}
-.oui-sel:focus{border-color:rgba(255,255,255,.45);
-  outline:2px solid rgba(255,255,255,.3);outline-offset:2px}
-
-.so-btn{display:flex;align-items:center;gap:9px;width:100%;padding:13px 16px;
-  border:1px solid var(--border2);
-  background:var(--surface2);color:var(--w);
-  font-size:13px;font-weight:700;cursor:pointer;outline:none;
-  border-radius:10px;margin-top:8px}
-.so-btn:focus,.so-btn:hover{background:var(--surface3);
-  outline:2px solid rgba(255,255,255,.35);outline-offset:2px}
-
-/* Source cards */
-.src-card{display:flex;align-items:center;gap:12px;padding:13px 0;
-  border-bottom:1px solid var(--border);cursor:pointer;outline:none}
-.src-card:focus{outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
-  background:rgba(255,255,255,.02);border-radius:4px}
-.src-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex-shrink:0}
-.src-i{flex:1;min-width:0}
-.src-n{font-size:13px;font-weight:700;color:var(--w)}
-.src-u{font-size:10px;color:var(--w3);margin-top:2px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.src-del{background:none;border:none;color:var(--w3);cursor:pointer;
-  font-size:16px;padding:4px 7px;outline:none}
-.src-del:focus{color:var(--live);outline:2px solid rgba(255,255,255,.35)}
-
-/* ════════════════════════════════════════════════════════════
-   DIALER
-════════════════════════════════════════════════════════════ */
-#mDial{position:absolute;inset:0;z-index:65;
-  background:rgba(0,0,0,.85);
-  background:rgba(0,0,0,.90);
-  display:none;align-items:center;justify-content:center}
-#mDial.on{display:flex}
-.dial-box{background:var(--surface);border:1px solid var(--border2);
-  padding:28px;width:300px;border-radius:20px;animation:popIn 140ms var(--spring)}
-.dial-scr{background:var(--surface2);border:1px solid var(--border);
-  border-radius:12px;padding:16px;text-align:center;margin-bottom:14px}
-#dnum{font-size:42px;font-weight:800;color:var(--w);letter-spacing:7px;
-  min-height:52px;font-variant-numeric:tabular-nums}
-.dial-hint{font-size:10px;color:var(--w3);margin-top:3px;letter-spacing:.3px}
-.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
-.dk{background:var(--surface2);border:1px solid var(--border);
-  color:var(--w);padding:14px;border-radius:11px;
-  font-size:24px;font-weight:700;cursor:pointer;outline:none}
-.dk:focus,.dk:hover{background:var(--surface3);color:var(--w);
-  border-color:var(--border2);outline:2px solid rgba(255,255,255,.35);outline-offset:1px}
-.dk.go{grid-column:span 2;background:rgba(255,255,255,.10);
-  border-color:rgba(255,255,255,.22);color:var(--w);font-size:14px;font-weight:700}
-.dk.clr{color:var(--live);font-size:17px}
-
-/* ── VOLUME HUD ── */
-#volHud{position:absolute;top:50%;left:50%;
-  transform:translate(-50%,-50%);z-index:70;
-  background:rgba(10,10,10,.96);
-  background:rgba(0,0,0,.90);
-  border:1px solid var(--border2);
-  padding:16px 34px;border-radius:14px;
-  display:flex;align-items:center;gap:16px;min-width:330px;
-  opacity:0;will-change:opacity;transition:opacity 160ms;pointer-events:none}
-#volHud.on{opacity:1}
-#volIco{font-size:24px;flex-shrink:0}
-.vol-track{flex:1;height:3px;background:rgba(255,255,255,.18);border-radius:2px;overflow:hidden}
-.vol-fill{height:100%;background:var(--w);
-  border-radius:2px;transition:width 70ms linear}
-#volPct{font-size:18px;font-weight:700;min-width:36px;text-align:right;color:var(--w)}
-
-/* ── SPLASH ── */
-#splash{position:absolute;inset:0;z-index:9500;background:#0d0d0d;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity 600ms ease}
-#splash.off{opacity:0;pointer-events:none}
-.spl-logo{font-size:14vw;font-weight:900;letter-spacing:-.04em;
-  color:var(--w);line-height:.9}
-.spl-bar{width:14vw;height:1px;background:rgba(255,255,255,.12);
-  margin-top:5vw;overflow:hidden}
-.spl-fill{height:100%;background:var(--w);
-  animation:splf 1.2s ease-in-out infinite}
-@keyframes splf{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}
+  background-repeat:no-repeat;background-position:right 14px center;
+  transition:border-color var(--fast);
 }
-.spl-msg{font-size:.75vw;color:var(--w3);margin-top:2vw;
-  letter-spacing:.25em;text-transform:uppercase}
+.oui-sel:focus{border-color:rgba(255,255,255,.45);outline:2px solid rgba(255,255,255,.3);outline-offset:2px}
+.so-btn{
+  display:flex;align-items:center;gap:9px;width:100%;padding:14px 16px;
+  border:1px solid var(--b2);background:var(--s2);color:var(--w0);
+  font-size:13px;font-weight:700;cursor:pointer;outline:none;
+  border-radius:10px;margin-top:8px;
+  transition:background var(--fast),transform var(--fast);
+}
+.so-btn.focused,.so-btn:focus{
+  background:var(--s3);outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
+  transform:scale(1.01);
+}
+.src-card{
+  display:flex;align-items:center;gap:12px;padding:13px 0;
+  border-bottom:1px solid var(--b1);cursor:pointer;outline:none;
+  transition:background var(--fast);border-radius:6px;
+}
+.src-card.focused,.src-card:focus{
+  background:rgba(255,255,255,.03);
+  outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
+}
+.src-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0}
+.src-i{flex:1;min-width:0}
+.src-n{font-size:13px;font-weight:700;color:var(--w0)}
+.src-u{font-size:10px;color:var(--w3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-del{
+  background:none;border:none;color:var(--w3);cursor:pointer;
+  font-size:15px;padding:5px 8px;outline:none;
+  transition:color var(--fast);
+}
+.src-del:focus{color:var(--live);outline:2px solid rgba(255,255,255,.3)}
 
+/* ══════════════════════════════════════════════════════
+   DIALER
+══════════════════════════════════════════════════════ */
+#mDial{
+  position:absolute;inset:0;z-index:65;
+  background:rgba(0,0,0,.88);
+  display:none;align-items:center;justify-content:center;
+}
+#mDial.on{display:flex}
+.dial-box{
+  background:var(--s1);border:1px solid var(--b2);
+  padding:30px;width:310px;border-radius:22px;
+  animation:popIn 120ms var(--spring);
+}
+.dial-scr{
+  background:var(--s2);border:1px solid var(--b1);
+  border-radius:14px;padding:18px;text-align:center;margin-bottom:16px;
+}
+#dnum{
+  font-size:46px;font-weight:900;color:var(--w0);letter-spacing:8px;
+  min-height:56px;font-variant-numeric:tabular-nums;
+}
+.dial-hint{font-size:10px;color:var(--w3);margin-top:4px;letter-spacing:.3px}
+.dgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.dk{
+  background:var(--s2);border:1px solid var(--b1);
+  color:var(--w0);padding:16px;border-radius:12px;
+  font-size:24px;font-weight:700;cursor:pointer;outline:none;
+  transition:background var(--fast),transform var(--fast);
+  transform:translateZ(0);
+}
+.dk.focused,.dk:focus{
+  background:var(--s3);border-color:var(--b3);
+  transform:scale(1.06) translateZ(0);
+  outline:none;
+}
+.dk:active{transform:scale(.94) translateZ(0)}
+.dk.go{grid-column:span 2;background:rgba(255,255,255,.10);border-color:rgba(255,255,255,.22);font-size:14px;font-weight:700}
+.dk.clr{color:var(--live)}
+
+/* ══════════════════════════════════════════════════════
+   VOLUME HUD
+══════════════════════════════════════════════════════ */
+#volHud{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%) translateZ(0);z-index:70;
+  background:rgba(8,8,8,.96);
+  border:1px solid var(--b2);
+  padding:18px 38px;border-radius:16px;
+  display:flex;align-items:center;gap:18px;min-width:340px;
+  opacity:0;will-change:opacity;transition:opacity 150ms;pointer-events:none;
+}
+#volHud.on{opacity:1}
+#volIco{font-size:26px;flex-shrink:0}
+.vol-track{flex:1;height:4px;background:rgba(255,255,255,.15);border-radius:2px;overflow:hidden}
+.vol-fill{height:100%;background:var(--w0);border-radius:2px;transition:width 70ms linear}
+#volPct{font-size:20px;font-weight:700;min-width:40px;text-align:right;color:var(--w0)}
+
+
+
+/* ══ EXIT CONFIRMATION ══ */
+#exitOv{
+  position:absolute;inset:0;z-index:9000;
+  background:rgba(0,0,0,.92);
+  display:none;align-items:center;justify-content:center;
+}
+#exitOv.on{display:flex}
+.exit-box{
+  background:var(--s1);border:1.5px solid var(--b2);
+  border-radius:24px;padding:40px 50px;
+  text-align:center;animation:popIn 120ms var(--spring);
+  min-width:380px;
+}
+.exit-icon{font-size:48px;margin-bottom:16px}
+.exit-title{font-size:24px;font-weight:900;color:var(--w0);margin-bottom:8px;letter-spacing:-.3px}
+.exit-sub{font-size:14px;color:var(--w3);margin-bottom:32px}
+.exit-btns{display:flex;gap:14px;justify-content:center}
+.exit-btn{
+  min-width:130px;padding:14px 24px;border-radius:14px;
+  font-size:16px;font-weight:800;cursor:pointer;outline:none;border:2px solid transparent;
+  transition:background var(--fast),transform var(--fast),border-color var(--fast);
+  transform:translateZ(0);
+}
+.exit-btn-yes{background:var(--live);color:#fff;border-color:var(--live)}
+.exit-btn-no{background:var(--s3);color:var(--w0);border-color:var(--b2)}
+.exit-btn.focused{transform:scale(1.08) translateZ(0);border-color:var(--w0);box-shadow:0 0 0 3px rgba(255,255,255,.2)}
+
+/* ══ CHANNEL NUMBER HUD — top-right digit popup ══ */
+#chHud{
+  position:absolute;top:16px;right:44px;z-index:80;
+  background:rgba(0,0,0,.94);border:2px solid rgba(255,255,255,.25);
+  border-radius:16px;padding:14px 24px;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  opacity:0;pointer-events:none;
+  transition:opacity 150ms;
+  will-change:opacity;
+}
+#chHud.on{opacity:1}
+#chHudNum{
+  font-size:52px;font-weight:900;color:var(--w0);
+  font-variant-numeric:tabular-nums;letter-spacing:6px;
+  min-width:80px;text-align:center;line-height:1;
+}
+#chHudLabel{font-size:10px;color:var(--w3);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+#chHudName{font-size:13px;color:var(--w2);font-weight:600;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ══════════════════════════════════════════════════════
+   BUFFERING SPINNER (shown over AVPlay)
+══════════════════════════════════════════════════════ */
+#bufSpinner{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%) translateZ(0);z-index:8;
+  width:56px;height:56px;
+  border:3px solid rgba(255,255,255,.12);
+  border-top-color:rgba(255,255,255,.7);
+  border-radius:50%;
+  display:none;
+  animation:spin 700ms linear infinite;
+  will-change:transform;
+}
+#bufSpinner.on{display:block}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+
+/* ══════════════════════════════════════════════════════
+   SPLASH
+══════════════════════════════════════════════════════ */
+#splash{
+  position:absolute;inset:0;z-index:9500;
+  background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity 500ms var(--ease);
+}
+#splash.off{opacity:0;pointer-events:none}
+.spl-logo{
+  font-size:13vw;font-weight:900;letter-spacing:-.04em;
+  color:var(--w0);line-height:.88;
+  text-shadow:0 0 80px rgba(255,255,255,.08);
+}
+.spl-tag{
+  font-size:.7vw;color:var(--w3);margin-top:2vw;
+  letter-spacing:.3em;text-transform:uppercase;
+}
+.spl-bar{
+  width:14vw;height:1px;background:rgba(255,255,255,.08);
+  margin-top:4vw;overflow:hidden;border-radius:1px;
+}
+.spl-fill{
+  height:100%;background:rgba(255,255,255,.5);
+  animation:splf 1.4s ease-in-out infinite;
+}
+@keyframes splf{
+  0%{transform:translateX(-100%)}
+  100%{transform:translateX(200%)}
+}
+.spl-msg{font-size:.68vw;color:var(--w3);margin-top:1.6vw;letter-spacing:.2em;text-transform:uppercase}
+
+/* ══════════════════════════════════════════════════════
+   SCROLLBAR (thin, almost invisible)
+══════════════════════════════════════════════════════ */
 ::-webkit-scrollbar{width:2px;height:2px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:2px}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:2px}
 </style>
 </head>
 <body>
+
+<!-- SPLASH -->
 <div id="splash">
   <div class="spl-logo">SAGA</div>
+  <div class="spl-tag">Native Edition</div>
   <div class="spl-bar"><div class="spl-fill"></div></div>
   <div class="spl-msg" id="splMsg">Initialising…</div>
 </div>
 
 <div id="root">
-  <video id="video" playsinline autoplay></video>
+
+  <!-- PLAYER LAYER -->
+  <div id="playerWrap">
+    <video id="video" playsinline autoplay></video>
+    <div id="avContainer"></div>
+  </div>
+  <div id="engBadge"></div>
+  <div id="bufSpinner"></div>
+
+  <!-- VIGNETTE -->
   <div id="vig"></div>
 
   <!-- TOP BAR -->
   <div id="topBar">
     <div class="brand">
-      <span class="brand-s">SAGA IPTV</span>
-      <span class="brand-tag">v39</span>
+      <span class="brand-name">SAGA IPTV</span>
+      
     </div>
     <div id="navTabs"></div>
     <div class="top-right">
       <span id="topClock">00:00</span>
-      <button class="top-icon" id="searchBtn" title="Search">
+      <button class="tip-btn" id="searchBtn" title="Search (Blue)">
         <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       </button>
-      <button class="top-icon" id="settingsBtn" title="Settings (MENU)">
+      <button class="tip-btn" id="settingsBtn" title="Settings (MENU)">
         <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
       </button>
     </div>
   </div>
 
-  <!-- NOW PLAYING INFO + EPG -->
+  <!-- SEARCH OVERLAY -->
+  <div id="searchOv">
+    <svg class="srch-ico" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+    <input id="searchInp" type="search" autocomplete="off" spellcheck="false" placeholder="Search channels…">
+    <span id="searchCount"></span>
+    <button class="srch-close" id="searchClose">✕ Close</button>
+  </div>
+
+  <!-- NOW PLAYING -->
   <div id="nowInfo">
-    <div id="nowTag"><span class="now-pulse"></span>NOW PLAYING</div>
+    <div id="nowTag"><span class="live-dot"></span>NOW PLAYING</div>
     <div id="nowName">Select a channel</div>
     <div id="nowMeta">
       <span class="np np-live">● LIVE</span>
+      <span class="np np-engine" id="nowEngine" style="display:none"></span>
       <span class="np" id="nowGroup" style="display:none"></span>
-      <span class="np" id="nowQ"     style="display:none"></span>
+      <span class="np" id="nowQ" style="display:none"></span>
     </div>
     <div id="epgRow" style="display:none">
       <span class="epg-time" id="epgTime"></span>
@@ -553,12 +813,12 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
     </div>
   </div>
 
-  <!-- BOTTOM PANEL — single row -->
+  <!-- BOTTOM PANEL -->
   <div id="bottomPanel">
     <div class="row-wrap">
       <div class="row-label">
         <span id="rowLabel">Live Channels</span>
-        <span class="row-label-n" id="rowCount">0</span>
+        <span class="row-count" id="rowCount">0</span>
       </div>
       <div class="tile-strip" id="strip"></div>
     </div>
@@ -572,7 +832,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
     <div id="sClock"></div>
   </div>
 
-  <!-- QUICK ACTIONS POPUP -->
+  <!-- QUICK ACTIONS -->
   <div id="yellowPopup">
     <div class="yp-card" id="ypCard">
       <div class="yp-hdr">
@@ -582,7 +842,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
       <div class="yp-acts" id="ypActs">
         <button class="yp-act" id="ypa-add">
           <div class="yp-act-ico">➕</div>
-          <div class="yp-act-txt"><div class="yp-act-t">Add Custom Playlist</div><div class="yp-act-d">Add a new M3U or JSON URL source</div></div>
+          <div class="yp-act-txt"><div class="yp-act-t">Add Custom Playlist</div><div class="yp-act-d">M3U, JSON, or HTML source URL</div></div>
           <span class="yp-act-arr">›</span>
         </button>
         <button class="yp-act" id="ypa-refresh">
@@ -607,33 +867,14 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
         </button>
       </div>
       <div id="ypForm">
-        <input class="yp-inp" id="ypName" type="text"  placeholder="Playlist name (e.g. My IPTV)" autocomplete="off">
-        <input class="yp-inp" id="ypUrl"  type="url"   placeholder="https://…/playlist.m3u or .json" autocomplete="off">
+        <input class="yp-inp" id="ypName" type="text" placeholder="Playlist name (e.g. My IPTV)" autocomplete="off">
+        <input class="yp-inp" id="ypUrl"  type="url"  placeholder="https://…/playlist.m3u or .json" autocomplete="off">
         <div class="yp-brow">
           <button class="yp-btn yp-btn-ok" id="ypSave">Add &amp; Load</button>
           <button class="yp-btn"           id="ypCancel">Cancel</button>
         </div>
       </div>
     </div>
-  </div>
-
-
-  <!-- SEARCH OVERLAY -->
-  <div id="searchOv" style="display:none;position:absolute;top:0;left:0;right:0;z-index:50;
-    background:rgba(0,0,0,.92);padding:14px 40px;align-items:center;gap:12px">
-    <svg style="width:20px;height:20px;fill:rgba(255,255,255,.5);flex-shrink:0" viewBox="0 0 24 24">
-      <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-    </svg>
-    <input id="searchInp" type="search" autocomplete="off" spellcheck="false"
-      placeholder="Search channels…"
-      style="flex:1;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);
-        border-radius:8px;padding:10px 14px;color:#fff;font-size:16px;outline:none;
-        -webkit-user-select:text!important;user-select:text!important">
-    <span id="searchCount" style="color:rgba(255,255,255,.4);font-size:12px;font-weight:600;white-space:nowrap"></span>
-    <button id="searchClose" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-      color:#fff;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;outline:none">
-      ✕ Close
-    </button>
   </div>
 
   <!-- SETTINGS -->
@@ -683,33 +924,48 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:var(--bg);color:va
     </div>
   </div>
 
+  <!-- CHANNEL NUMBER HUD -->
+  <div id="chHud">
+    <div id="chHudNum">—</div>
+    <div id="chHudLabel">Channel</div>
+    <div id="chHudName"></div>
+  </div>
+
   <!-- VOLUME HUD -->
   <div id="volHud">
     <span id="volIco">🔊</span>
     <div class="vol-track"><div class="vol-fill" id="volFill" style="width:50%"></div></div>
     <span id="volPct">50</span>
   </div>
-</div>
+
+
+  <!-- EXIT CONFIRMATION -->
+  <div id="exitOv">
+    <div class="exit-box">
+      <div class="exit-icon">📺</div>
+      <div class="exit-title">Exit SAGA IPTV?</div>
+      <div class="exit-sub">Your favourites and settings will be saved.</div>
+      <div class="exit-btns">
+        <button class="exit-btn exit-btn-yes" id="exitYes">✓ Exit</button>
+        <button class="exit-btn exit-btn-no"  id="exitNo">✕ Stay</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #root -->
 
 <canvas id="cc" width="8" height="8" style="display:none"></canvas>
 
 <script>
 /*══════════════════════════════════════════════════════════════════
-  SAGA IPTV v44 — CricHd+YuppTV HTML scraper source
-  ──────────────────────────────────────────────────────────────────
-  · Three built-in playlists: Telugu, Jio, YuppTV
-  · One UI monochrome design — white accents, dark surfaces
-  · Channel tiles: dominant-colour tint extracted from logo
-  · Settings opens via MENU/INFO remote key (keyCode 457/10133)
-  · Custom playlist: add via Yellow popup, manage in Settings→Sources
-  · NEW: Auto-detects JSON (array of channels) and converts to M3U style
-  · Supports fields: name/title, m3u8/url/stream_url, logo/logo_url, group
-  · EMBEDDED: CricHd JSON playlist as built-in source
+  SAGA IPTV — Native Edition
+  AVPlay-first · Shaka fallback · Samsung Tizen OS9
+  Full remote binding · GPU compositing · Solid transitions
 ══════════════════════════════════════════════════════════════════*/
 (function(){
 'use strict';
 
-/* ── requestIdleCallback polyfill ── */
+/* ── rIC polyfill ── */
 if(typeof requestIdleCallback==='undefined'){
   window.requestIdleCallback=function(cb){return setTimeout(function(){cb({timeRemaining:function(){return 50}})},16)};
   window.cancelIdleCallback=clearTimeout;
@@ -719,38 +975,31 @@ if(typeof requestIdleCallback==='undefined'){
 (function(){
   try{
     if(!window.tizen||!tizen.tvinputdevice)return;
-    var keys=[
-      'ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
-      'MediaPlay','MediaPause','MediaPlayPause','MediaStop',
-      'MediaFastForward','MediaRewind','ChannelUp','ChannelDown',
-      'VolumeUp','VolumeDown','VolumeMute',
-      'Menu','Info','Tools','Extra',
-      '0','1','2','3','4','5','6','7','8','9','Exit','Return'
-    ];
-    for(var ki=0;ki<keys.length;ki++){
-      try{tizen.tvinputdevice.registerKey(keys[ki])}catch(e){}
-    }
+    ['ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
+     'MediaPlay','MediaPause','MediaPlayPause','MediaStop',
+     'MediaFastForward','MediaRewind','ChannelUp','ChannelDown',
+     'VolumeUp','VolumeDown','VolumeMute',
+     'Menu','Info','Tools','Extra',
+     '0','1','2','3','4','5','6','7','8','9','Exit','Return'
+    ].forEach(function(k){try{tizen.tvinputdevice.registerKey(k)}catch(e){}});
   }catch(e){}
 })();
 
 /* ════════════════════════════════════════════════════════════
    CONSTANTS
 ════════════════════════════════════════════════════════════ */
-var CW=200, CH=118, CGAP=14;
-var AUTO_HIDE_MS=4000;
-var PLAY_DEB=80;
+var CW=228, CH=136, CGAP=14;
+var AUTO_HIDE_MS=4200;
+var PLAY_DEB=120;
 
-/* Three built-in playlists */
+/* Built-in sources */
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,_src:'telugu'};
-var JIO_PL={name:'Jio',url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
-var YUPP_PL={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
-/* CricHd sports worker page */
+var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
+var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
 var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
 
 var ASPECTS=['Contain','Stretch','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
-
-var ALLOWED_TABS=['Telugu','Jio','YuppTV','News','Sports','Entertainment'];
 var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
   'sports':'Sports','live sports':'Sports','cricket':'Sports','football':'Sports',
@@ -758,72 +1007,47 @@ var GROUP_MAP={
   'movies':'Entertainment','kids':'Entertainment','music':'Entertainment'
 };
 
-/* ── DOM ── */
+/* ── DOM refs ── */
 var $=function(id){return document.getElementById(id)};
 var QA=function(s,r){return[].slice.call((r||document).querySelectorAll(s))};
 
-var video      =$('video');
-var vig        =$('vig');
-var topBar     =$('topBar');
-var navTabs    =$('navTabs');
-var bottomPanel=$('bottomPanel');
-var nowInfo    =$('nowInfo');
-var nowName    =$('nowName');
-var nowGroup   =$('nowGroup');
-var nowQ       =$('nowQ');
-var epgRow     =$('epgRow');
-var epgTime    =$('epgTime');
-var epgProg    =$('epgProg');
-var rowLabel   =$('rowLabel');
-var rowCount   =$('rowCount');
-var strip      =$('strip');
-var yellowPopup=$('yellowPopup');
-var ypForm     =$('ypForm');
-var settingsOv =$('settingsOv');
-var soSide     =$('soSide');
-var soMain     =$('soMain');
-var mDial      =$('mDial');
-var dnum       =$('dnum');
-var volHudEl   =$('volHud');
-var volFill    =$('volFill');
-var volPct     =$('volPct');
-var volIco     =$('volIco');
-var sBuf       =$('sBuf');
-var sTxt       =$('sTxt');
-var sBw        =$('sBw');
-var sClock     =$('sClock');
-var statusBar  =$('statusBar');
-var topClock   =$('topClock');
-var cc         =$('cc');
-var ccx;
-try{ccx=cc.getContext('2d',{willReadFrequently:true})}catch(e){ccx=cc.getContext('2d')}
+var video=$('video'),vig=$('vig'),topBar=$('topBar'),navTabs=$('navTabs');
+var bottomPanel=$('bottomPanel'),nowInfo=$('nowInfo'),nowName=$('nowName');
+var nowGroup=$('nowGroup'),nowQ=$('nowQ'),nowEngine=$('nowEngine');
+var epgRow=$('epgRow'),epgTime=$('epgTime'),epgProg=$('epgProg');
+var rowLabel=$('rowLabel'),rowCount=$('rowCount'),strip=$('strip');
+var yellowPopup=$('yellowPopup'),ypForm=$('ypForm');
+var settingsOv=$('settingsOv'),soSide=$('soSide'),soMain=$('soMain');
+var mDial=$('mDial'),dnum=$('dnum');
+var volHudEl=$('volHud'),volFill=$('volFill'),volPct=$('volPct'),volIco=$('volIco');
+var sBuf=$('sBuf'),sTxt=$('sTxt'),sBw=$('sBw'),sClock=$('sClock');
+var statusBar=$('statusBar'),topClock=$('topClock');
+var engBadge=$('engBadge'),bufSpinner=$('bufSpinner');
+var avCont=$('avContainer');
+var cc=$('cc');
+var ccx;try{ccx=cc.getContext('2d',{willReadFrequently:true})}catch(e){ccx=cc.getContext('2d')}
 
 /* ── State ── */
-var player=null, allChs=[], viewChs=[];
-var curUrl='', isPlaying=false, isMuted=false, aspectMode=0;
-var favs=new Set(), pls=[], searchQ='';
-var activeTab='Telugu';
-var showFavs=false;
-
-var col=0;
-var scrollOff=0;
-
-var hideTimer=null, uiVisible=true;
-
-var zone='rows';
-var tabIdx=0;
-var ypIdx=0;
-var soSideIdx=0, soMainIdx=0, soSideZone=true;
-var dialStr='', dialTimer=null;
-var rDialStr='', rDialTimer=null;
-var playTimer=null, volTimer=null, osdTimer=null;
+var shakaPlayer=null,avplay=null;
+var ENGINE='none'; /* 'avplay' | 'shaka' | 'native' | 'none' */
+var allChs=[],viewChs=[];
+var curUrl='',isPlaying=false,isMuted=false,aspectMode=0;
+var favs=new Set(),pls=[],searchQ='';
+var activeTab='Telugu',showFavs=false;
+var col=0,scrollOff=0;
+var hideTimer=null,uiVisible=true;
+var zone='rows'; /* rows|tabs|yp|settings|dialer|search|ar */
+var tabIdx=0,ypIdx=0,soSideIdx=0,soMainIdx=0,soSideZone=true;
+var dialStr='',dialTimer=null,rDialStr='',rDialTimer=null;
+var playTimer=null,volTimer=null,osdTimer=null,engBadgeTimer=null;
 var currentVol=50;
-var cfg={hq:true,muteSwitch:false,buf:12,osd:true};
-
+var cfg={hq:true,muteSwitch:false,buf:12,osd:true,engine:'auto'};
 var epgCache={};
-var epgFetching=false;
+var avReady=false; /* AVPlay API available? */
 
-/* ── Utils ── */
+/* ════════════════════════════════════════════════════════════
+   UTILS
+════════════════════════════════════════════════════════════ */
 function esc(s){
   if(!s)return'';
   return String(s).replace(/[&<>'"]/g,function(c){
@@ -833,16 +1057,13 @@ function esc(s){
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 
-/* ── Status bar ── */
 function setSt(msg,state){
-  sTxt.textContent=msg||'';
-  var dot=$('sBuf');
-  if(dot){dot.className=state?('sdot '+state):'sdot'}
+  if(sTxt)sTxt.textContent=msg||'';
+  if(sBuf)sBuf.className=state?('sdot '+state):'sdot';
 }
-function clearSt(){setSt('Ready','')}
 
 /* ════════════════════════════════════════════════════════════
-   AUTO-HIDE
+   AUTO-HIDE UI
 ════════════════════════════════════════════════════════════ */
 function wakeUI(){
   if(!uiVisible){
@@ -852,22 +1073,22 @@ function wakeUI(){
     vig.classList.remove('dim');
     statusBar.classList.remove('hide');
   }
+  resetOsd();
   resetHideTimer();
 }
 function hideUI(){
-  if(zone==='yp'||zone==='settings'||zone==='dialer')return;
+  if(zone==='yp'||zone==='settings'||zone==='dialer'||zone==='search')return;
   uiVisible=false;
   topBar.classList.add('hide');
   bottomPanel.classList.add('hide');
   vig.classList.add('dim');
   statusBar.classList.add('hide');
 }
-function resetHideTimer(){
-  clearTimeout(hideTimer);
-  hideTimer=setTimeout(hideUI,AUTO_HIDE_MS);
-}
+function resetHideTimer(){clearTimeout(hideTimer);hideTimer=setTimeout(hideUI,AUTO_HIDE_MS)}
 
-/* ── Volume ── */
+/* ════════════════════════════════════════════════════════════
+   VOLUME
+════════════════════════════════════════════════════════════ */
 function getSysVol(){
   try{if(window.tizen&&tizen.tvaudiocontrol)return tizen.tvaudiocontrol.getVolume()}catch(e){}
   return Math.round(video.volume*100);
@@ -889,142 +1110,89 @@ function showVol(){
   volTimer=setTimeout(function(){volHudEl.classList.remove('on')},1800);
 }
 
-/* ── Storage ── */
+/* ════════════════════════════════════════════════════════════
+   STORAGE
+════════════════════════════════════════════════════════════ */
 function loadStore(){
   try{var r=lsGet(LS.FAVS);if(r)favs=new Set(JSON.parse(r))}catch(e){}
   try{var r2=lsGet(LS.PL);if(r2)pls=JSON.parse(r2)}catch(e){}
   try{var r3=lsGet(LS.CFG);if(r3)Object.assign(cfg,JSON.parse(r3))}catch(e){}
 }
 function saveFavs(){lsSet(LS.FAVS,JSON.stringify(Array.from(favs)))}
-function savePls(){
-  /* Only persist custom (non built-in) playlists */
-  var custom=pls.filter(function(p){return!p.builtIn});
-  lsSet(LS.PL,JSON.stringify(custom));
-}
+function savePls(){lsSet(LS.PL,JSON.stringify(pls.filter(function(p){return!p.builtIn})))}
 function saveCfg(){lsSet(LS.CFG,JSON.stringify(cfg))}
 
 /* ════════════════════════════════════════════════════════════
-   DOMINANT COLOUR — tile background tint
-   Extracts dominant hue from channel logo via 8×8 canvas.
-   Applies as darkened warm tint. Falls back gracefully.
+   DOMINANT COLOUR
 ════════════════════════════════════════════════════════════ */
 function extractColour(img,cb){
   try{
-    ccx.clearRect(0,0,8,8);
-    ccx.drawImage(img,0,0,8,8);
+    ccx.clearRect(0,0,8,8);ccx.drawImage(img,0,0,8,8);
     var d=ccx.getImageData(0,0,8,8).data;
     var r=0,g=0,b=0,n=0;
     for(var i=0;i<d.length;i+=4){
       if(d[i+3]<40)continue;
       var mx=Math.max(d[i],d[i+1],d[i+2]);
       var mn=Math.min(d[i],d[i+1],d[i+2]);
-      /* Weight by saturation so grey pixels contribute less */
-      var w=0.15+(mx>0?(mx-mn)/mx*0.85:0);
+      var w=.15+(mx>0?(mx-mn)/mx*.85:0);
       r+=d[i]*w;g+=d[i+1]*w;b+=d[i+2]*w;n+=w;
     }
     if(n<1){cb(null);return}
-    var dr=Math.round(r/n),dg=Math.round(g/n),db=Math.round(b/n);
-    /* Tile: darkened 32% */
-    var tile='rgb('+Math.round(dr*.32)+','+Math.round(dg*.32)+','+Math.round(db*.32)+')';
+    var tile='rgb('+Math.round(r/n*.30)+','+Math.round(g/n*.30)+','+Math.round(b/n*.30)+')';
     cb(tile);
   }catch(e){cb(null)}
 }
 
 /* ════════════════════════════════════════════════════════════
-   JSON PARSER — for CricHd style API
-   Expects array of objects with at least 'name' and a stream URL.
-   Recognised URL fields: m3u8, url, stream_url, stream, link.
-   Logo fields: logo, logo_url, image.
-   Group field: group, category.
+   PARSERS — JSON / HTML / M3U
 ════════════════════════════════════════════════════════════ */
-function parseJsonChannels(jsonText, srcTag){
-  var data;
-  try{
-    data=JSON.parse(jsonText);
-  }catch(e){
-    throw new Error('Invalid JSON');
-  }
-  if(!Array.isArray(data)) data=[data]; // allow single object wrap
-  var channels=[];
+function parseJsonChannels(txt,srcTag){
+  var data=JSON.parse(txt);
+  if(!Array.isArray(data))data=[data];
+  var out=[];
   for(var i=0;i<data.length;i++){
-    var item=data[i];
-    if(!item) continue;
-    // Extract name
-    var name=item.name||item.title||item.channel_name||'Unnamed';
-    // Extract stream URL
-    var url=item.m3u8||item.url||item.stream_url||item.stream||item.link;
-    if(!url) continue;
-    // Extract logo
-    var logo=item.logo||item.logo_url||item.image||'';
-    // Extract group
-    var group=item.group||item.category||item.genre||'General';
-    channels.push({
-      name:String(name).trim(),
-      url:url,
-      logo:logo,
-      group:group,
-      _src:srcTag,
-      _col:null
-    });
+    var it=data[i];if(!it)continue;
+    var name=it.name||it.title||it.channel_name||'Channel';
+    var url=it.m3u8||it.url||it.stream_url||it.stream||it.link;
+    if(!url)continue;
+    out.push({name:String(name).trim(),url:url,
+      logo:it.logo||it.logo_url||it.image||'',
+      group:it.group||it.category||it.genre||'General',
+      _src:srcTag,_col:null});
   }
-  return channels;
+  return out;
 }
 
-
-/* ════════════════════════════════════════════════════════════
-   HTML CHANNEL PAGE PARSER — for CricHd/YuppTV worker pages
-   Finds all <a href="...?dtv=URL"> links and extracts:
-     - Channel name from alt text or link text (h3/strong/span)
-     - Stream URL from the dtv= query param (decoded)
-     - Logo from the first <img> inside the link
-   The dtv= value may itself be a redirect URL (CricHd) or a
-   direct m3u8 URL (YuppTV). Both work fine with Shaka Player.
-════════════════════════════════════════════════════════════ */
-function parseHtmlChannels(html, srcTag, group){
-  var channels=[];
-  // Use a temporary DOM element for safe parsing
+function parseHtmlChannels(html,srcTag,group){
   var tmp=document.createElement('div');
   tmp.innerHTML=html;
+  var out=[];
   var anchors=tmp.querySelectorAll('a[href]');
   for(var i=0;i<anchors.length;i++){
     var a=anchors[i];
     var href=a.getAttribute('href')||'';
-    // Must have dtv= param to be a valid channel link
-    if(href.indexOf('dtv=') < 0) continue;
-    // Use the FULL href as stream URL — the indexind wrapper IS the working stream
+    if(href.indexOf('dtv=')<0)continue;
     var streamUrl=href;
-    if(!streamUrl||streamUrl.indexOf('http')<0) continue;
-    // Channel name: try img alt, then h3, then h2, then full text
+    if(streamUrl.indexOf('http')<0)continue;
     var img=a.querySelector('img');
     var logo=img?img.getAttribute('src'):'';
     var name='';
     var h=a.querySelector('h3,h2,h1,strong,span');
-    if(h) name=h.textContent.trim();
-    if(!name&&img) name=img.getAttribute('alt')||'';
-    if(!name) name=a.textContent.trim().replace(/\s+/g,' ').slice(0,60);
-    if(!name) name='Channel';
-    // Strip badge suffixes like "PROMO", "Premium", "News" etc appended by page
-    name=name.replace(/\s*(PROMO|Premium|HD|SD|Free|Paid|Live)$/i,'').trim();
-    channels.push({
-      name:name,
-      url:streamUrl,
-      logo:logo||'',
-      group:group||'Sports',
-      _src:srcTag,
-      _col:null
-    });
+    if(h)name=h.textContent.trim();
+    if(!name&&img)name=img.getAttribute('alt')||'';
+    if(!name)name=a.textContent.trim().replace(/\s+/g,' ').slice(0,60);
+    name=name.replace(/\s*(PROMO|Premium|HD|SD|Free|Paid|Live)$/i,'').trim()||'Channel';
+    out.push({name:name,url:streamUrl,logo:logo||'',
+      group:group||'Sports',_src:srcTag,_col:null});
   }
-  return channels;
+  return out;
 }
 
-/* ════════════════════════════════════════════════════════════
-   M3U PARSER — chunked
-════════════════════════════════════════════════════════════ */
 function parseM3UChunked(txt,onDone){
   var lines=txt.split(/\r?\n/);
   var out=[],cur=null,i=0;
   function chunk(){
-    var end=Math.min(i+800,lines.length);
+    var end=Math.min(i+1000,lines.length);
     for(;i<end;i++){
       var l=lines[i].trim();
       if(l.indexOf('#EXTINF')===0){
@@ -1038,33 +1206,29 @@ function parseM3UChunked(txt,onDone){
         if(l.indexOf('http')===0){cur.url=l;out.push(cur);cur=null}
       }
     }
-    if(i<lines.length)requestIdleCallback(chunk,{timeout:50});
+    if(i<lines.length)requestIdleCallback(chunk,{timeout:40});
     else onDone(out);
   }
   chunk();
 }
 
 /* ════════════════════════════════════════════════════════════
-   CATEGORY FILTERING
+   CATEGORY
 ════════════════════════════════════════════════════════════ */
 function canonicalTab(ch){
-  /* Source-based (highest priority) */
   if(ch._src==='telugu')return'Telugu';
   if(ch._src==='jio')return'Jio';
   if(ch._src==='yupp')return'YuppTV';
   if(ch._src==='crichd')return'CricHd';
-  /* Custom playlist — use group mapping */
   var g=(ch.group||'').toLowerCase().trim();
   if(GROUP_MAP[g])return GROUP_MAP[g];
   if(g.indexOf('news')>=0)return'News';
-  if(g.indexOf('sport')>=0)return'Sports';
+  if(g.indexOf('sport')>=0||g.indexOf('cricket')>=0)return'Sports';
   if(g.indexOf('entertain')>=0||g.indexOf('movie')>=0||
      g.indexOf('music')>=0||g.indexOf('kids')>=0)return'Entertainment';
-  /* Custom playlist channels fallback to a tab named after the playlist */
-  if(ch._src&&ch._src!=='telugu'&&ch._src!=='jio'&&ch._src!=='yupp'&&ch._src!=='crichd')return ch._src;
+  if(ch._src&&!['telugu','jio','yupp','crichd'].includes(ch._src))return ch._src;
   return null;
 }
-
 function getViewChs(){
   var arr=[];
   for(var i=0;i<allChs.length;i++){
@@ -1075,24 +1239,59 @@ function getViewChs(){
   }
   if(searchQ){
     var q=searchQ.toLowerCase();
-    var filtered=[];
-    for(var j=0;j<arr.length;j++){
-      if(arr[j].name.toLowerCase().indexOf(q)>=0)filtered.push(arr[j]);
-    }
-    arr=filtered;
+    arr=arr.filter(function(c){return c.name.toLowerCase().indexOf(q)>=0});
   }
   return arr;
 }
 
 /* ════════════════════════════════════════════════════════════
-   PLAYLIST LOAD — auto-detects JSON vs M3U
+   CHANNEL LIST CACHE — persist to IDB for instant startup
+   Stored as JSON. Restored before network fetch for instant UI.
 ════════════════════════════════════════════════════════════ */
+var CH_CACHE_KEY='saga:chCache';
+var CH_CACHE_TTL=4*60*60*1000; /* 4 hours */
+
+function saveChCache(){
+  requestIdleCallback(function(){
+    try{
+      var payload=JSON.stringify({ts:Date.now(),chs:allChs,tab:activeTab});
+      if(typeof AppCache!=='undefined'){
+        AppCache.setM3U(CH_CACHE_KEY,payload);
+      }else{
+        localStorage.setItem(CH_CACHE_KEY,payload);
+      }
+    }catch(e){}
+  },{timeout:2000});
+}
+
+function loadChCache(){
+  return new Promise(function(resolve){
+    function parse(raw){
+      if(!raw){resolve(null);return}
+      try{
+        var d=JSON.parse(raw);
+        if(d&&d.chs&&Array.isArray(d.chs)&&d.chs.length>0&&
+           (Date.now()-(d.ts||0))<CH_CACHE_TTL){
+          resolve(d);
+        }else resolve(null);
+      }catch(e){resolve(null)}
+    }
+    if(typeof AppCache!=='undefined'){
+      AppCache.getM3U(CH_CACHE_KEY).then(parse).catch(function(){resolve(null)});
+    }else{
+      try{parse(localStorage.getItem(CH_CACHE_KEY))}catch(e){resolve(null)}
+    }
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   PLAYLIST LOADER
 function loadPl(url,name,force,srcTag){
   if(force===undefined)force=false;
   if(!srcTag)srcTag='';
   setSt('Loading '+name+'…','buf');
   return new Promise(function(resolve){
-    var doFetch=function(){
+    function doFetch(){
       setSt('Fetching '+name+'…','buf');
       var ctrl=new AbortController();
       var tid=setTimeout(function(){try{ctrl.abort()}catch(ex){}},28000);
@@ -1104,743 +1303,603 @@ function loadPl(url,name,force,srcTag){
         if(typeof AppCache!=='undefined')AppCache.setM3U(url,txt);
         process(txt);
       }).catch(function(e){
-        setSt('Error loading '+name+': '+String(e.message).slice(0,40),'err');
+        setSt('Error loading '+name+': '+String(e.message||e).slice(0,40),'err');
         resolve([]);
       });
-    };
-    var process=function(txt){
-      // Detect format: HTML, JSON, or M3U
+    }
+    function process(txt){
       var trimmed=txt.trim();
       var isHtml=(trimmed.charAt(0)==='<');
       var isJson=(!isHtml&&(trimmed.charAt(0)==='['||trimmed.charAt(0)==='{'));
-      var parsedChannels=null;
-
+      var parsed=null;
       if(isHtml){
-        /* HTML channel page (CricHd / YuppTV worker pages) */
         var grp=(srcTag==='crichd')?'Sports':(srcTag==='yupp')?'Entertainment':'General';
-        parsedChannels=parseHtmlChannels(txt, srcTag||name.toLowerCase(), grp);
-        if(!parsedChannels.length){
-          setSt('No channels found in '+name+' page','err');
-          resolve([]);
-          return;
-        }
+        parsed=parseHtmlChannels(txt,srcTag||name.toLowerCase(),grp);
+        if(!parsed.length){setSt('No channels in '+name,'err');resolve([]);return}
+        merge(parsed);resolve(parsed);
       }else if(isJson){
-        try{
-          parsedChannels=parseJsonChannels(txt, srcTag || name.toLowerCase());
-        }catch(je){
-          setSt('JSON parse error for '+name,'err');
-          resolve([]);
-          return;
-        }
-      }
-
-      if(parsedChannels){
-        // HTML or JSON path — merge into allChs
-        var fresh=[];
-        var seen=new Set(allChs.map(function(c){return c.url}));
-        for(var i=0;i<parsedChannels.length;i++){
-          if(!seen.has(parsedChannels[i].url)){
-            fresh.push(parsedChannels[i]);
-          }
-        }
-        allChs=allChs.concat(fresh);
-        lsSet('saga:last',url);
-        rebuildNavTabs();
-        viewChs=getViewChs();
-        renderStrip();
-        setSt(''+allChs.length+' channels loaded','ok');
-        /* Preload logos */
-        var logos=[];
-        for(var k=0;k<Math.min(60,parsedChannels.length);k++){
-          if(parsedChannels[k].logo)logos.push(parsedChannels[k].logo);
-        }
-        if(typeof AppCache!=='undefined')AppCache.preloadImages(logos,[]);
-        resolve(parsedChannels);
+        try{parsed=parseJsonChannels(txt,srcTag||name.toLowerCase())}
+        catch(je){setSt('JSON error '+name,'err');resolve([]);return}
+        merge(parsed);resolve(parsed);
       }else{
-        // M3U path
-        parseM3UChunked(txt,function(parsed){
-          if(!parsed.length){setSt('No channels in '+name,'err');resolve([]);return}
-          var seen=new Set(allChs.map(function(c){return c.url}));
-          var fresh=[];
-          for(var i=0;i<parsed.length;i++){
-            if(!seen.has(parsed[i].url)){
-              parsed[i]._src=srcTag||parsed[i]._src||name.toLowerCase();
-              fresh.push(parsed[i]);
-            }
-          }
-          allChs=allChs.concat(fresh);
-          lsSet('saga:last',url);
-          rebuildNavTabs();
-          viewChs=getViewChs();
-          renderStrip();
-          setSt(''+allChs.length+' channels loaded','ok');
-          /* Preload first 60 logos */
-          var logos=[];
-          for(var k=0;k<Math.min(60,parsed.length);k++){
-            if(parsed[k].logo)logos.push(parsed[k].logo);
-          }
-          if(typeof AppCache!=='undefined')AppCache.preloadImages(logos,[]);
-          resolve(parsed);
+        parseM3UChunked(txt,function(parsed2){
+          if(!parsed2.length){setSt('No channels in '+name,'err');resolve([]);return}
+          for(var i=0;i<parsed2.length;i++)parsed2[i]._src=srcTag||parsed2[i]._src||name.toLowerCase();
+          merge(parsed2);resolve(parsed2);
         });
       }
-    };
-    if(!force&&typeof AppCache!=='undefined'){
-      AppCache.getM3U(url).then(function(cached){
-        if(cached)process(cached);
-        else doFetch();
-      }).catch(function(){doFetch()});
-    }else{
-      doFetch();
     }
+    function merge(parsed){
+      var seen=new Set(allChs.map(function(c){return c.url}));
+      var fresh=parsed.filter(function(c){return!seen.has(c.url)});
+      allChs=allChs.concat(fresh);
+      lsSet(LS.LCHU+'_pl',url);
+      rebuildNavTabs();viewChs=getViewChs();renderStrip();
+      setSt(allChs.length+' channels loaded','ok');
+      saveChCache();
+      /* preload logos */
+      var logos=[];
+      for(var k=0;k<Math.min(80,parsed.length);k++){if(parsed[k].logo)logos.push(parsed[k].logo)}
+      if(typeof AppCache!=='undefined')AppCache.preloadImages(logos,[]);
+    }
+    if(!force&&typeof AppCache!=='undefined'){
+      AppCache.getM3U(url).then(function(cached){if(cached)process(cached);else doFetch()}).catch(doFetch);
+    }else doFetch();
   });
 }
 
 /* ════════════════════════════════════════════════════════════
-   NAV TABS — dynamic, includes YuppTV + custom playlists
+   NAV TABS
 ════════════════════════════════════════════════════════════ */
-function getAvailableTabs(){
-  /* Build ordered tab list from channels */
-  var tabSet={};
-  /* Built-in order */
-  var builtIns=['Telugu','Jio','YuppTV','CricHd','Favourites'];
-  for(var bi=0;bi<builtIns.length;bi++)tabSet[builtIns[bi]]=true;
-  /* Custom playlist source tabs */
-  for(var i=0;i<allChs.length;i++){
-    var ct=canonicalTab(allChs[i]);
-    if(ct)tabSet[ct]=true;
-  }
-  /* Standard categories */
-  var cats=['News','Sports','Entertainment'];
-  for(var ci=0;ci<cats.length;ci++)tabSet[cats[ci]]=true;
-  return tabSet;
-}
-
 function rebuildNavTabs(){
-  var tabOrder=['Telugu','Jio','YuppTV','CricHd'];
-  /* Add custom playlist tabs */
-  var customNames=[];
-  for(var pi=0;pi<pls.length;pi++){
-    if(!pls[pi].builtIn)customNames.push(pls[pi].name);
-  }
-  for(var ni=0;ni<customNames.length;ni++){
-    if(tabOrder.indexOf(customNames[ni])<0)tabOrder.push(customNames[ni]);
-  }
-  /* Standard categories */
-  var cats=['News','Sports','Entertainment','Favourites'];
-  for(var ci=0;ci<cats.length;ci++)tabOrder.push(cats[ci]);
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','Favourites'];
+  var cats=['News','Sports','Entertainment'];
+  var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
+  var seen=new Set();
+  var order=['Telugu','Jio','YuppTV','CricHd'];
+  allChs.forEach(function(ch){
+    var t=canonicalTab(ch);
+    if(t&&!builtIns.includes(t)&&!cats.includes(t))order.push(t);
+  });
+  cats.forEach(function(c){
+    var hasChs=allChs.some(function(ch){return canonicalTab(ch)===c});
+    if(hasChs)order.push(c);
+  });
+  if(favs.size>0)order.push('Favourites');
+  customNames.forEach(function(n){if(!order.includes(n))order.push(n)});
+  var tabs=[];
+  order.forEach(function(t){if(!seen.has(t)){seen.add(t);tabs.push(t)}});
 
   navTabs.innerHTML='';
-  for(var i=0;i<tabOrder.length;i++){
-    var g=tabOrder[i];
-    /* Check if tab has channels */
-    var hasChs=false;
-    if(g==='Favourites'){hasChs=favs.size>0}
-    else if(g==='Telugu'||g==='Jio'||g==='YuppTV'||g==='CricHd'){hasChs=true} /* always show built-ins */
-    else{
-      for(var j=0;j<allChs.length;j++){
-        if(canonicalTab(allChs[j])===g){hasChs=true;break}
-      }
-    }
-    if(!hasChs)continue;
+  tabs.forEach(function(t,idx){
     var btn=document.createElement('button');
-    btn.className='ntab'+(g===activeTab?' on':'');
-    btn.textContent=g;
-    btn.dataset.g=g;
-    btn.tabIndex=-1;
-    (function(gName){
-      btn.addEventListener('click',function(){setTab(gName)});
-    })(g);
+    btn.className='ntab'+(t===activeTab?' on':'');
+    btn.textContent=t;btn.dataset.g=t;btn.tabIndex=0;
+    btn.addEventListener('click',function(){
+      if(t==='Favourites'){showFavs=true;activeTab='Favourites'}
+      else{showFavs=false;activeTab=t}
+      viewChs=getViewChs();col=0;renderStrip();rebuildNavTabs();
+    });
     navTabs.appendChild(btn);
-  }
-  /* Sync tabIdx */
-  var allTabBtns=QA('.ntab',navTabs);
-  for(var k=0;k<allTabBtns.length;k++){
-    if(allTabBtns[k].dataset.g===activeTab){tabIdx=k;break}
-  }
+  });
 }
 
-function setTab(g){
-  activeTab=g;
-  showFavs=(g==='Favourites');
-  var btns=QA('.ntab',navTabs);
-  for(var i=0;i<btns.length;i++){
-    btns[i].classList.toggle('on',btns[i].dataset.g===g);
-    if(btns[i].dataset.g===g)tabIdx=i;
-  }
-  var active=navTabs.querySelector('.ntab.on');
-  if(active)active.scrollIntoView({inline:'nearest',behavior:'smooth'});
-  col=0;scrollOff=0;
-  viewChs=getViewChs();
-  var lbl=g==='Favourites'?'Favourites':g+' Channels';
-  rowLabel.textContent=lbl;
-  renderStrip();
-  updateNowInfo(null);
+function setTab(t){
+  showFavs=(t==='Favourites');
+  activeTab=t;
+  viewChs=getViewChs();col=0;renderStrip();rebuildNavTabs();
 }
 
 /* ════════════════════════════════════════════════════════════
-   EPG
+   VIRTUAL SCROLL STRIP RENDERER
 ════════════════════════════════════════════════════════════ */
-var EPG_API='https://apis-jiotv.jio.com/apis/v1.4/getepg?langId=6&channelId=';
-var JIO_CH_IDS={
-  'NDTV 24x7':'1','Aaj Tak':'2','India TV':'3','News18 India':'4',
-  'CNN News18':'5','Republic TV':'7','Times Now':'6',
-  'Star Sports 1':'21','Star Sports 2':'22','Sony Sports':'23',
-  'Sony LIV Sports':'25','Colors':'31','Star Plus':'32','Zee TV':'33',
-  'Sony Entertainment':'34','Zee Cinema':'35','Star Gold':'36',
-  'Sun TV':'41','Gemini TV':'42','Star Vijay':'43','Zee Telugu':'44',
-  'ETV Telugu':'45','Star Maa':'46','Gemini Movies':'47'
-};
+var VPORT=8; /* cards rendered at once — wider tiles */
+var renderFrom=0;
 
-function fetchEPGForChannel(chName){
-  var chId=JIO_CH_IDS[chName];
-  if(!chId||epgFetching)return;
-  epgFetching=true;
-  var now=Math.floor(Date.now()/1000);
-  var url=EPG_API+chId+'&fromTime='+now+'&toTime='+(now+7200);
-  fetch(url,{headers:{'Accept':'application/json'}}).then(function(r){
-    if(!r.ok)throw new Error('epg '+r.status);
-    return r.json();
-  }).then(function(data){
-    epgFetching=false;
-    if(!data||!data.epg||!data.epg[0])return;
-    var progs=data.epg[0].programs||[];
-    if(!progs.length)return;
-    var nowT=Date.now()/1000;
-    for(var i=0;i<progs.length;i++){
-      var p=progs[i];
-      if(p.startEpoch<=nowT&&p.endEpoch>=nowT){
-        var startD=new Date(p.startEpoch*1000);
-        var timeStr=startD.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
-        epgCache[chName]={time:timeStr,prog:p.showName||p.title||'',pct:Math.round((nowT-p.startEpoch)/(p.endEpoch-p.startEpoch)*100)};
-        updateEPGDisplay(chName);
-        return;
-      }
-    }
-  }).catch(function(){epgFetching=false});
-}
-
-function updateEPGDisplay(chName){
-  var e=epgCache[chName];
-  if(!e||!e.prog){epgRow.style.display='none';return}
-  epgTime.textContent=e.time;
-  epgProg.textContent=e.prog;
-  epgRow.style.display='block';
-  var cards=[].slice.call(strip.children);
-  for(var i=0;i<cards.length;i++){
-    var fill=cards[i].querySelector('.card-epg-fill');
-    if(fill&&cards[i].dataset.name===chName){
-      fill.style.width=e.pct+'%';
-    }
-  }
-}
-
-/* ════════════════════════════════════════════════════════════
-   RENDER STRIP
-════════════════════════════════════════════════════════════ */
 function renderStrip(){
-  strip.innerHTML='';
+  rowLabel.textContent=showFavs?'Favourites':activeTab;
   rowCount.textContent=viewChs.length;
-
-  /* TV Guide card */
-  var guide=document.createElement('div');
-  guide.className='card tvg';
-  guide.tabIndex=-1;
-  guide.innerHTML='<div class="card-inner"><div class="card-tvg-content"><div class="card-tvg-icon">≡</div><div class="card-tvg-label">Guide</div></div></div>';
-  guide.addEventListener('click',function(){wakeUI();setSt('TV Guide — coming soon','')});
-  strip.appendChild(guide);
-
-  for(var i=0;i<viewChs.length;i++){
-    strip.appendChild(makeCard(viewChs[i],i));
+  strip.innerHTML='';
+  renderFrom=Math.max(0,Math.min(viewChs.length-VPORT,col>0?col-2:0));
+  var frag=document.createDocumentFragment();
+  for(var i=renderFrom;i<Math.min(renderFrom+VPORT,viewChs.length);i++){
+    frag.appendChild(makeCard(i));
   }
-
+  strip.appendChild(frag);
+  strip.style.transform='translateX(0) translateZ(0)';
   updateStripFocus();
-  syncScroll();
 }
 
-function makeCard(ch,ci){
-  var card=document.createElement('div');
-  card.className='card'+(ch.url===curUrl&&isPlaying?' playing':'');
-  card.dataset.ci=ci;
-  card.dataset.name=ch.name;
-  card.tabIndex=-1;
+function makeCard(idx){
+  var ch=viewChs[idx];
+  var div=document.createElement('div');
+  div.className='card'+(curUrl&&curUrl===ch.url?' playing':'');
+  div.tabIndex=idx===col-1?0:-1;
+  div.dataset.i=idx;
 
   var inner=document.createElement('div');inner.className='card-inner';
-  /* Apply saved colour immediately */
-  if(ch._col)inner.style.background=ch._col;
-
   var bg=document.createElement('div');bg.className='card-bg';
+  var num=document.createElement('div');num.className='card-num';num.textContent=idx+1;
+  var badges=document.createElement('div');badges.className='card-badges';
+  var bLive=document.createElement('span');bLive.className='badge b-live';bLive.textContent='LIVE';
+  badges.appendChild(bLive);
+  if(ch.name.match(/HD|4K/i)){var bHD=document.createElement('span');bHD.className='badge b-hd';bHD.textContent='HD';badges.appendChild(bHD)}
+  var fav=document.createElement('div');fav.className='card-fav';fav.textContent='★';
+  if(favs.has(ch.url))fav.style.display='block';
+
+  var grad=document.createElement('div');grad.className='card-grad';
+  var nm=document.createElement('div');nm.className='card-name';nm.textContent=ch.name;
+  grad.appendChild(nm);
 
   if(ch.logo){
-    var img=document.createElement('img');
-    img.className='card-img';
-    img.loading='lazy';img.decoding='async';
-    img.src=esc(ch.logo);
-    (function(imgEl,chRef,innerEl,bgEl){
-      imgEl.onload=function(){
-        extractColour(imgEl,function(tileCol){
-          if(tileCol){
-            chRef._col=tileCol;
-            innerEl.style.background=tileCol;
-            bgEl.style.backgroundImage="url('"+esc(chRef.logo)+"')";
-            bgEl.classList.add('on');
-          }
-        });
-      };
-      imgEl.onerror=function(){
-        imgEl.style.display='none';
-        var fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';
-        innerEl.appendChild(fb);
-      };
-    })(img,ch,inner,bg);
-    inner.appendChild(bg);inner.appendChild(img);
+    var img=new Image();img.className='card-img';img.alt=ch.name;
+    img.crossOrigin='anonymous';
+    img.onload=function(){
+      bg.style.backgroundImage='url('+this.src+')';
+      bg.classList.add('on');
+      if(!ch._col)extractColour(img,function(c){
+        if(c){ch._col=c;inner.style.background=c;bg.style.backgroundColor=c}
+      });
+    };
+    img.onerror=function(){
+      var fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';
+      inner.appendChild(fb);
+    };
+    img.src=ch.logo;
+    inner.appendChild(img);
   }else{
     var fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';
     inner.appendChild(fb);
   }
 
-  var grad=document.createElement('div');grad.className='card-grad';
-  var nm=document.createElement('div');nm.className='card-name';nm.textContent=ch.name;
-  grad.appendChild(nm);inner.appendChild(grad);
+  if(ch._col)inner.style.background=ch._col;
+  inner.appendChild(bg);
+  inner.appendChild(grad);
+  div.appendChild(num);div.appendChild(badges);div.appendChild(fav);div.appendChild(inner);
 
-  var badges=document.createElement('div');badges.className='card-badges';
-  var liveB=document.createElement('span');liveB.className='badge b-live';liveB.textContent='LIVE';
-  badges.appendChild(liveB);
-  if(ch.name&&ch.name.toLowerCase().indexOf(' hd')>=0){
-    var hdB=document.createElement('span');hdB.className='badge b-hd';hdB.textContent='HD';
-    badges.appendChild(hdB);
-  }
-  inner.appendChild(badges);
-
-  var epgBar=document.createElement('div');epgBar.className='card-epg-bar';
-  var epgFillEl=document.createElement('div');epgFillEl.className='card-epg-fill';
-  epgFillEl.style.width='0%';
-  var cached=epgCache[ch.name];
-  if(cached)epgFillEl.style.width=cached.pct+'%';
-  epgBar.appendChild(epgFillEl);inner.appendChild(epgBar);
-
-  var num=document.createElement('div');num.className='card-num';num.textContent=ci+1;
-  var fav=document.createElement('div');fav.className='card-fav';fav.textContent='★';
-  if(favs.has(ch.url))fav.style.display='block';
-
-  card.appendChild(inner);card.appendChild(num);card.appendChild(fav);
-
-  (function(idx){
-    card.addEventListener('click',function(){
-      col=idx+1;
-      updateStripFocus();syncScroll();
-      immediatePlay();wakeUI();
-    });
-  })(ci);
-
-  return card;
+  div.addEventListener('click',function(){
+    col=idx+1;updateStripFocus();syncScroll();immediatePlay();
+  });
+  return div;
 }
 
 function updateStripFocus(){
-  var cards=[].slice.call(strip.children);
-  for(var i=0;i<cards.length;i++){
-    var ci=i-1;
-    var sel=(i===col);
-    cards[i].classList.toggle('sel',sel);
-    cards[i].tabIndex=sel?0:-1;
-    if(ci>=0&&viewChs[ci]){
-      cards[i].classList.toggle('playing',viewChs[ci].url===curUrl&&isPlaying);
-      var fav=cards[i].querySelector('.card-fav');
-      if(fav)fav.style.display=favs.has(viewChs[ci].url)?'block':'none';
-    }
-  }
-  if(col>0&&viewChs[col-1]){
-    updateNowInfo(viewChs[col-1]);
-    fetchEPGForChannel(viewChs[col-1].name);
-  }
+  var cards=QA('.card',strip);
+  cards.forEach(function(c){
+    var i=parseInt(c.dataset.i);
+    c.classList.toggle('sel',i===col-1);
+    c.classList.toggle('playing',viewChs[i]&&curUrl===viewChs[i].url);
+    c.tabIndex=(i===col-1)?0:-1;
+    if(i===col-1)c.focus({preventScroll:true});
+  });
 }
 
 function syncScroll(){
-  var cw=CW+CGAP;
-  var visW=window.innerWidth-80;
-  var cardLeft=col*cw;
-  var cardRight=cardLeft+CW;
-  if(cardLeft<scrollOff+cw)         scrollOff=Math.max(0,cardLeft-cw);
-  else if(cardRight>scrollOff+visW) scrollOff=cardRight-visW+CW+CGAP;
-  scrollOff=Math.max(0,scrollOff);
-  strip.style.transform='translateX('+(-scrollOff)+'px)';
+  /* Re-render window around focused card */
+  var newFrom=Math.max(0,Math.min(viewChs.length-VPORT,col>0?col-3:0));
+  if(newFrom!==renderFrom){
+    renderFrom=newFrom;
+    var frag=document.createDocumentFragment();
+    for(var i=renderFrom;i<Math.min(renderFrom+VPORT,viewChs.length);i++){
+      frag.appendChild(makeCard(i));
+    }
+    strip.innerHTML='';
+    strip.appendChild(frag);
+  }
+  /* Pixel offset for smooth scroll within window */
+  var localIdx=col-1-renderFrom;
+  var maxOff=Math.max(0,(VPORT-5)*(CW+CGAP));
+  var off=Math.max(0,Math.min(maxOff,(localIdx-2)*(CW+CGAP)));
+  strip.style.transform='translateX(-'+off+'px) translateZ(0)';
+  updateStripFocus();
 }
 
+function getFocusedCh(){return col>0&&viewChs[col-1]?viewChs[col-1]:null}
+
+/* ════════════════════════════════════════════════════════════
+   NOW INFO + EPG
+════════════════════════════════════════════════════════════ */
 function updateNowInfo(ch){
-  if(!ch){nowInfo.classList.remove('vis');return}
   nowName.textContent=ch.name;
-  nowGroup.textContent=ch.group||'';
-  nowGroup.style.display=ch.group?'inline':'none';
+  var g=canonicalTab(ch)||ch.group||'';
+  if(g){nowGroup.textContent=g;nowGroup.style.display=''}else nowGroup.style.display='none';
   nowInfo.classList.add('vis');
-  var e=epgCache[ch.name];
-  if(e&&e.prog){
-    epgTime.textContent=e.time;
-    epgProg.textContent=e.prog;
-    epgRow.style.display='block';
-  }else{
-    epgRow.style.display='none';
-  }
+  lsSet(LS.LCHU,ch.url);
 }
-
-
-/* ════════════════════════════════════════════════════════════
-   STREAM RESOLVER — for proxy/redirect stream URLs
-   CrichD worker pages return JSON or HTML containing the real
-   m3u8 URL. We fetch the proxy URL, extract the m3u8, then
-   pass that to Shaka instead of the proxy URL directly.
-════════════════════════════════════════════════════════════ */
-function resolveStreamUrl(proxyUrl){
-  return new Promise(function(resolve){
-    var ctrl=new AbortController();
-    var tid=setTimeout(function(){try{ctrl.abort()}catch(e){}; resolve(null)},8000);
-    fetch(proxyUrl,{signal:ctrl.signal}).then(function(resp){
-      clearTimeout(tid);
-      if(!resp.ok){resolve(null);return;}
-      return resp.text();
-    }).then(function(txt){
-      if(!txt){resolve(null);return;}
-      // Try JSON first
-      try{
-        var j=JSON.parse(txt);
-        var u=j.url||j.stream||j.m3u8||j.link||j.hls||j.source||
-               (j.data&&(j.data.url||j.data.stream||j.data.m3u8))||null;
-        if(u&&u.indexOf('http')===0){resolve(u);return;}
-      }catch(e){}
-      // Scan for .m3u8 URL in response
-      var m=txt.match(/https?:\/\/[^"'\s,<>]+\.m3u8[^"'\s,<>]*/);
-      if(m){resolve(m[0]);return;}
-      // No extraction possible — return null so caller uses original URL
-      resolve(null);
-    }).catch(function(){clearTimeout(tid);resolve(null)});
-  });
-}
-
-
-/* ════════════════════════════════════════════════════════════
-   NATIVE AVPLAY FALLBACK — Samsung Tizen AVPlay API
-   Used when Shaka fails (e.g. CrichD proxy streams, non-standard HLS)
-════════════════════════════════════════════════════════════ */
-function tryNativePlay(ch){
-  var url=ch?ch.url:'';
-  if(!url)return;
-  /* Try webapis.avplay first (Tizen 4+) */
-  try{
-    if(window.webapis&&webapis.avplay){
-      var av=webapis.avplay;
-      try{av.close()}catch(e){}
-      av.open(url);
-      av.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');
-      av.setListener({
-        onbufferingstart:function(){setSt('Native: buffering…','buf')},
-        onbufferingprogress:function(){},
-        onbufferingcomplete:function(){setSt('Streaming · '+ch.name+' (native)','ok');isPlaying=true},
-        onerror:function(e){setSt('Native error: '+e,'err')},
-        onstreamcompleted:function(){setSt('Stream ended','');isPlaying=false}
-      });
-      av.prepare();
-      av.play();
-      setSt('Native player started…','buf');
-      return;
-    }
-  }catch(ex){setSt('Native AVPlay: '+String(ex).slice(0,40),'err')}
-  /* Last resort: set video.src directly (works for direct m3u8 without DRM) */
-  try{
-    video.src=url;
-    video.load();
-    video.play().then(function(){
-      isPlaying=true;
-      setSt('Streaming · '+ch.name+' (direct)','ok');
-    }).catch(function(e2){
-      setSt('All players failed','err');
-    });
-  }catch(ex2){setSt('All players failed','err')}
+function showEngine(eng){
+  nowEngine.textContent=eng.toUpperCase();
+  nowEngine.style.display='';
+  engBadge.textContent=eng.toUpperCase();
+  engBadge.classList.add('show');
+  clearTimeout(engBadgeTimer);
+  engBadgeTimer=setTimeout(function(){engBadge.classList.remove('show')},4000);
 }
 
 /* ════════════════════════════════════════════════════════════
-   SEARCH — inline channel search activated by search button or
-   pressing the search icon / pressing S key on remote
+   EPG
 ════════════════════════════════════════════════════════════ */
-var searchOpen=false;
-function openSearch(){
-  var ov=$('searchOv');
-  if(!ov)return;
-  ov.style.display='flex';
-  searchOpen=true;
-  zone='search';
-  wakeUI();clearTimeout(hideTimer);
-  var inp=$('searchInp');
-  if(inp){inp.value=searchQ||'';inp.focus();updateSearchCount();}
+function fetchEPGForChannel(name){
+  /* Lightweight XMLTV-compatible EPG via github iptv-org */
+  var key='epg_'+name.toLowerCase().replace(/\s+/g,'_');
+  if(epgCache[key]){showEPG(epgCache[key]);return}
+  epgRow.style.display='none';
 }
-function closeSearch(){
-  var ov=$('searchOv');
-  if(ov)ov.style.display='none';
-  searchOpen=false;
-  zone='rows';
-  resetHideTimer();
-  syncFocusRows();
-}
-function updateSearchCount(){
-  var sc=$('searchCount');
-  if(sc)sc.textContent=viewChs.length+' channels';
+function showEPG(prog){
+  if(!prog)return;
+  epgTime.textContent=prog.t||'';
+  epgProg.textContent=prog.p||'';
+  epgRow.style.display='';
 }
 
 /* ════════════════════════════════════════════════════════════
-   SHAKA PLAYER
+   ASPECT RATIO
 ════════════════════════════════════════════════════════════ */
-function initPlayer(){
-  return new Promise(function(resolve){
-    try{shaka.polyfill.installAll()}catch(ex){}
-    if(typeof shaka==='undefined'||!shaka.Player.isBrowserSupported()){
-      setSt('Shaka Player not supported','err');resolve();return;
-    }
-    player=new shaka.Player(video);
-    /* Inject required headers per stream source */
-    player.getNetworkingEngine().registerRequestFilter(function(type,request){
-      var u=request.uris&&request.uris[0]?request.uris[0]:'';
-      /* CricHd streams (sanwalyaarpya CDN) require Referer */
-      if(u.indexOf('sanwalyaarpya.com')>=0||u.indexOf('profamouslife')>=0){
-        request.headers['Referer']='https://profamouslife.com/';
-        request.headers['Origin']='https://profamouslife.com';
-      }
-    });
-    recfg();
-    player.addEventListener('adaptation',updateQ);
-    player.addEventListener('variantchanged',updateQ);
-    player.addEventListener('buffering',function(e){
-      if(e.buffering)setSt('Buffering…','buf');
-      else setSt('Streaming · '+(viewChs[col-1]?viewChs[col-1].name:''),'ok');
-    });
-    player.addEventListener('error',function(e){
-      var msg=(e.detail&&e.detail.message)||'Stream error';
-      setSt(msg.slice(0,60),'err');
-      isPlaying=false;
-      var u2=curUrl;
-      setTimeout(function(){if(!isPlaying&&curUrl===u2)immediatePlay()},3500);
-    });
-    video.addEventListener('playing',function(){
-      setSt('Streaming · '+(viewChs[col-1]?viewChs[col-1].name:''),'ok');
-      updateStripFocus();
-    });
-    video.addEventListener('error',function(){setSt('Video error','err');isPlaying=false});
-    setSt('Ready','');
-    resolve();
-  });
-}
-
-function recfg(){
-  if(!player)return;
-  player.configure({
-    abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10000000,switchInterval:8,
-      bandwidthUpgradeTarget:0.8,bandwidthDowngradeTarget:0.9},
-    streaming:{bufferingGoal:cfg.buf,rebufferingGoal:2,
-      stallEnabled:true,stallThreshold:1,stallSkip:0.1,
-      retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:0.3,timeout:25000},
-      safeSeekOffset:2},
-  });
-}
-
-function updateQ(){
-  if(!player)return;
-  try{
-    var tracks=player.getVariantTracks();
-    var a=null;
-    for(var i=0;i<tracks.length;i++){if(tracks[i].active){a=tracks[i];break}}
-    if(a){
-      var q=(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1000000).toFixed(1)+'M';
-      nowQ.textContent=q;nowQ.style.display='inline';
-    }
-  }catch(e){}
-}
-
-function lockHQ(){
-  if(!player||!isPlaying)return;
-  try{
-    var t=player.getVariantTracks();if(!t.length)return;
-    var best=t[0];
-    for(var i=1;i<t.length;i++){if(t[i].bandwidth>best.bandwidth)best=t[i]}
-    player.selectVariantTrack(best,false);
-  }catch(e){}
-}
-
-function getFocusedCh(){
-  if(col>0&&viewChs[col-1])return viewChs[col-1];
-  return null;
-}
-
-function immediatePlay(){
-  clearTimeout(playTimer);
-  playTimer=setTimeout(_doPlay,PLAY_DEB);
-}
-
-function _doPlay(){
-  var ch=getFocusedCh();
-  if(!ch||!ch.url||!player)return;
-  if(ch.url===curUrl&&isPlaying)return;
-  curUrl=ch.url;lsSet(LS.LCHU,ch.url);
-  if(cfg.muteSwitch&&isPlaying)video.muted=true;
-  isPlaying=false;
-  updateNowInfo(ch);
-  setSt('Connecting…','buf');
-  /* CrichD worker URLs need resolving to actual m3u8 first */
-  var isCrichd=(ch.url.indexOf('calm-sun-04d5.rojoni9589.workers.dev')>=0||ch.url.indexOf('crichd.uhd2026.workers.dev')>=0);
-  var playPromise;
-  if(isCrichd){
-    setSt('Resolving stream…','buf');
-    playPromise=resolveStreamUrl(ch.url).then(function(resolved){
-      var finalUrl=resolved||ch.url;
-      if(resolved)setSt('Stream resolved, loading…','buf');
-      else setSt('Using direct URL…','buf');
-      return player.load(finalUrl);
-    });
-  }else{
-    playPromise=player.load(ch.url);
-  }
-  playPromise.then(function(){
-    return video.play();
-  }).then(function(){
-    isPlaying=true;
-    setSt('Streaming · '+ch.name,'ok');
-    if(cfg.muteSwitch)setTimeout(function(){video.muted=isMuted},700);
-    if(cfg.hq)setTimeout(lockHQ,4000);
-    updateQ();
-    updateStripFocus();
-    fetchEPGForChannel(ch.name);
-    if(cfg.osd){
-      clearTimeout(osdTimer);
-      osdTimer=setTimeout(function(){nowInfo.classList.remove('vis')},5000);
-    }
-  }).catch(function(err){
-    setSt('Load failed: '+String(err.message).slice(0,45),'err');
-    isPlaying=false;
-    if(cfg.muteSwitch)video.muted=isMuted;
-  });
-}
-
 function cycleAspect(){
   aspectMode=(aspectMode+1)%ASPECTS.length;
-  video.classList.remove('vid-stretch','vid-cover');
-  if(aspectMode===1)video.classList.add('vid-stretch');
-  if(aspectMode===2)video.classList.add('vid-cover');
+  video.classList.remove('stretch','cover');
+  if(aspectMode===1)video.classList.add('stretch');
+  if(aspectMode===2)video.classList.add('cover');
   setSt('Aspect: '+ASPECTS[aspectMode],'');
+  /* Apply to AVPlay too */
+  try{
+    if(avplay&&ENGINE==='avplay'){
+      var mode=aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
+               aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
+               'PLAYER_DISPLAY_MODE_ORIGINAL_SIZE';
+      avplay.setDisplayMethod(mode);
+    }
+  }catch(e){}
 }
 
+/* ════════════════════════════════════════════════════════════
+   FAV / TOGGLE
+════════════════════════════════════════════════════════════ */
 function toggleFav(){
   var ch=getFocusedCh();if(!ch)return;
   if(favs.has(ch.url)){favs.delete(ch.url);setSt('Removed from favourites','')}
   else{favs.add(ch.url);setSt('Added to favourites','ok')}
-  saveFavs();
-  rebuildNavTabs();
-  updateStripFocus();
+  saveFavs();rebuildNavTabs();updateStripFocus();
 }
 
 /* ════════════════════════════════════════════════════════════
-   QUICK ACTIONS POPUP
+   OSD HIDE — only hides channel info overlay, not video
+   Respects cfg.osd flag. wakeUI re-shows info, resetOsd resets timer.
 ════════════════════════════════════════════════════════════ */
-function openYP(){
-  yellowPopup.classList.add('on');zone='yp';ypIdx=0;
-  ypForm.classList.remove('on');ypForm.style.display='none';
-  var acts=QA('.yp-act',$('ypActs'));
-  for(var i=0;i<acts.length;i++)acts[i].style.display='';
-  wakeUI();clearTimeout(hideTimer);
-  setTimeout(function(){
-    var items=QA('.yp-act',$('ypActs'));
-    if(items[0])items[0].focus({preventScroll:true});
-  },50);
+function scheduleOsdHide(){
+  clearTimeout(osdTimer);
+  nowInfo.classList.add('vis'); /* always show on play */
+  if(!cfg.osd)return; /* osd=false means always visible */
+  osdTimer=setTimeout(function(){
+    if(isPlaying)nowInfo.classList.remove('vis');
+  },6000);
 }
-function closeYP(){
-  yellowPopup.classList.remove('on');zone='rows';
-  resetHideTimer();syncFocusRows();
-}
-$('ypClose').addEventListener('click',closeYP);
-
-$('ypa-add').addEventListener('click',function(){
-  var acts=QA('.yp-act',$('ypActs'));
-  for(var i=0;i<acts.length;i++)acts[i].style.display='none';
-  ypForm.classList.add('on');ypForm.style.display='flex';
-  setTimeout(function(){if($('ypName'))$('ypName').focus()},50);
-});
-$('ypa-refresh').addEventListener('click',function(){
-  closeYP();
-  if(typeof AppCache!=='undefined')AppCache.clearAllM3U();
-  allChs=[];setSt('Refreshing all playlists…','buf');
-  loadAll(true);
-});
-$('ypa-dialer').addEventListener('click',function(){closeYP();openDial()});
-$('ypa-settings').addEventListener('click',function(){closeYP();openSettings()});
-$('ypa-favs').addEventListener('click',function(){closeYP();setTab('Favourites')});
-$('ypCancel').addEventListener('click',function(){
-  ypForm.classList.remove('on');ypForm.style.display='none';
-  var acts=QA('.yp-act',$('ypActs'));
-  for(var i=0;i<acts.length;i++)acts[i].style.display='';
-  setTimeout(function(){
-    var items=QA('.yp-act',$('ypActs'));
-    if(items[0])items[0].focus({preventScroll:true});
-  },30);
-});
-$('ypSave').addEventListener('click',function(){
-  var name=$('ypName').value.trim(),url=$('ypUrl').value.trim();
-  if(!name||!url){setSt('Please enter a name and URL','err');return}
-  if(!url.match(/^https?:\/\//i)){setSt('URL must start with http:// or https://','err');return}
-  /* Check duplicate */
-  for(var pi=0;pi<pls.length;pi++){
-    if(pls[pi].url===url){setSt('Playlist already added','');return}
+function resetOsd(){
+  /* Called by wakeUI — re-show info and restart timer */
+  if(isPlaying){
+    nowInfo.classList.add('vis');
+    if(cfg.osd){
+      clearTimeout(osdTimer);
+      osdTimer=setTimeout(function(){
+        if(isPlaying)nowInfo.classList.remove('vis');
+      },6000);
+    }
   }
-  var newPl={name:name,url:url,builtIn:false};
-  pls.push(newPl);savePls();
-  $('ypName').value='';$('ypUrl').value='';
-  ypForm.classList.remove('on');ypForm.style.display='none';
-  closeYP();
-  /* Load and tag with custom source */
-  loadPl(url,name,false,name.toLowerCase()).then(function(){
-    rebuildNavTabs();
-    setSt('Loaded: '+name,'ok');
-  });
-});
+}
 
 /* ════════════════════════════════════════════════════════════
-   SETTINGS
+   ╔═══════════════════════════════════════════════════════╗
+   ║              NATIVE AVPLAY ENGINE                     ║
+   ╚═══════════════════════════════════════════════════════╝
 ════════════════════════════════════════════════════════════ */
-function openSettings(){
-  settingsOv.classList.add('on');zone='settings';
-  soSideIdx=0;soMainIdx=0;soSideZone=true;
-  /* Mark settings button as active */
-  $('settingsBtn').classList.add('active-focus');
-  renderSettingsSect('playback');
-  wakeUI();clearTimeout(hideTimer);
-  setTimeout(function(){
-    var items=QA('.so-nav',soSide);
-    if(items[0])items[0].focus({preventScroll:true});
-  },50);
+function initAVPlay(){
+  try{
+    if(window.webapis&&webapis.avplay){
+      avplay=webapis.avplay;
+      avReady=true;
+      setSt('AVPlay ready','ok');
+      return true;
+    }
+  }catch(e){}
+  avReady=false;
+  return false;
 }
-function closeSettings(){
-  settingsOv.classList.remove('on');zone='rows';
-  $('settingsBtn').classList.remove('active-focus');
+
+function avplayStop(){
+  if(!avplay)return;
+  try{
+    var st=avplay.getState();
+    if(st==='PLAYING'||st==='PAUSED'||st==='READY')avplay.stop();
+    avplay.close();
+  }catch(e){}
+  avCont.classList.remove('active');
+}
+
+function playWithAVPlay(ch){
+  var url=ch.url;
+  avplayStop();
+  try{
+    avplay.open(url);
+    avplay.setDisplayRect(0,0,1920,1080);
+    avplay.setDisplayMethod(
+      aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
+      aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
+      'PLAYER_DISPLAY_MODE_ORIGINAL_SIZE'
+    );
+    /* Referer for CrichD streams */
+    if(url.indexOf('sanwalyaarpya')>=0||url.indexOf('calm-sun')>=0||url.indexOf('crichd')>=0){
+      try{avplay.setStreamingProperty('CUSTOM_MESSAGE','Referer:https://profamouslife.com/')}catch(e){}
+      try{avplay.setStreamingProperty('USER_AGENT','Mozilla/5.0')}catch(e){}
+    }
+    avplay.setListener({
+      onbufferingstart:function(){
+        setSt('Buffering…','buf');
+        bufSpinner.classList.add('on');
+      },
+      onbufferingprogress:function(){},
+      onbufferingcomplete:function(){
+        setSt('Streaming · '+ch.name+' [AVPlay]','ok');
+        isPlaying=true;
+        bufSpinner.classList.remove('on');
+        showEngine('avplay');
+        updateStripFocus();
+        scheduleOsdHide();
+      },
+      onerror:function(errCode){
+        bufSpinner.classList.remove('on');
+        setSt('AVPlay error '+errCode+' — trying Shaka…','buf');
+        isPlaying=false;
+        avplayStop();
+        /* Fallback to Shaka */
+        playWithShaka(ch,false);
+      },
+      onstreamcompleted:function(){
+        setSt('Stream ended','');isPlaying=false;
+        bufSpinner.classList.remove('on');
+      }
+    });
+    avplay.prepare();
+    avplay.play();
+    ENGINE='avplay';
+    avCont.classList.add('active');
+    video.style.display='none'; /* Hide Shaka video element */
+    setSt('Connecting [AVPlay]…','buf');
+    bufSpinner.classList.add('on');
+    updateNowInfo(ch);
+  }catch(ex){
+    setSt('AVPlay open failed — trying Shaka…','buf');
+    avplayStop();
+    video.style.display='';
+    playWithShaka(ch,false);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   ╔═══════════════════════════════════════════════════════╗
+   ║              SHAKA PLAYER ENGINE                      ║
+   ╚═══════════════════════════════════════════════════════╝
+════════════════════════════════════════════════════════════ */
+function initShaka(){
+  return new Promise(function(resolve){
+    try{shaka.polyfill.installAll()}catch(ex){}
+    if(typeof shaka==='undefined'||!shaka.Player.isBrowserSupported()){
+      setSt('Shaka not supported on this TV','err');resolve(false);return;
+    }
+    shakaPlayer=new shaka.Player(video);
+    /* Request filter — inject headers per source domain */
+    shakaPlayer.getNetworkingEngine().registerRequestFilter(function(type,req){
+      var u=req.uris&&req.uris[0]?req.uris[0]:'';
+      /* CrichD streams need Referer */
+      if(u.indexOf('sanwalyaarpya.com')>=0||u.indexOf('calm-sun')>=0||u.indexOf('crichd')>=0){
+        req.headers['Referer']='https://profamouslife.com/';
+        req.headers['Origin']='https://profamouslife.com';
+      }
+      /* YuppTV Akamai CDN — needs Origin + Referer to match stream domain */
+      if(u.indexOf('yuppparoriglin.akamaized.net')>=0||
+         u.indexOf('yuppcdn.net')>=0||
+         u.indexOf('catchup.yuppcdn')>=0||
+         u.indexOf('livegeoroueu.akamaized.net')>=0||
+         u.indexOf('vg-republictvlive.akamaized.net')>=0||
+         u.indexOf('aajtaklive.vgcdn.net')>=0||
+         u.indexOf('yupptv')>=0){
+        req.headers['Referer']='https://www.yupptv.com/';
+        req.headers['Origin']='https://www.yupptv.com';
+        req.headers['User-Agent']='Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36';
+      }
+    });
+    /* Response filter — handle redirect responses from worker pages */
+    shakaPlayer.getNetworkingEngine().registerResponseFilter(function(type,resp){
+      /* If a playlist URL redirected to a new location, nothing to do */
+    });
+    shakaPlayer.configure({
+      abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10000000,switchInterval:8,
+           bandwidthUpgradeTarget:0.8,bandwidthDowngradeTarget:0.9},
+      streaming:{bufferingGoal:cfg.buf,rebufferingGoal:2,
+                 stallEnabled:true,stallThreshold:1,stallSkip:0.1,
+                 retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:0.3,timeout:25000},
+                 safeSeekOffset:2},
+    });
+    shakaPlayer.addEventListener('adaptation',updateQ);
+    shakaPlayer.addEventListener('variantchanged',updateQ);
+    shakaPlayer.addEventListener('buffering',function(e){
+      if(e.buffering){setSt('Buffering…','buf');bufSpinner.classList.add('on')}
+      else{bufSpinner.classList.remove('on');setSt('Streaming · '+(getFocusedCh()?getFocusedCh().name:''),'ok')}
+    });
+    shakaPlayer.addEventListener('error',function(e){
+      var msg=(e.detail&&e.detail.message)||'Stream error';
+      setSt(msg.slice(0,60),'err');isPlaying=false;
+      bufSpinner.classList.remove('on');
+    });
+    video.addEventListener('playing',function(){
+      isPlaying=true;bufSpinner.classList.remove('on');
+      var ch=getFocusedCh();
+      if(ch)setSt('Streaming · '+ch.name+' [Shaka]','ok');
+      showEngine('shaka');updateStripFocus();
+      scheduleOsdHide();
+    });
+    video.addEventListener('error',function(){setSt('Video error','err');isPlaying=false;bufSpinner.classList.remove('on')});
+    setSt('Shaka ready','');
+    resolve(true);
+  });
+}
+
+function resolveYuppUrl(ch,cb){
+  /* YuppTV worker page returns HTML — dtv= param contains actual Akamai m3u8 */
+  /* We stored the full calm-sun wrapper URL; re-fetch to find any Location header */
+  /* For yupp, the dtv= value IS the signed m3u8, so extract from stored href */
+  var href=ch.url||'';
+  if(href.indexOf('dtv=')>=0){
+    var dtvMatch=href.match(/[?&]dtv=([^&\s]+)/);
+    if(dtvMatch){
+      var decoded;
+      try{decoded=decodeURIComponent(dtvMatch[1])}catch(e){decoded=dtvMatch[1]}
+      if(decoded&&decoded.indexOf('.m3u8')>=0){cb(decoded);return}
+    }
+  }
+  cb(ch.url); /* fallback: use original */
+}
+
+function playWithShaka(ch,tryAVFirst){
+  if(tryAVFirst===undefined)tryAVFirst=true;
+  if(tryAVFirst&&avReady&&cfg.engine!=='shaka'){playWithAVPlay(ch);return}
+  /* Shaka path */
+  avplayStop();
+  video.style.display='';
+  ENGINE='shaka';
+  if(!shakaPlayer){setSt('Shaka not initialised','err');return}
+  updateNowInfo(ch);
+  setSt('Connecting [Shaka]…','buf');
+  bufSpinner.classList.add('on');
+  /* For yupp channels, extract the real m3u8 from the dtv= wrapper */
+  var loadUrl=ch.url;
+  if(ch._src==='yupp'&&ch.url.indexOf('dtv=')>=0){
+    var m=ch.url.match(/[?&]dtv=([^&\s]+)/);
+    if(m){try{loadUrl=decodeURIComponent(m[1])}catch(e){loadUrl=m[1]}}
+  }
+  shakaPlayer.load(loadUrl).then(function(){
+    return video.play();
+  }).then(function(){
+    isPlaying=true;bufSpinner.classList.remove('on');
+    setSt('Streaming · '+ch.name+' [Shaka]','ok');
+    showEngine('shaka');
+    if(cfg.hq)setTimeout(lockHQ,4000);
+    updateQ();updateStripFocus();
+    fetchEPGForChannel(ch.name);
+    scheduleOsdHide();
+    if(cfg.muteSwitch)setTimeout(function(){video.muted=isMuted},700);
+  }).catch(function(err){
+    setSt('Shaka failed: '+String(err.message||err).slice(0,45),'err');
+    isPlaying=false;bufSpinner.classList.remove('on');
+    /* Last resort — direct video.src */
+    tryDirectPlay(ch);
+  });
+}
+
+function tryDirectPlay(ch){
+  setSt('Trying direct play…','buf');
+  try{
+    video.style.display='';avplayStop();
+    video.src=ch.url;video.load();
+    video.play().then(function(){
+      isPlaying=true;ENGINE='native';
+      setSt('Streaming · '+ch.name+' [Direct]','ok');
+      showEngine('direct');updateStripFocus();
+    }).catch(function(){setSt('All engines failed for: '+ch.name,'err')});
+  }catch(e){setSt('All engines failed','err')}
+}
+
+function updateQ(){
+  if(!shakaPlayer)return;
+  try{
+    var tracks=shakaPlayer.getVariantTracks();
+    var a=null;
+    for(var i=0;i<tracks.length;i++){if(tracks[i].active){a=tracks[i];break}}
+    if(a){
+      var q=(a.height?a.height+'p':'Auto')+' · '+(a.bandwidth/1000000).toFixed(1)+'M';
+      nowQ.textContent=q;nowQ.style.display='';
+    }
+  }catch(e){}
+}
+function lockHQ(){
+  if(!shakaPlayer||!isPlaying)return;
+  try{
+    var t=shakaPlayer.getVariantTracks();if(!t.length)return;
+    var best=t[0];
+    for(var i=1;i<t.length;i++){if(t[i].bandwidth>best.bandwidth)best=t[i]}
+    shakaPlayer.selectVariantTrack(best,false);
+  }catch(e){}
+}
+function recfg(){
+  if(!shakaPlayer)return;
+  shakaPlayer.configure({
+    abr:{enabled:!cfg.hq},
+    streaming:{bufferingGoal:cfg.buf},
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   PLAY DEBOUNCE + MAIN ENTRY
+════════════════════════════════════════════════════════════ */
+function immediatePlay(){clearTimeout(playTimer);playTimer=setTimeout(_doPlay,PLAY_DEB)}
+function _doPlay(){
+  var ch=getFocusedCh();
+  if(!ch||!ch.url)return;
+  if(ch.url===curUrl&&isPlaying)return;
+  curUrl=ch.url;
+  if(cfg.muteSwitch&&isPlaying)video.muted=true;
+  isPlaying=false;nowQ.style.display='none';
+  updateNowInfo(ch);
+  /* Engine selection */
+  if(cfg.engine==='shaka'){playWithShaka(ch,false);return}
+  if(cfg.engine==='avplay'&&avReady){playWithAVPlay(ch);return}
+  /* auto: AVPlay first, Shaka fallback */
+  if(avReady)playWithAVPlay(ch);
+  else playWithShaka(ch,false);
+}
+
+/* ════════════════════════════════════════════════════════════
+   SEARCH
+════════════════════════════════════════════════════════════ */
+var searchOpen=false;
+function openSearch(){
+  var ov=$('searchOv');if(!ov)return;
+  ov.classList.add('open');
+  searchOpen=true;zone='search';
+  wakeUI();clearTimeout(hideTimer);
+  var inp=$('searchInp');
+  if(inp){inp.value=searchQ||'';inp.focus();updateSearchCount()}
+}
+function closeSearch(){
+  var ov=$('searchOv');if(ov)ov.classList.remove('open');
+  searchOpen=false;zone='rows';
   resetHideTimer();syncFocusRows();
 }
-$('soClose').addEventListener('click',closeSettings);
-$('settingsBtn').addEventListener('click',openSettings);
+function updateSearchCount(){
+  var sc=$('searchCount');
+  if(sc)sc.textContent=viewChs.length+' results';
+}
 
-/* Search button */
+/* Wire search */
 (function(){
   var sb=$('searchBtn');
-  if(sb)sb.addEventListener('click',function(){openSearch()});
+  if(sb)sb.addEventListener('click',openSearch);
   var si=$('searchInp');
   if(si){
     si.addEventListener('input',function(){
       searchQ=si.value.trim();
-      viewChs=getViewChs();renderStrip();
-      col=Math.min(col,viewChs.length);
-      updateStripFocus();updateSearchCount();
+      viewChs=getViewChs();col=Math.min(col,viewChs.length);
+      renderStrip();updateSearchCount();
     });
     si.addEventListener('keydown',function(e){
-      if(e.keyCode===27||e.key==='Escape'||e.keyCode===10009){
+      if(e.keyCode===27||e.keyCode===10009){
         e.preventDefault();
-        if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderStrip();updateSearchCount();}
+        if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderStrip();updateSearchCount()}
         else closeSearch();
+        return;
       }
-      if(e.keyCode===13||e.key==='Enter'){
+      if(e.keyCode===13){
         e.preventDefault();
         closeSearch();
-        if(viewChs.length>0){col=1;updateStripFocus();syncScroll();immediatePlay();}
+        if(viewChs.length>0){col=1;updateStripFocus();syncScroll();immediatePlay()}
       }
     });
   }
@@ -1851,36 +1910,121 @@ $('settingsBtn').addEventListener('click',openSettings);
   });
 })();
 
+/* ════════════════════════════════════════════════════════════
+   EXIT CONFIRMATION
+════════════════════════════════════════════════════════════ */
+var exitFocusYes=true;
+function openExit(){
+  var ov=$('exitOv');if(!ov)return;
+  ov.classList.add('on');zone='exit';exitFocusYes=true;
+  updateExitFocus();wakeUI();clearTimeout(hideTimer);
+}
+function closeExit(){
+  var ov=$('exitOv');if(ov)ov.classList.remove('on');
+  zone='rows';resetHideTimer();syncFocusRows();
+}
+function updateExitFocus(){
+  var y=$('exitYes'),n=$('exitNo');
+  if(y)y.classList.toggle('focused',exitFocusYes);
+  if(n)n.classList.toggle('focused',!exitFocusYes);
+  if(exitFocusYes&&y)y.focus({preventScroll:true});
+  else if(n)n.focus({preventScroll:true});
+}
+function doExit(){
+  try{if(window.tizen&&tizen.application)tizen.application.getCurrentApplication().exit()}catch(e){}
+  try{window.close()}catch(e){}
+}
+(function(){
+  var y=$('exitYes'),n=$('exitNo');
+  if(y)y.addEventListener('click',doExit);
+  if(n)n.addEventListener('click',closeExit);
+})();
+
+/* ════════════════════════════════════════════════════════════
+   QUICK ACTIONS (YELLOW popup)
+════════════════════════════════════════════════════════════ */
+function openYP(){yellowPopup.classList.add('on');zone='yp';ypIdx=0;wakeUI();clearTimeout(hideTimer);
+  setTimeout(function(){var it=QA('.yp-act',$('ypActs'));if(it[0]){it[0].focus({preventScroll:true})}},30)}
+function closeYP(){yellowPopup.classList.remove('on');ypForm.classList.remove('on');
+  zone='rows';resetHideTimer();syncFocusRows()}
+$('ypClose').addEventListener('click',closeYP);
+$('ypa-refresh').addEventListener('click',function(){
+  if(typeof AppCache!=='undefined')AppCache.clearAllM3U();
+  allChs=[];setSt('Refreshing…','buf');loadAll(true);closeYP();
+});
+$('ypa-dialer').addEventListener('click',function(){closeYP();openDial()});
+$('ypa-settings').addEventListener('click',function(){closeYP();openSettings()});
+$('ypa-favs').addEventListener('click',function(){closeYP();setTab('Favourites')});
+$('ypa-add').addEventListener('click',function(){
+  ypForm.classList.toggle('on');
+  if(ypForm.classList.contains('on')){
+    setTimeout(function(){$('ypName').focus()},50);
+  }
+});
+$('ypSave').addEventListener('click',function(){
+  var n=($('ypName').value||'').trim();
+  var u=($('ypUrl').value||'').trim();
+  if(!n||!u){setSt('Enter name and URL','err');return}
+  if(pls.some(function(p){return p.url===u})){setSt('Already added','err');return}
+  var pl={name:n,url:u,builtIn:false,_src:n.toLowerCase()};
+  pls.push(pl);savePls();
+  loadPl(u,n,false,n.toLowerCase()).then(function(){
+    rebuildNavTabs();setSt('Loaded: '+n,'ok');
+  });
+  $('ypName').value='';$('ypUrl').value='';ypForm.classList.remove('on');closeYP();
+});
+$('ypCancel').addEventListener('click',function(){ypForm.classList.remove('on')});
+
+/* ════════════════════════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════════════════════════ */
+function openSettings(){
+  settingsOv.classList.add('on');zone='settings';
+  soSideIdx=0;soMainIdx=0;soSideZone=true;
+  $('settingsBtn').classList.add('active');
+  renderSettingsSect('playback');wakeUI();clearTimeout(hideTimer);
+  setTimeout(function(){var it=QA('.so-nav',soSide);if(it[0])it[0].focus({preventScroll:true})},50);
+}
+function closeSettings(){
+  settingsOv.classList.remove('on');zone='rows';
+  $('settingsBtn').classList.remove('active');
+  resetHideTimer();syncFocusRows();
+}
+$('soClose').addEventListener('click',closeSettings);
+$('settingsBtn').addEventListener('click',openSettings);
+
 QA('.so-nav',soSide).forEach(function(n){
   n.addEventListener('click',function(){
     QA('.so-nav',soSide).forEach(function(x){x.classList.remove('on')});
     n.classList.add('on');
-    renderSettingsSect(n.dataset.s);
-    soSideZone=false;soMainIdx=0;
-    setTimeout(function(){
-      var it=QA('[tabindex="0"]',soMain);
-      if(it[0])it[0].focus({preventScroll:true});
-    },30);
+    renderSettingsSect(n.dataset.s);soSideZone=false;soMainIdx=0;
+    setTimeout(function(){var it=QA('[tabindex="0"]',soMain);if(it[0])it[0].focus({preventScroll:true})},30);
   });
 });
 
 function renderSettingsSect(s){
   var nav=soSide.querySelector('.so-nav[data-s="'+s+'"]');
-  if(nav){
-    QA('.so-nav',soSide).forEach(function(x){x.classList.remove('on')});
-    nav.classList.add('on');
-  }
+  if(nav){QA('.so-nav',soSide).forEach(function(x){x.classList.remove('on')});nav.classList.add('on')}
   if(s==='playback'){
     soMain.innerHTML=
+      '<div class="srow" tabindex="0">'+
+        '<div class="srow-l"><div class="srow-t">Player Engine</div><div class="srow-d">Auto = AVPlay first, Shaka fallback. Force to override.</div></div>'+
+      '</div>'+
+      '<select class="oui-sel" id="cfgEngine" tabindex="0">'+
+        '<option value="auto"'+(cfg.engine==='auto'?' selected':'')+'>Auto (AVPlay → Shaka)</option>'+
+        '<option value="avplay"'+(cfg.engine==='avplay'?' selected':'')+'>Force AVPlay (Native)</option>'+
+        '<option value="shaka"'+(cfg.engine==='shaka'?' selected':'')+'>Force Shaka Player</option>'+
+      '</select>'+
+      '<div style="margin-top:18px"></div>'+
       '<div class="srow" tabindex="0">'+
         '<div class="srow-l"><div class="srow-t">Force Highest Quality</div><div class="srow-d">Lock max bitrate — prevents quality drops</div></div>'+
         '<label class="tog"><input type="checkbox" id="cfgHQ"'+(cfg.hq?' checked':'')+'>'+
         '<span class="tog-t"></span></label></div>'+
       '<div class="srow" tabindex="0">'+
-        '<div class="srow-l"><div class="srow-t">Mute on Channel Switch</div><div class="srow-d">Silence during zap, restore after 700ms</div></div>'+
+        '<div class="srow-l"><div class="srow-t">Mute on Channel Switch</div><div class="srow-d">Silence during zap, restore after 700 ms</div></div>'+
         '<label class="tog"><input type="checkbox" id="cfgMute"'+(cfg.muteSwitch?' checked':'')+'>'+
         '<span class="tog-t"></span></label></div>'+
-      '<div style="margin-top:18px;margin-bottom:6px;font-size:13px;color:rgba(255,255,255,.5);font-weight:700">Buffer Goal</div>'+
+      '<div style="margin-top:16px;font-size:13px;color:rgba(255,255,255,.45);font-weight:700">Buffer Goal (Shaka)</div>'+
       '<select class="oui-sel" id="cfgBuf" tabindex="0">'+
         '<option value="6"'+(cfg.buf==6?' selected':'')+'>6 s — Ultra Low Latency</option>'+
         '<option value="8"'+(cfg.buf==8?' selected':'')+'>8 s — Low Latency</option>'+
@@ -1891,122 +2035,89 @@ function renderSettingsSect(s){
   }else if(s==='display'){
     soMain.innerHTML=
       '<div class="srow" tabindex="0">'+
-        '<div class="srow-l"><div class="srow-t">OSD Auto-hide</div><div class="srow-d">Channel info fades after 5 seconds during playback</div></div>'+
+        '<div class="srow-l"><div class="srow-t">OSD Auto-hide</div><div class="srow-d">Channel info fades after 5 s during playback</div></div>'+
         '<label class="tog"><input type="checkbox" id="cfgOsd"'+(cfg.osd?' checked':'')+'>'+
-        '<span class="tog-t"></span></label></div>';
+        '<span class="tog-t"></span></label></div>'+
+      '<div style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.55);font-weight:700;margin-bottom:6px">Aspect Ratio</div>'+
+      '<button class="so-btn" id="soAspect" tabindex="0">⬜ Cycle: '+ASPECTS[aspectMode]+'</button>';
     wireSettings();
+    var ab=$('soAspect');
+    if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    /* Built-ins + custom playlists */
     var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
-    if(!allSrc.length)html='<p style="color:rgba(255,255,255,.35);padding:14px 0">No sources configured.</p>';
-    else{
-      for(var i=0;i<allSrc.length;i++){
-        var p=allSrc[i];
-        html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
-          '<div class="src-dot" style="'+(p.builtIn?'background:rgba(255,255,255,.4)':'background:#22c55e')+'" ></div>'+
-          '<div class="src-i">'+
-            '<div class="src-n">'+esc(p.name)+(p.builtIn?' <small style="opacity:.35;font-weight:400">(built-in)</small>':'')+
-          '</div><div class="src-u">'+esc(p.url)+'</div></div>'+
-          (p.builtIn?'':'<button class="src-del" data-del="'+i+'" title="Remove">✕</button>')+
-        '</div>';
-      }
-    }
+    allSrc.forEach(function(p,i){
+      html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
+        '<div class="src-dot" style="'+(p.builtIn?'background:rgba(255,255,255,.3)':'')+'"></div>'+
+        '<div class="src-i"><div class="src-n">'+esc(p.name)+(p.builtIn?' <small style="opacity:.3">(built-in)</small>':'')+
+        '</div><div class="src-u">'+esc(p.url)+'</div></div>'+
+        (p.builtIn?'':'<button class="src-del" data-del="'+i+'" title="Remove">✕</button>')+
+      '</div>';
+    });
     soMain.innerHTML=html+
       '<button class="so-btn" id="soAddSrc" tabindex="0">➕ Add Custom Playlist</button>'+
       '<button class="so-btn" id="soRefresh" tabindex="0">↺ Refresh All Playlists</button>';
-
     soMain.querySelectorAll('.src-card').forEach(function(el){
       el.addEventListener('click',function(e){
         if(e.target.closest('[data-del]'))return;
-        var idx=parseInt(el.dataset.i);
-        var src=allSrc[idx];
-        if(src){
-          var tag=src._src||src.name.toLowerCase();
-          loadPl(src.url,src.name,false,tag).then(function(){
-            setSt('Loaded: '+src.name,'ok');
-          });
-          closeSettings();
-        }
+        var src=allSrc[parseInt(el.dataset.i)];
+        if(src){loadPl(src.url,src.name,false,src._src||src.name.toLowerCase()).then(function(){setSt('Loaded: '+src.name,'ok')});closeSettings()}
       });
     });
     soMain.querySelectorAll('[data-del]').forEach(function(btn){
       btn.addEventListener('click',function(e){
         e.stopPropagation();
-        var idx=parseInt(btn.dataset.del);
-        /* idx in allSrc: 0,1,2,3 = built-ins; 4+ = custom */
-        var customIdx=idx-4;
-        if(customIdx>=0&&customIdx<pls.filter(function(p){return!p.builtIn}).length){
-          var customPls=pls.filter(function(p){return!p.builtIn});
-          var removed=customPls[customIdx];
-          /* Remove from pls */
-          pls=pls.filter(function(p){return p.builtIn||p.url!==removed.url});
+        var customPls=pls.filter(function(p){return!p.builtIn});
+        var idx=parseInt(btn.dataset.del)-4;
+        if(idx>=0&&idx<customPls.length){
+          var rm=customPls[idx];
+          pls=pls.filter(function(p){return p.builtIn||p.url!==rm.url});
           savePls();
-          /* Remove channels from allChs */
-          allChs=allChs.filter(function(c){return c._src!==removed.name.toLowerCase()});
-          rebuildNavTabs();
-          if(activeTab===removed.name)setTab('Telugu');
+          allChs=allChs.filter(function(c){return c._src!==rm.name.toLowerCase()});
+          rebuildNavTabs();if(activeTab===rm.name)setTab('Telugu');
           renderSettingsSect('sources');
         }
       });
     });
-    var rb=$('soRefresh');
-    if(rb)rb.addEventListener('click',function(){
-      if(typeof AppCache!=='undefined')AppCache.clearAllM3U();
-      allChs=[];setSt('Refreshing…','buf');
-      loadAll(true);closeSettings();
-    });
-    var ab=$('soAddSrc');
-    if(ab)ab.addEventListener('click',function(){
-      closeSettings();openYP();
-      /* Auto-click add button */
-      setTimeout(function(){var a=$('ypa-add');if(a)a.click()},100);
-    });
+    var rb=$('soRefresh');if(rb)rb.addEventListener('click',function(){if(typeof AppCache!=='undefined')AppCache.clearAllM3U();allChs=[];setSt('Refreshing…','buf');loadAll(true);closeSettings()});
+    var ab2=$('soAddSrc');if(ab2)ab2.addEventListener('click',function(){closeSettings();openYP();setTimeout(function(){var a=$('ypa-add');if(a)a.click()},100)});
   }else if(s==='about'){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
-        '<div style="font-size:28px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-        '<div style="font-size:12px;color:rgba(255,255,255,.4);margin-bottom:20px;letter-spacing:.3px">Version 44 · Samsung Tizen OS9 · CricHd+YuppTV HTML scraper</div>'+
-        '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.9">'+
-          '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
-          '↑↓←→ — Navigate · OK — Play<br>'+
-          '▲▼ CH — Previous / Next channel<br>'+
-          'RED — Next category tab<br>'+
-          'GREEN — Cycle aspect ratio<br>'+
-          'YELLOW — Quick actions menu<br>'+
-          'BLUE — Toggle favourite<br>'+
-          'MENU / INFO — Settings<br>'+
-          '0–9 — Quick channel jump<br>'+
-          'BACK — Close / go back'+
-        '</div>'+
-        '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.25)">'+
-          'Built-in: Telugu · Jio · YuppTV · CricHd<br>Custom playlists (M3U or JSON) stored on device'+
-        '</div>'+
-      '</div>';
+      '<div style="font-size:30px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
+      '<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:22px;letter-spacing:.3px">Native Edition v1.0 · Samsung Tizen OS9 · AVPlay + Shaka</div>'+
+      '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:2.1">'+
+        '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
+        '↑↓←→ Navigate · OK Play<br>'+
+        'CH▲▼ Previous / Next channel<br>'+
+        'RED Next tab · GREEN Aspect ratio<br>'+
+        'YELLOW Quick actions · BLUE Search<br>'+
+        'MENU / INFO Settings<br>'+
+        '0–9 Quick channel jump<br>'+
+        'BACK Close / go back'+
+      '</div>'+
+      '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
+        'Built-in: Telugu · Jio · YuppTV · CricHd<br>'+
+        'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · Direct (last resort)'+
+      '</div></div>';
   }
 }
 
 function wireSettings(){
-  var hq=$('cfgHQ'),mu=$('cfgMute'),bu=$('cfgBuf'),os=$('cfgOsd');
+  var eng=$('cfgEngine'),hq=$('cfgHQ'),mu=$('cfgMute'),bu=$('cfgBuf'),os=$('cfgOsd');
+  if(eng)eng.onchange=function(){cfg.engine=this.value;saveCfg()};
   if(hq)hq.onchange=function(){cfg.hq=this.checked;saveCfg();recfg()};
   if(mu)mu.onchange=function(){cfg.muteSwitch=this.checked;saveCfg()};
   if(bu)bu.onchange=function(){cfg.buf=parseInt(this.value);saveCfg();recfg()};
   if(os)os.onchange=function(){cfg.osd=this.checked;saveCfg()};
 }
 
-/* ── Dialer ── */
-function openDial(){
-  mDial.classList.add('on');zone='dialer';
-  dialStr='';dnum.textContent='—';
-  wakeUI();clearTimeout(hideTimer);
-}
-function closeDial(){
-  mDial.classList.remove('on');zone='rows';
-  resetHideTimer();syncFocusRows();
-}
-QA('.dk',$('mDial')).forEach(function(b){
-  b.addEventListener('click',function(){dialPush(b.dataset.d)});
-});
+/* ════════════════════════════════════════════════════════════
+   DIALER
+════════════════════════════════════════════════════════════ */
+function openDial(){mDial.classList.add('on');zone='dialer';dialStr='';dnum.textContent='—';wakeUI();clearTimeout(hideTimer)}
+function closeDial(){mDial.classList.remove('on');zone='rows';resetHideTimer();syncFocusRows()}
+QA('.dk',$('mDial')).forEach(function(b){b.addEventListener('click',function(){dialPush(b.dataset.d)})});
 function dialPush(d){
   if(d==='clr')dialStr=dialStr.slice(0,-1);
   else if(d==='go'){dialGo();return}
@@ -2017,62 +2128,69 @@ function dialPush(d){
 }
 function dialGo(){
   var n=parseInt(dialStr,10);dialStr='';dnum.textContent='—';closeDial();
-  if(!isNaN(n)&&n>=1&&n<=viewChs.length){
-    col=n;
-    updateStripFocus();syncScroll();immediatePlay();
-  }else{
-    setSt('Channel '+n+' not found','err');
-  }
+  if(!isNaN(n)&&n>=1&&n<=viewChs.length){col=n;updateStripFocus();syncScroll();immediatePlay()}
+  else setSt('Channel '+n+' not found','err');
 }
+var chHudEl=null,chHudNum=null,chHudName=null,chHudTimer=null;
+function initChHud(){chHudEl=$('chHud');chHudNum=$('chHudNum');chHudName=$('chHudName')}
+function showChHud(str){
+  if(!chHudEl)return;
+  chHudNum.textContent=str||'—';
+  var n=parseInt(str,10);
+  chHudName.textContent=(n>=1&&n<=viewChs.length&&viewChs[n-1])?viewChs[n-1].name:'';
+  chHudEl.classList.add('on');
+  clearTimeout(chHudTimer);
+  chHudTimer=setTimeout(function(){chHudEl.classList.remove('on')},1400);
+}
+function hideChHud(){if(chHudEl)chHudEl.classList.remove('on');clearTimeout(chHudTimer)}
+
 function remoteDigit(d){
   rDialStr+=d;clearTimeout(rDialTimer);
+  showChHud(rDialStr);
   setSt('CH: '+rDialStr+'…','');
   rDialTimer=setTimeout(function(){
-    var n=parseInt(rDialStr,10);rDialStr='';
-    if(!isNaN(n)&&n>=1&&n<=viewChs.length){
-      col=n;updateStripFocus();syncScroll();immediatePlay();
-    }else{
-      setSt('Channel not found','err');
-    }
-  },1200);
+    var n=parseInt(rDialStr,10);var prev=rDialStr;rDialStr='';hideChHud();
+    if(!isNaN(n)&&n>=1&&n<=viewChs.length){col=n;updateStripFocus();syncScroll();immediatePlay()}
+    else setSt('Channel not found','err');
+  },1400);
 }
 
-/* Focus helpers */
+/* ════════════════════════════════════════════════════════════
+   FOCUS SYNC
+════════════════════════════════════════════════════════════ */
 function syncFocusRows(){
   if(zone==='tabs'){
     var tabs=QA('.ntab',navTabs);
     if(tabs[tabIdx])tabs[tabIdx].focus({preventScroll:true});
   }else{
     var cards=[].slice.call(strip.children);
-    if(cards[col]){cards[col].tabIndex=0;cards[col].focus({preventScroll:true})}
+    var target=cards.find(function(c){return parseInt(c.dataset.i)===col-1});
+    if(target){target.tabIndex=0;target.focus({preventScroll:true})}
   }
 }
 
-/* Clock */
+/* ════════════════════════════════════════════════════════════
+   CLOCK + BANDWIDTH
+════════════════════════════════════════════════════════════ */
 function tick(){
   var t=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
   topClock.textContent=t;sClock.textContent=t;
 }
 tick();setInterval(tick,10000);
 
-/* Bandwidth */
 setInterval(function(){
-  if(!player||!isPlaying)return;
-  try{
-    var bw=player.getStats().estimatedBandwidth||0,mb=bw/1000000;
-    if(mb>0)sBw.textContent=mb.toFixed(1)+'Mbps';
-  }catch(e){}
+  if(!shakaPlayer||!isPlaying||ENGINE!=='shaka')return;
+  try{var bw=shakaPlayer.getStats().estimatedBandwidth||0,mb=bw/1000000;
+    if(mb>0)sBw.textContent=mb.toFixed(1)+'M';}catch(e){}
 },3000);
 
 function hideSplash(){
   $('splash').classList.add('off');
-  setTimeout(function(){$('splash').style.display='none'},650);
+  setTimeout(function(){$('splash').style.display='none'},600);
 }
 
 /* ════════════════════════════════════════════════════════════
-   KEYMAP — Tizen OS 9
-   Includes MENU (457), INFO (457/10133), TOOLS (10135)
-   for settings button
+   KEYMAP — Tizen OS9 complete remote binding
 ════════════════════════════════════════════════════════════ */
 var KC={
   UP:38,DN:40,LT:37,RT:39,
@@ -2081,36 +2199,22 @@ var KC={
   PLAY:415,PAUSE:19,PP:10252,STOP:413,FF:417,REW:412,
   RED:403,GREEN:404,YELLOW:405,BLUE:406,
   CHUP:427,CHDN:428,VOL_UP:447,VOL_DN:448,MUTE:449,
-  /* Settings-related keys */
-  MENU:457,INFO:457,TOOLS:10135,EXTRA:10253,
-  /* Samsung SmartHub / Info variants */
-  INFO2:10133
+  MENU:457,TOOLS:10135,EXTRA:10253,INFO2:10133,
 };
-
 function isUp(kc,k){return kc===KC.UP||kc===KC.TUP||k==='ArrowUp'||k==='Up'}
 function isDn(kc,k){return kc===KC.DN||kc===KC.TDN||k==='ArrowDown'||k==='Down'}
 function isLt(kc,k){return kc===KC.LT||kc===KC.TLT||k==='ArrowLeft'||k==='Left'}
 function isRt(kc,k){return kc===KC.RT||kc===KC.TRT||k==='ArrowRight'||k==='Right'}
 function isOK(kc,k){return kc===KC.ENTER||k==='Enter'}
-function isBack(kc,k){return kc===KC.BACK||k==='Escape'||k==='BrowserBack'}
-function isSettings(kc,k){
-  return kc===KC.MENU||kc===KC.INFO2||kc===KC.TOOLS||kc===KC.EXTRA||
-         k==='Menu'||k==='Info'||k==='Tools';
-}
-function isDig(e){
-  var kc=e.keyCode;
-  return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9');
-}
-function getDig(e){
-  if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;
-  if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);
-  return String(e.keyCode-48);
-}
+function isBack(kc,k){return kc===KC.BACK||k==='Escape'||k==='BrowserBack'||kc===10009}
+function isSettings(kc,k){return kc===KC.MENU||kc===KC.INFO2||kc===KC.TOOLS||kc===KC.EXTRA||k==='Menu'||k==='Info'||k==='Tools'}
+function isDig(e){var kc=e.keyCode;return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')}
+function getDig(e){if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);return String(e.keyCode-48)}
 
 window.addEventListener('keydown',function(e){
   var kc=e.keyCode,k=e.key;
 
-  /* Volume — always first */
+  /* Volume — always first, all zones */
   if(kc===KC.VOL_UP||k==='VolumeUp'){e.preventDefault();volUp();wakeUI();return}
   if(kc===KC.VOL_DN||k==='VolumeDown'){e.preventDefault();volDown();wakeUI();return}
   if(kc===KC.MUTE||k==='VolumeMute'){
@@ -2119,24 +2223,39 @@ window.addEventListener('keydown',function(e){
     isMuted=!isMuted;video.muted=isMuted;return;
   }
 
-  /* Settings key (MENU/INFO/TOOLS) — global, works in all zones */
-  if(isSettings(kc,k)){
-    e.preventDefault();wakeUI();
-    if(zone==='settings')closeSettings();
-    else openSettings();
-    return;
-  }
+  /* Settings — global */
+  if(isSettings(kc,k)){e.preventDefault();wakeUI();if(zone==='settings')closeSettings();else openSettings();return}
 
   wakeUI();
 
-  /* YP form inputs — let text flow, intercept only Back */
+  /* Input fields (ypName/ypUrl) — pass through except Back */
   var yn=$('ypName'),yu=$('ypUrl');
   if(document.activeElement===yn||document.activeElement===yu){
     if(isBack(kc,k)){e.preventDefault();$('ypCancel').click()}
     return;
   }
 
-  /* DIALER */
+  /* SEARCH input */
+  var si=$('searchInp');
+  if(document.activeElement===si){
+    /* handled by searchInp keydown listener */
+    if(isBack(kc,k)){e.preventDefault();
+      if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderStrip();updateSearchCount()}
+      else closeSearch();
+    }
+    return;
+  }
+
+  /* ── EXIT CONFIRM ── */
+  if(zone==='exit'){
+    if(isBack(kc,k)||kc===KC.BLUE){e.preventDefault();closeExit();return}
+    if(isLt(kc,k)||isRt(kc,k)){e.preventDefault();exitFocusYes=!exitFocusYes;updateExitFocus();return}
+    if(isOK(kc,k)){e.preventDefault();if(exitFocusYes)doExit();else closeExit();return}
+    if(kc===KC.RED||kc===KC.GREEN){e.preventDefault();doExit();return}
+    return;
+  }
+
+  /* ── DIALER ── */
   if(zone==='dialer'){
     if(isDig(e)){e.preventDefault();dialPush(getDig(e));return}
     if(isOK(kc,k)){e.preventDefault();dialGo();return}
@@ -2144,23 +2263,18 @@ window.addEventListener('keydown',function(e){
     return;
   }
 
-  /* SEARCH ZONE */
+  /* ── SEARCH zone (overlay open but input not focused) ── */
   if(zone==='search'){
-    /* Most keys pass to input naturally; intercept only nav and back */
-    if(isBack(kc,k)||kc===27){e.preventDefault();closeSearch();return}
-    if(isUp(kc,k)||isDn(kc,k)){
-      e.preventDefault();
-      /* Up/down while searching: move through results */
-      if(isUp(kc,k)&&col>1){col--;updateStripFocus();syncScroll();}
-      if(isDn(kc,k)&&col<viewChs.length){col++;updateStripFocus();syncScroll();}
-      updateSearchCount();
-      return;
-    }
-    /* Let other keys through to input */
+    if(isBack(kc,k)){e.preventDefault();closeSearch();return}
+    if(isOK(kc,k)){e.preventDefault();if(si)si.focus();return}
+    if(isUp(kc,k)&&col>1){e.preventDefault();col--;updateStripFocus();syncScroll();updateSearchCount();return}
+    if(isDn(kc,k)&&col<viewChs.length){e.preventDefault();col++;updateStripFocus();syncScroll();updateSearchCount();return}
+    if(isLt(kc,k)&&col>1){e.preventDefault();col--;updateStripFocus();syncScroll();return}
+    if(isRt(kc,k)&&col<viewChs.length){e.preventDefault();col++;updateStripFocus();syncScroll();return}
     return;
   }
 
-  /* QUICK ACTIONS */
+  /* ── QUICK ACTIONS ── */
   if(zone==='yp'){
     if(isBack(kc,k)){e.preventDefault();closeYP();return}
     var showingForm=ypForm.classList.contains('on');
@@ -2170,91 +2284,70 @@ window.addEventListener('keydown',function(e){
       if(isDn(kc,k)){e.preventDefault();ypIdx=Math.min(items.length-1,ypIdx+1);if(items[ypIdx])items[ypIdx].focus({preventScroll:true});return}
       if(isOK(kc,k)){e.preventDefault();if(items[ypIdx])items[ypIdx].click();return}
     }else{
-      /* Form open — up/down nav between inputs */
       if(isUp(kc,k)||isDn(kc,k)){
         e.preventDefault();
-        var inputs=QA('.yp-inp,#ypSave,#ypCancel',ypForm);
-        var fi=-1;
-        for(var qi=0;qi<inputs.length;qi++){if(inputs[qi]===document.activeElement){fi=qi;break}}
-        if(isUp(kc,k)&&fi>0)inputs[fi-1].focus({preventScroll:true});
-        else if(isDn(kc,k)&&fi<inputs.length-1)inputs[fi+1].focus({preventScroll:true});
+        var inp2=QA('.yp-inp,#ypSave,#ypCancel',ypForm);
+        var fi=-1;for(var qi=0;qi<inp2.length;qi++){if(inp2[qi]===document.activeElement){fi=qi;break}}
+        if(isUp(kc,k)&&fi>0)inp2[fi-1].focus({preventScroll:true});
+        else if(isDn(kc,k)&&fi<inp2.length-1)inp2[fi+1].focus({preventScroll:true});
         return;
       }
     }
     return;
   }
 
-  /* SETTINGS */
+  /* ── SETTINGS ── */
   if(zone==='settings'){
     if(isBack(kc,k)){e.preventDefault();closeSettings();return}
     var sideItems=QA('.so-nav',soSide);
     var mainItems=QA('[tabindex="0"]',soMain);
-    if(isUp(kc,k)){
-      e.preventDefault();
+    if(isUp(kc,k)){e.preventDefault();
       if(soSideZone){soSideIdx=Math.max(0,soSideIdx-1);if(sideItems[soSideIdx])sideItems[soSideIdx].focus({preventScroll:true})}
       else{soMainIdx=Math.max(0,soMainIdx-1);if(mainItems[soMainIdx]){mainItems[soMainIdx].focus({preventScroll:true});mainItems[soMainIdx].scrollIntoView({block:'nearest'})}}
-      return;
-    }
-    if(isDn(kc,k)){
-      e.preventDefault();
+      return;}
+    if(isDn(kc,k)){e.preventDefault();
       if(soSideZone){soSideIdx=Math.min(sideItems.length-1,soSideIdx+1);if(sideItems[soSideIdx])sideItems[soSideIdx].focus({preventScroll:true})}
       else{soMainIdx=Math.min(mainItems.length-1,soMainIdx+1);if(mainItems[soMainIdx]){mainItems[soMainIdx].focus({preventScroll:true});mainItems[soMainIdx].scrollIntoView({block:'nearest'})}}
-      return;
-    }
+      return;}
     if(isRt(kc,k)&&soSideZone){e.preventDefault();soSideZone=false;soMainIdx=0;if(mainItems[0])mainItems[0].focus({preventScroll:true});return}
     if(isLt(kc,k)&&!soSideZone){e.preventDefault();soSideZone=true;if(sideItems[soSideIdx])sideItems[soSideIdx].focus({preventScroll:true});return}
-    if(isOK(kc,k)){
-      e.preventDefault();
+    if(isOK(kc,k)){e.preventDefault();
       var f=document.activeElement;
-      if(f&&f.classList&&f.classList.contains('srow')){
-        var cb=f.querySelector('input[type=checkbox]');
-        if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}))}
-      }else if(f&&f.classList&&f.classList.contains('so-nav'))f.click();
+      if(f&&f.classList.contains('srow')){var cb=f.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}))}}
+      else if(f&&f.classList.contains('so-nav'))f.click();
       else if(f)f.click();
-      return;
-    }
+      return;}
     return;
   }
 
-  /* TABS ZONE */
+  /* ── TABS ── */
   if(zone==='tabs'){
-    var tabs=QA('.ntab',navTabs);
-    if(isLt(kc,k)){e.preventDefault();tabIdx=Math.max(0,tabIdx-1);if(tabs[tabIdx])tabs[tabIdx].focus({preventScroll:true});return}
-    if(isRt(kc,k)){e.preventDefault();tabIdx=Math.min(tabs.length-1,tabIdx+1);if(tabs[tabIdx])tabs[tabIdx].focus({preventScroll:true});return}
-    if(isOK(kc,k)){e.preventDefault();if(tabs[tabIdx])tabs[tabIdx].click();zone='rows';syncFocusRows();return}
+    var tabs2=QA('.ntab',navTabs);
+    if(isLt(kc,k)){e.preventDefault();tabIdx=Math.max(0,tabIdx-1);if(tabs2[tabIdx])tabs2[tabIdx].focus({preventScroll:true});return}
+    if(isRt(kc,k)){e.preventDefault();tabIdx=Math.min(tabs2.length-1,tabIdx+1);if(tabs2[tabIdx])tabs2[tabIdx].focus({preventScroll:true});return}
+    if(isOK(kc,k)){e.preventDefault();if(tabs2[tabIdx])tabs2[tabIdx].click();zone='rows';syncFocusRows();return}
     if(isDn(kc,k)){e.preventDefault();zone='rows';syncFocusRows();return}
     if(isBack(kc,k)){e.preventDefault();zone='rows';syncFocusRows();return}
     return;
   }
 
-  /* ROWS ZONE */
+  /* ── ROWS ── */
   if(zone==='rows'){
     if(isUp(kc,k)){
-      e.preventDefault();
-      zone='tabs';
+      e.preventDefault();zone='tabs';
       var tabBtns=QA('.ntab',navTabs);
-      var curTI=0;
-      for(var ti=0;ti<tabBtns.length;ti++){if(tabBtns[ti].dataset.g===activeTab){curTI=ti;break}}
-      tabIdx=curTI;
+      for(var ti=0;ti<tabBtns.length;ti++){if(tabBtns[ti].dataset.g===activeTab){tabIdx=ti;break}}
       if(tabBtns[tabIdx])tabBtns[tabIdx].focus({preventScroll:true});
       return;
     }
     if(isDn(kc,k)){e.preventDefault();return}
-    if(isLt(kc,k)){
-      e.preventDefault();
-      if(col>0){col--;updateStripFocus();syncScroll();syncFocusRows()}
-      return;
-    }
-    if(isRt(kc,k)){
-      e.preventDefault();
-      if(col<viewChs.length){col++;updateStripFocus();syncScroll();syncFocusRows()}
-      return;
-    }
+    if(isLt(kc,k)){e.preventDefault();if(col>0){col--;updateStripFocus();syncScroll();syncFocusRows()}return}
+    if(isRt(kc,k)){e.preventDefault();if(col<viewChs.length){col++;updateStripFocus();syncScroll();syncFocusRows()}return}
     if(isOK(kc,k)){e.preventDefault();immediatePlay();return}
-    if(isBack(kc,k)){return}
+    if(isBack(kc,k)){e.preventDefault();openExit();return}
   }
 
-  /* Universal keys (work in rows zone) */
+  /* ── UNIVERSAL (all non-overlay zones) ── */
   switch(true){
     case kc===KC.RED:
       e.preventDefault();
@@ -2267,38 +2360,48 @@ window.addEventListener('keydown',function(e){
     case kc===KC.YELLOW:
       e.preventDefault();openYP();break;
     case kc===KC.BLUE:
-      e.preventDefault();toggleFav();break;
+      e.preventDefault();openSearch();break; /* BLUE = Search */
     case kc===KC.PLAY||k==='MediaPlay':
-      e.preventDefault();video.play().catch(function(){});break;
+      e.preventDefault();
+      if(ENGINE==='avplay'&&avplay){try{avplay.play()}catch(e2){}}
+      else video.play().catch(function(){});
+      break;
     case kc===KC.PAUSE||k==='MediaPause':
-      e.preventDefault();video.pause();break;
+      e.preventDefault();
+      if(ENGINE==='avplay'&&avplay){try{avplay.pause()}catch(e2){}}
+      else video.pause();
+      break;
     case kc===KC.PP||k==='MediaPlayPause':
       e.preventDefault();
-      if(video.paused)video.play().catch(function(){});else video.pause();
+      if(ENGINE==='avplay'&&avplay){
+        try{var st2=avplay.getState();if(st2==='PLAYING')avplay.pause();else avplay.play()}catch(e2){}
+      }else{if(video.paused)video.play().catch(function(){});else video.pause()}
       break;
     case kc===KC.STOP||k==='MediaStop':
       e.preventDefault();
-      if(player){player.unload();isPlaying=false;curUrl='';setSt('Stopped','')}
+      if(ENGINE==='avplay')avplayStop();
+      else if(shakaPlayer){shakaPlayer.unload();isPlaying=false;curUrl=''}
+      setSt('Stopped','');
       break;
     case kc===KC.CHUP||k==='ChannelUp'||k==='PageUp':
       e.preventDefault();
-      if(col>0){col--;updateStripFocus();syncScroll();syncFocusRows()}
+      if(col>1){col--;updateStripFocus();syncScroll();syncFocusRows();immediatePlay()}
       break;
     case kc===KC.CHDN||k==='ChannelDown'||k==='PageDown':
       e.preventDefault();
-      if(col<viewChs.length){col++;updateStripFocus();syncScroll();syncFocusRows()}
+      if(col<viewChs.length){col++;updateStripFocus();syncScroll();syncFocusRows();immediatePlay()}
       break;
     case k==='f'||k==='F':e.preventDefault();toggleFav();break;
     case k==='d'||k==='D':e.preventDefault();openDial();break;
     case k==='s'||k==='S':e.preventDefault();openSearch();break;
-    case isDig(e)&&zone==='rows':e.preventDefault();remoteDigit(getDig(e));break;
+    case isDig(e)&&(zone==='rows'||zone==='tabs'):e.preventDefault();remoteDigit(getDig(e));break;
   }
 });
 
 $('root').addEventListener('click',wakeUI);
 
 /* ════════════════════════════════════════════════════════════
-   LOAD ALL — three built-in playlists + user custom + CricHd
+   LOAD ALL
 ════════════════════════════════════════════════════════════ */
 function loadAll(force){
   if(force===undefined)force=false;
@@ -2309,7 +2412,6 @@ function loadAll(force){
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
     .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
     .then(function(){
-      /* Load custom playlists */
       var customs=pls.filter(function(p){return!p.builtIn});
       function loadNext(i){
         if(i>=customs.length)return Promise.resolve();
@@ -2319,17 +2421,14 @@ function loadAll(force){
       return loadNext(0);
     })
     .then(function(){
-      rebuildNavTabs();
-      setTab(activeTab);
-      /* Restore last channel */
+      rebuildNavTabs();setTab(activeTab);
       var lastUrl=lsGet(LS.LCHU);
       if(lastUrl){
         for(var li=0;li<viewChs.length;li++){
           if(viewChs[li].url===lastUrl){col=li+1;updateStripFocus();syncScroll();break}
         }
       }
-      hideSplash();
-      resetHideTimer();
+      hideSplash();resetHideTimer();
       currentVol=getSysVol();
       setSt('Ready — '+allChs.length+' channels','ok');
     });
@@ -2340,24 +2439,24 @@ function loadAll(force){
 ════════════════════════════════════════════════════════════ */
 (function boot(){
   loadStore();
-  /* Strip built-in duplicates from saved custom pls */
+  initChHud();
   pls=pls.filter(function(p){
     return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url;
   });
-
   $('splMsg').textContent='Initialising player…';
 
-  initPlayer().then(function(){
+  /* 1. Try AVPlay */
+  initAVPlay();
+  initShaka().then(function(){
     $('splMsg').textContent='Loading channels…';
     rebuildNavTabs();
     return loadAll(false);
   }).catch(function(err){
-    setSt('Boot error: '+String(err),'err');
-    hideSplash();
+    setSt('Boot error: '+String(err),'err');hideSplash();
   });
 })();
 
-})();
+})(); /* IIFE end */
 </script>
 </body>
 </html>
