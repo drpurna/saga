@@ -7,10 +7,12 @@
 <title>SAGA IPTV</title>
 <script src="./js/shaka.js"></script>
 <script src="./js/cache.js"></script>
+<script src="./js/hls.min.js"></script>
+<script src="./js/epg.js"></script>
 <style>
 /*══════════════════════════════════════════════════════
   SAGA IPTV — Native Edition v1.0
-  AVPlay-first · Shaka fallback · Samsung Tizen OS9
+  AVPlay · Shaka · HLS.js · Direct — Samsung Tizen OS9
   One UI design language · GPU-composited layers
 ══════════════════════════════════════════════════════*/
 *,*::before,*::after{
@@ -960,7 +962,7 @@ html,body{
 <script>
 /*══════════════════════════════════════════════════════════════════
   SAGA IPTV — Native Edition
-  AVPlay-first · Shaka fallback · Samsung Tizen OS9
+  AVPlay · Shaka · HLS.js · Direct — Samsung Tizen OS9
   Full remote binding · GPU compositing · Solid transitions
 ══════════════════════════════════════════════════════════════════*/
 (function(){
@@ -999,6 +1001,9 @@ var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.d
 var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
 var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
 var MOVIES_PL={name:'Movies',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'movies'};
+var HINDI_PL ={name:'Hindi', url:'https://iptv-org.github.io/iptv/languages/hin.m3u',builtIn:true,_src:'hindi'};
+var TAMIL_PL ={name:'Tamil', url:'https://iptv-org.github.io/iptv/languages/tam.m3u',builtIn:true,_src:'tamil'};
+var INDIA_PL ={name:'India', url:'https://iptv-org.github.io/iptv/countries/in.m3u',builtIn:true,_src:'india'};
 
 var ASPECTS=['Contain','Stretch','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1223,6 +1228,9 @@ function canonicalTab(ch){
   if(ch._src==='yupp')return'YuppTV';
   if(ch._src==='crichd')return'CricHd';
   if(ch._src==='movies')return'Movies';
+  if(ch._src==='hindi')return'Hindi';
+  if(ch._src==='tamil')return'Tamil';
+  if(ch._src==='india')return'India';
   var g=(ch.group||'').toLowerCase().trim();
   if(GROUP_MAP[g])return GROUP_MAP[g];
   if(g.indexOf('news')>=0)return'News';
@@ -1356,11 +1364,11 @@ function loadPl(url,name,force,srcTag){
    NAV TABS
 ════════════════════════════════════════════════════════════ */
 function rebuildNavTabs(){
-  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','Hindi','Tamil','India','Favourites'];
   var cats=['News','Sports','Entertainment'];
   var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
   var seen=new Set();
-  var order=['Telugu','Jio','YuppTV','CricHd','Movies'];
+  var order=['Telugu','Jio','YuppTV','CricHd','Movies','Hindi','Tamil','India'];
   allChs.forEach(function(ch){
     var t=canonicalTab(ch);
     if(t&&!builtIns.includes(t)&&!cats.includes(t))order.push(t);
@@ -1523,10 +1531,11 @@ function showEngine(eng){
    EPG
 ════════════════════════════════════════════════════════════ */
 function fetchEPGForChannel(name){
-  /* Lightweight XMLTV-compatible EPG via github iptv-org */
-  var key='epg_'+name.toLowerCase().replace(/\s+/g,'_');
-  if(epgCache[key]){showEPG(epgCache[key]);return}
-  epgRow.style.display='none';
+  if(typeof SagaEPG==='undefined'){epgRow.style.display='none';return}
+  SagaEPG.getCurrent(name,function(prog){
+    if(prog){showEPG({t:new Date(prog.start).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}),p:prog.title})}
+    else epgRow.style.display='none';
+  });
 }
 function showEPG(prog){
   if(!prog)return;
@@ -1793,8 +1802,8 @@ function playWithShaka(ch,tryAVFirst){
   }).catch(function(err){
     setSt('Shaka failed: '+String(err.message||err).slice(0,45),'err');
     isPlaying=false;bufSpinner.classList.remove('on');
-    /* Last resort — direct video.src */
-    tryDirectPlay(ch);
+    /* Try HLS.js before direct — better HLS support */
+    tryHlsPlay(ch);
   });
 }
 
@@ -1809,6 +1818,65 @@ function tryDirectPlay(ch){
       showEngine('direct');updateStripFocus();
     }).catch(function(){setSt('All engines failed for: '+ch.name,'err')});
   }catch(e){setSt('All engines failed','err')}
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   HLS.JS ENGINE — 4th fallback (loads from CDN on demand)
+   Used when AVPlay + Shaka + direct all fail.
+════════════════════════════════════════════════════════════ */
+function tryHlsPlay(ch){
+  setSt('Trying HLS.js…','buf');
+  bufSpinner.classList.add('on');
+  var doPlay=function(){
+    if(typeof Hls==='undefined'||!Hls.isSupported()){
+      /* HLS.js not available — try native <video> as last resort */
+      tryDirectPlay(ch);
+      return;
+    }
+    if(window._hlsInstance){try{window._hlsInstance.destroy()}catch(e){}}
+    var h=new Hls({
+      maxBufferLength:cfg.buf,
+      maxMaxBufferLength:cfg.buf*2,
+      enableWorker:false,
+      xhrSetup:function(xhr,url){
+        if(url.indexOf('sanwalyaarpya')>=0||url.indexOf('calm-sun')>=0){
+          xhr.setRequestHeader('Referer','https://profamouslife.com/');
+        }
+        if(url.indexOf('yuppparoriglin')>=0||url.indexOf('yuppcdn')>=0){
+          xhr.setRequestHeader('Referer','https://www.yupptv.com/');
+        }
+      }
+    });
+    window._hlsInstance=h;
+    video.style.display='';
+    h.loadSource(ch.url);
+    h.attachMedia(video);
+    h.on(Hls.Events.MANIFEST_PARSED,function(){
+      video.play().then(function(){
+        isPlaying=true;ENGINE='hlsjs';
+        setSt('Streaming · '+ch.name+' [HLS.js]','ok');
+        bufSpinner.classList.remove('on');
+        showEngine('hls.js');updateStripFocus();
+        scheduleOsdHide();
+      }).catch(function(e){
+        setSt('HLS.js play failed: '+String(e).slice(0,40),'err');
+        bufSpinner.classList.remove('on');
+        tryDirectPlay(ch);
+      });
+    });
+    h.on(Hls.Events.ERROR,function(ev,data){
+      if(data.fatal){
+        bufSpinner.classList.remove('on');
+        setSt('HLS.js fatal error — trying direct…','err');
+        h.destroy();tryDirectPlay(ch);
+      }
+    });
+  };
+  /* Load hls.js on demand if not already present */
+  if(typeof loadHlsJs==='function'){
+    loadHlsJs().then(function(H){ if(H)doPlay(); else tryDirectPlay(ch); });
+  }else doPlay();
 }
 
 function updateQ(){
@@ -2096,7 +2164,7 @@ function renderSettingsSect(s){
     var ab=$('soAspect');
     if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL,HINDI_PL,TAMIL_PL,INDIA_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     allSrc.forEach(function(p,i){
       html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
@@ -2149,7 +2217,7 @@ function renderSettingsSect(s){
         'BACK Close / go back'+
       '</div>'+
       '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
-        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies (VOD)<br>'+
+        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies · Hindi · Tamil · India<br>'+
         'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · Direct (last resort)'+
       '</div></div>';
   }
@@ -2319,8 +2387,16 @@ window.addEventListener('keydown',function(e){
   if(zone==='search'){
     if(isBack(kc,k)){e.preventDefault();closeSearch();return}
     if(isOK(kc,k)){e.preventDefault();if(si)si.focus();return}
-    if(isUp(kc,k)&&col>1){e.preventDefault();col--;updateStripFocus();syncScroll();updateSearchCount();return}
-    if(isDn(kc,k)&&col<viewChs.length){e.preventDefault();col++;updateStripFocus();syncScroll();updateSearchCount();return}
+    if(isUp(kc,k)){e.preventDefault();
+      if(document.activeElement===$('searchClose')){var si2=$('searchInp');if(si2)si2.focus({preventScroll:true})}
+      else if(col>1){col--;updateStripFocus();syncScroll();updateSearchCount()}
+      return;
+    }
+    if(isDn(kc,k)){e.preventDefault();
+      if(col<viewChs.length){col++;updateStripFocus();syncScroll();updateSearchCount()}
+      else{$('searchClose').focus({preventScroll:true})}
+      return;
+    }
     if(isLt(kc,k)&&col>1){e.preventDefault();col--;updateStripFocus();syncScroll();return}
     if(isRt(kc,k)&&col<viewChs.length){e.preventDefault();col++;updateStripFocus();syncScroll();return}
     return;
@@ -2332,9 +2408,19 @@ window.addEventListener('keydown',function(e){
     var showingForm=ypForm.classList.contains('on');
     if(!showingForm){
       var items=QA('.yp-act',$('ypActs'));
-      if(isUp(kc,k)){e.preventDefault();ypIdx=Math.max(0,ypIdx-1);if(items[ypIdx])items[ypIdx].focus({preventScroll:true});return}
+      if(isUp(kc,k)){
+        e.preventDefault();
+        if(ypIdx===0){$('ypClose').focus({preventScroll:true})}
+        else{ypIdx--;if(items[ypIdx])items[ypIdx].focus({preventScroll:true})}
+        return;
+      }
       if(isDn(kc,k)){e.preventDefault();ypIdx=Math.min(items.length-1,ypIdx+1);if(items[ypIdx])items[ypIdx].focus({preventScroll:true});return}
-      if(isOK(kc,k)){e.preventDefault();if(items[ypIdx])items[ypIdx].click();return}
+      if(isOK(kc,k)){
+        e.preventDefault();
+        if(document.activeElement===$('ypClose'))closeYP();
+        else if(items[ypIdx])items[ypIdx].click();
+        return;
+      }
     }else{
       if(isUp(kc,k)||isDn(kc,k)){
         e.preventDefault();
@@ -2354,7 +2440,10 @@ window.addEventListener('keydown',function(e){
     var sideItems=QA('.so-nav',soSide);
     var mainItems=QA('[tabindex="0"]',soMain);
     if(isUp(kc,k)){e.preventDefault();
-      if(soSideZone){soSideIdx=Math.max(0,soSideIdx-1);if(sideItems[soSideIdx])sideItems[soSideIdx].focus({preventScroll:true})}
+      if(soSideZone){
+        if(soSideIdx===0){$('soClose').focus({preventScroll:true})}
+        else{soSideIdx--;if(sideItems[soSideIdx])sideItems[soSideIdx].focus({preventScroll:true})}
+      }
       else{soMainIdx=Math.max(0,soMainIdx-1);if(mainItems[soMainIdx]){mainItems[soMainIdx].focus({preventScroll:true});mainItems[soMainIdx].scrollIntoView({block:'nearest'})}}
       return;}
     if(isDn(kc,k)){e.preventDefault();
@@ -2490,6 +2579,9 @@ function loadAll(force){
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
     .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
     .then(function(){return loadPl(MOVIES_PL.url,MOVIES_PL.name,force,'movies')})
+    .then(function(){return loadPl(HINDI_PL.url,HINDI_PL.name,force,'hindi')})
+    .then(function(){return loadPl(TAMIL_PL.url,TAMIL_PL.name,force,'tamil')})
+    .then(function(){return loadPl(INDIA_PL.url,INDIA_PL.name,force,'india')})
     .then(function(){
       var customs=pls.filter(function(p){return!p.builtIn});
       function loadNext(i){
@@ -2521,7 +2613,7 @@ function loadAll(force){
   loadStore();
   initChHud();
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url&&p.url!==HINDI_PL.url&&p.url!==TAMIL_PL.url&&p.url!==INDIA_PL.url;
   });
   $('splMsg').textContent='Initialising player…';
 
@@ -2551,7 +2643,13 @@ function loadAll(force){
       return loadAll(false);
     });
   }).catch(function(err){
-    setSt('Boot error: '+String(err),'err');hideSplash();
+    setSt('Boot error: '+String(err),'err');
+    /* If network is likely the issue, show offline page */
+    if(String(err).indexOf('network')>=0||String(err).indexOf('fetch')>=0||
+       String(err).indexOf('Failed to fetch')>=0){
+      setTimeout(function(){window.location.href='offline.html'},2000);
+    }
+    hideSplash();
   });
 })();
 
