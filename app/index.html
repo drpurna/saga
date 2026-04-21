@@ -7,6 +7,8 @@
 <title>SAGA IPTV</title>
 <script src="./js/shaka.js"></script>
 <script src="./js/cache.js"></script>
+<script src="./js/preact.min.js"></script>
+<script src="./js/htm.min.js"></script>
 <script src="./js/hls.min.js"></script>
 <script src="./js/epg.js"></script>
 <style>
@@ -749,6 +751,35 @@ html,body{
 ::-webkit-scrollbar{width:2px;height:2px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:2px}
+
+/* ══ GLOBAL FOCUS INDICATORS ══════════════════════════════ */
+/* Keyboard/remote focus ring for all interactive elements */
+*:focus{outline:none} /* reset browser default */
+*:focus-visible{
+  outline:2.5px solid rgba(255,255,255,.70);
+  outline-offset:2px;
+}
+/* Cards get the full .sel treatment on :focus-visible */
+.card:focus-visible{
+  border:3px solid rgba(255,255,255,.98);
+  transform:scale(1.16) translateZ(0);z-index:10;
+  box-shadow:
+    0 0 0 5px rgba(255,255,255,.22),
+    0 0 0 9px rgba(255,255,255,.08),
+    0 28px 70px rgba(0,0,0,.99);
+  outline:none;
+}
+/* Engine badge transition */
+#engBadge{
+  transition:opacity 250ms ease;
+}
+/* Channel HUD fade */
+#chHud{
+  transition:opacity 300ms ease;
+}
+#chHud.on{opacity:1}
+#chHud:not(.on){opacity:0;pointer-events:none}
+
 </style>
 </head>
 <body>
@@ -980,10 +1011,13 @@ if(typeof requestIdleCallback==='undefined'){
     if(!window.tizen||!tizen.tvinputdevice)return;
     ['ColorF0Red','ColorF1Green','ColorF2Yellow','ColorF3Blue',
      'MediaPlay','MediaPause','MediaPlayPause','MediaStop',
-     'MediaFastForward','MediaRewind','ChannelUp','ChannelDown',
+     'MediaFastForward','MediaRewind','MediaSkipBackward','MediaSkipForward',
+     'ChannelUp','ChannelDown',
      'VolumeUp','VolumeDown','VolumeMute',
      'Menu','Info','Tools','Extra',
-     '0','1','2','3','4','5','6','7','8','9','Exit','Return'
+     '0','1','2','3','4','5','6','7','8','9',
+     'Exit','Return','Back',
+     'ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter'
     ].forEach(function(k){try{tizen.tvinputdevice.registerKey(k)}catch(e){}});
   }catch(e){}
 })();
@@ -1022,7 +1056,8 @@ var video=$('video'),vig=$('vig'),topBar=$('topBar'),navTabs=$('navTabs');
 var bottomPanel=$('bottomPanel'),nowInfo=$('nowInfo'),nowName=$('nowName');
 var nowGroup=$('nowGroup'),nowQ=$('nowQ'),nowEngine=$('nowEngine');
 var epgRow=$('epgRow'),epgTime=$('epgTime'),epgProg=$('epgProg');
-var rowLabel=$('rowLabel'),rowCount=$('rowCount'),strip=$('strip');
+var rowLabel=$('rowLabel'),rowCount=$('rowCount');
+var strip; /* assigned dynamically — Preact mounts here */
 var yellowPopup=$('yellowPopup'),ypForm=$('ypForm');
 var settingsOv=$('settingsOv'),soSide=$('soSide'),soMain=$('soMain');
 var mDial=$('mDial'),dnum=$('dnum');
@@ -1346,7 +1381,7 @@ function loadPl(url,name,force,srcTag){
       var fresh=parsed.filter(function(c){return!seen.has(c.url)});
       allChs=allChs.concat(fresh);
       lsSet(LS.LCHU+'_pl',url);
-      rebuildNavTabs();viewChs=getViewChs();renderStrip();
+      rebuildNavTabs();viewChs=getViewChs();renderAll();
       setSt(allChs.length+' channels loaded','ok');
       saveChCache();
       /* preload logos */
@@ -1382,24 +1417,268 @@ function rebuildNavTabs(){
   var tabs=[];
   order.forEach(function(t){if(!seen.has(t)){seen.add(t);tabs.push(t)}});
 
-  navTabs.innerHTML='';
-  tabs.forEach(function(t,idx){
-    var btn=document.createElement('button');
-    btn.className='ntab'+(t===activeTab?' on':'');
-    btn.textContent=t;btn.dataset.g=t;btn.tabIndex=0;
-    btn.addEventListener('click',function(){
-      if(t==='Favourites'){showFavs=true;activeTab='Favourites'}
-      else{showFavs=false;activeTab=t}
-      viewChs=getViewChs();col=0;renderStrip();rebuildNavTabs();
+  /* Render tabs via Preact if available, else vanilla DOM */
+  if(_preactReady && window.__P_renderTabs) {
+    window.__P_renderTabs({
+      tabs: tabs,
+      activeTab: activeTab,
+      onTab: function(t) {
+        if(t==='Favourites'){showFavs=true;activeTab='Favourites'}
+        else{showFavs=false;activeTab=t}
+        viewChs=getViewChs();col=0;renderFrom=0;renderAll();rebuildNavTabs();
+      }
     });
-    navTabs.appendChild(btn);
-  });
+  } else {
+    navTabs.innerHTML='';
+    tabs.forEach(function(t,idx){
+      var btn=document.createElement('button');
+      btn.className='ntab'+(t===activeTab?' on':'');
+      btn.textContent=t;btn.dataset.g=t;btn.tabIndex=0;
+      btn.addEventListener('click',function(){
+        if(t==='Favourites'){showFavs=true;activeTab='Favourites'}
+        else{showFavs=false;activeTab=t}
+        viewChs=getViewChs();col=0;renderFrom=0;renderAll();rebuildNavTabs();
+      });
+      navTabs.appendChild(btn);
+    });
+  }
 }
 
+function renderAllTabs(){
+  /* Force re-render of nav tabs after all channels loaded */
+  rebuildNavTabs();
+}
 function setTab(t){
   showFavs=(t==='Favourites');
   activeTab=t;
-  viewChs=getViewChs();col=0;renderStrip();rebuildNavTabs();
+  viewChs=getViewChs();col=0;renderFrom=0;renderAll();rebuildNavTabs();
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   ╔═══════════════════════════════════════════════════════╗
+   ║           PREACT RENDERING LAYER                      ║
+   ║  Channel cards, nav tabs, overlays rendered via       ║
+   ║  Preact 10 components for clean state-driven UI.      ║
+   ║  Engine code (AVPlay/Shaka/keys) stays vanilla.       ║
+   ╚═══════════════════════════════════════════════════════╝
+════════════════════════════════════════════════════════════ */
+
+/* ── Preact render root ── */
+var _preactReady = false;
+var _pendingRender = false;
+
+function initPreactRenderer() {
+  if(typeof usePreact === 'undefined') {
+    /* Preact not available — vanilla DOM fallback already in place */
+    _preactReady = false;
+    return;
+  }
+  usePreact(function(P, html, hooks) {
+    if(!P) { _preactReady = false; return; }
+    var h = P.createElement;
+    var render = P.render;
+    var useCallback = hooks.useCallback || function(fn){ return fn; };
+    var useMemo = hooks.useMemo || function(fn){ return fn(); };
+
+    _preactReady = true;
+
+    /* ── Channel Card Component ── */
+    function ChannelCard(props) {
+      var ch = props.ch, idx = props.idx, isSelected = props.isSelected,
+          isPlaying = props.isPlaying, isFav = props.isFav, onClick = props.onClick;
+
+      var hasHD = /HD|4K/i.test(ch.name);
+      var cardClass = 'card' + (isSelected ? ' sel' : '') + (isPlaying ? ' playing' : '');
+      var bgStyle = ch._col ? {background: ch._col} : {};
+
+      return h('div', {
+        className: cardClass,
+        tabIndex: isSelected ? 0 : -1,
+        'data-i': idx,
+        onClick: onClick,
+        style: {contain:'layout style'}
+      },
+        h('div', {className:'card-num'}, idx + 1),
+        h('div', {className:'card-badges'},
+          h('span', {className:'badge b-live'}, 'LIVE'),
+          hasHD ? h('span', {className:'badge b-hd'}, 'HD') : null
+        ),
+        isFav ? h('div', {className:'card-fav'}, '★') : null,
+        h('div', {className:'card-inner', style: bgStyle},
+          ch.logo
+            ? h('img', {
+                className:'card-img',
+                src: ch.logo,
+                alt: ch.name,
+                crossOrigin:'anonymous',
+                loading:'lazy',
+                onError: function(e){ e.target.style.display='none'; }
+              })
+            : h('div', {className:'card-fb'}, '📺'),
+          ch.logo ? h('div', {
+            className:'card-bg',
+            style:{backgroundImage:'url('+ch.logo+')',opacity: ch._col ? 1 : 0}
+          }) : null,
+          h('div', {className:'card-grad'},
+            h('div', {className:'card-name'}, ch.name)
+          )
+        )
+      );
+    }
+
+    /* ── Channel Strip Component ── */
+    function ChannelStrip(props) {
+      var chs = props.viewChs, selectedCol = props.col, playingUrl = props.curUrl,
+          favSet = props.favs, from = props.renderFrom, vport = props.vport,
+          offsetPx = props.offsetPx, onSelect = props.onSelect;
+
+      var cards = [];
+      for(var i = from; i < Math.min(from + vport, chs.length); i++) {
+        var ch = chs[i];
+        (function(ch, i) {
+          cards.push(h(ChannelCard, {
+            key: ch.url || i,
+            ch: ch,
+            idx: i,
+            isSelected: i === selectedCol - 1,
+            isPlaying: ch.url === playingUrl,
+            isFav: favSet.has(ch.url),
+            onClick: function() { onSelect(i + 1); }
+          }));
+        })(ch, i);
+      }
+
+      return h('div', {
+        className:'tile-strip',
+        id:'strip',
+        style:{transform:'translateX(-'+offsetPx+'px) translateZ(0)'}
+      }, cards);
+    }
+
+    /* ── Nav Tab Component ── */
+    function NavTab(props) {
+      var label = props.label, isActive = props.isActive, onClick = props.onClick;
+      return h('button', {
+        className:'ntab' + (isActive ? ' on' : ''),
+        'data-g': label,
+        tabIndex: 0,
+        onClick: onClick
+      }, label);
+    }
+
+    /* ── Nav Tabs Bar Component ── */
+    function NavTabsBar(props) {
+      var tabs = props.tabs, activeTab = props.activeTab, onTab = props.onTab;
+      return h('div', {id:'navTabs'},
+        tabs.map(function(t) {
+          return h(NavTab, {
+            key: t,
+            label: t,
+            isActive: t === activeTab,
+            onClick: function() { onTab(t); }
+          });
+        })
+      );
+    }
+
+    /* ── Mounts ── */
+    /* We render Preact into dedicated mount points, 
+       leaving the rest of the DOM (video, overlays) untouched */
+
+    var _stripMount = null;
+    var _tabsMount = null;
+
+    function getStripMount() {
+      if(!_stripMount) {
+        _stripMount = document.getElementById('strip');
+        if(!_stripMount) {
+          _stripMount = document.createElement('div');
+          _stripMount.id = 'strip';
+          var bp = document.querySelector('.row-wrap');
+          if(bp) bp.appendChild(_stripMount);
+        }
+      }
+      return _stripMount;
+    }
+
+    function getTabsMount() {
+      if(!_tabsMount) _tabsMount = document.getElementById('navTabs');
+      return _tabsMount;
+    }
+
+    /* ── Public render functions — called by engine code ── */
+    window.__P_renderStrip = function(state) {
+      var mount = getStripMount();
+      if(!mount) return false;
+      render(h(ChannelStrip, {
+        viewChs: state.viewChs,
+        col: state.col,
+        curUrl: state.curUrl,
+        favs: state.favs,
+        renderFrom: state.renderFrom,
+        vport: state.vport,
+        offsetPx: state.offsetPx,
+        onSelect: state.onSelect
+      }), mount);
+      return true;
+    };
+
+    window.__P_renderTabs = function(state) {
+      var mount = getTabsMount();
+      if(!mount) return false;
+      render(h(NavTabsBar, {
+        tabs: state.tabs,
+        activeTab: state.activeTab,
+        onTab: state.onTab
+      }), mount);
+      return true;
+    };
+
+    /* Trigger any pending renders that happened before Preact loaded */
+    if(_pendingRender) {
+      _pendingRender = false;
+      renderAll();
+    }
+  });
+}
+
+/* ── renderAll: called whenever state changes ── */
+function renderAll() {
+  /* Sync strip scroll pixel offset */
+  var localIdx = col - 1 - renderFrom;
+  var off = Math.max(0, Math.min(
+    Math.max(0, (VPORT-5)*(CW+CGAP)),
+    (localIdx - 2) * (CW + CGAP)
+  ));
+
+  if(_preactReady && window.__P_renderStrip) {
+    var ok = window.__P_renderStrip({
+      viewChs: viewChs,
+      col: col,
+      curUrl: curUrl,
+      favs: favs,
+      renderFrom: renderFrom,
+      vport: VPORT,
+      offsetPx: off,
+      onSelect: function(newCol) {
+        col = newCol;
+        syncScroll();
+        immediatePlay();
+      }
+    });
+    if(ok) {
+      /* After Preact renders, restore focus to selected card */
+      requestAnimationFrame(function() {
+        var sel = document.querySelector('.card.sel');
+        if(sel) sel.focus({preventScroll:true});
+      });
+      return;
+    }
+  }
+  /* Fallback to vanilla DOM if Preact not ready yet */
+  _pendingRender = true;
+  _vanillaRenderStrip(off);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1408,10 +1687,12 @@ function setTab(t){
 var VPORT=7; /* 7 × (248+14) = 1834px fits 1920px screen */
 var renderFrom=0;
 
-function renderStrip(){
+function _vanillaRenderStrip(precomputedOff){
+  if(typeof precomputedOff==='undefined')precomputedOff=0;
   rowLabel.textContent=showFavs?'Favourites':activeTab;
   rowCount.textContent=viewChs.length;
-  strip.innerHTML='';
+  strip=document.getElementById('strip');
+  if(strip)strip.innerHTML='';
   renderFrom=Math.max(0,Math.min(viewChs.length-VPORT,col>0?col-2:0));
   var frag=document.createDocumentFragment();
   for(var i=renderFrom;i<Math.min(renderFrom+VPORT,viewChs.length);i++){
@@ -1420,6 +1701,7 @@ function renderStrip(){
   strip.appendChild(frag);
   strip.style.transform='translateX(0) translateZ(0)';
   updateStripFocus();
+  /* vanilla fallback used until Preact loads */
 }
 
 function makeCard(idx){
@@ -1476,34 +1758,31 @@ function makeCard(idx){
 }
 
 function updateStripFocus(){
-  var cards=QA('.card',strip);
-  cards.forEach(function(c){
-    var i=parseInt(c.dataset.i);
-    c.classList.toggle('sel',i===col-1);
-    c.classList.toggle('playing',viewChs[i]&&curUrl===viewChs[i].url);
-    c.tabIndex=(i===col-1)?0:-1;
-    if(i===col-1)c.focus({preventScroll:true});
+  /* With Preact: classes/tabIndex set declaratively in ChannelCard component.
+     Just move DOM focus to the selected card after render. */
+  requestAnimationFrame(function(){
+    var stripEl=document.getElementById('strip');
+    if(!stripEl)return;
+    var cards=QA('.card',stripEl);
+    cards.forEach(function(c){
+      var i=parseInt(c.dataset.i);
+      /* Vanilla fallback: keep class sync when Preact not ready */
+      if(!_preactReady){
+        c.classList.toggle('sel',i===col-1);
+        c.classList.toggle('playing',viewChs[i]&&curUrl===viewChs[i].url);
+        c.tabIndex=(i===col-1)?0:-1;
+      }
+      if(i===col-1)c.focus({preventScroll:true});
+    });
   });
 }
 
 function syncScroll(){
-  /* Re-render window around focused card */
+  /* Update renderFrom window */
   var newFrom=Math.max(0,Math.min(viewChs.length-VPORT,col>0?col-3:0));
-  if(newFrom!==renderFrom){
-    renderFrom=newFrom;
-    var frag=document.createDocumentFragment();
-    for(var i=renderFrom;i<Math.min(renderFrom+VPORT,viewChs.length);i++){
-      frag.appendChild(makeCard(i));
-    }
-    strip.innerHTML='';
-    strip.appendChild(frag);
-  }
-  /* Pixel offset for smooth scroll within window */
-  var localIdx=col-1-renderFrom;
-  var maxOff=Math.max(0,(VPORT-5)*(CW+CGAP));
-  var off=Math.max(0,Math.min(maxOff,(localIdx-2)*(CW+CGAP)));
-  strip.style.transform='translateX(-'+off+'px) translateZ(0)';
-  updateStripFocus();
+  renderFrom=newFrom;
+  /* Preact re-renders with new state — updateStripFocus called inside renderAll */
+  renderAll();
 }
 
 function getFocusedCh(){return col>0&&viewChs[col-1]?viewChs[col-1]:null}
@@ -1519,12 +1798,19 @@ function updateNowInfo(ch){
   lsSet(LS.LCHU,ch.url);
 }
 function showEngine(eng){
-  nowEngine.textContent=eng.toUpperCase();
+  var label={'avplay':'AVPlay','shaka':'Shaka','hlsjs':'HLS.js','direct':'Direct','none':'—'}[eng]||eng.toUpperCase();
+  nowEngine.textContent=label;
   nowEngine.style.display='';
-  engBadge.textContent=eng.toUpperCase();
+  /* Engine badge — always visible, auto-hides after 3s */
+  engBadge.textContent=label;
+  engBadge.style.display='block';
+  engBadge.style.opacity='1';
   engBadge.classList.add('show');
   clearTimeout(engBadgeTimer);
-  engBadgeTimer=setTimeout(function(){engBadge.classList.remove('show')},4000);
+  engBadgeTimer=setTimeout(function(){
+    engBadge.classList.remove('show');
+    engBadge.style.opacity='0';
+  },3000);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -1659,15 +1945,29 @@ function playWithAVPlay(ch){
       },
       onerror:function(errCode){
         bufSpinner.classList.remove('on');
-        setSt('AVPlay error '+errCode+' — trying Shaka…','buf');
+        setSt('AVPlay error '+errCode+' — retrying…','buf');
         isPlaying=false;
-        avplayStop();
-        /* Fallback to Shaka */
-        playWithShaka(ch,false);
+        /* Retry once with desktop UA before falling back to Shaka */
+        avplayRetry(ch,errCode);
       },
       onstreamcompleted:function(){
         setSt('Stream ended','');isPlaying=false;
         bufSpinner.classList.remove('on');
+      },
+      oncurrentplaytime:function(ms){
+        /* Update bandwidth display using AVPlay currentplaytime */
+        if(isPlaying&&ENGINE==='avplay'){
+          try{
+            var info=avplay.getCurrentStreamInfo();
+            if(info&&info.length>0){
+              var bw=0;
+              for(var si=0;si<info.length;si++){
+                if(info[si].property==='bandwidth')bw=parseInt(info[si].value)||0;
+              }
+              if(bw>0)sBw.textContent=(bw/1000000).toFixed(1)+'M';
+            }
+          }catch(e){}
+        }
       }
     });
     avplay.prepare();
@@ -1682,6 +1982,65 @@ function playWithAVPlay(ch){
     setSt('AVPlay open failed — trying Shaka…','buf');
     avplayStop();
     video.style.display='';
+    playWithShaka(ch,false);
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   AVPLAY ERROR RETRY — try with desktop UA before Shaka fallback
+════════════════════════════════════════════════════════════ */
+var _avplayRetried=false;
+function avplayRetry(ch,errCode){
+  if(_avplayRetried){
+    /* Already retried — fall back to Shaka */
+    _avplayRetried=false;
+    avplayStop();
+    setSt('AVPlay error '+errCode+' — trying Shaka…','buf');
+    playWithShaka(ch,false);
+    return;
+  }
+  _avplayRetried=true;
+  setSt('Retrying with desktop UA…','buf');
+  avplayStop();
+  try{
+    avplay.open(ch.url);
+    avplay.setDisplayRect(0,0,1920,1080);
+    avplay.setDisplayMethod(
+      aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
+      aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
+      'PLAYER_DISPLAY_MODE_ORIGINAL_SIZE'
+    );
+    /* Different UA — desktop Chrome */
+    avplay.setStreamingProperty('USER_AGENT',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    if(ch.url.indexOf('sanwalyaarpya')>=0||ch.url.indexOf('calm-sun')>=0){
+      try{avplay.setStreamingProperty('CUSTOM_MESSAGE','Referer:https://profamouslife.com/')}catch(e){}
+    }
+    avplay.setListener({
+      onbufferingcomplete:function(){
+        setSt('Streaming · '+ch.name+' [AVPlay]','ok');
+        isPlaying=true;bufSpinner.classList.remove('on');
+        showEngine('avplay');updateStripFocus();scheduleOsdHide();
+        _avplayRetried=false;
+      },
+      onerror:function(ec){
+        bufSpinner.classList.remove('on');
+        _avplayRetried=true; /* mark so next call falls through */
+        avplayRetry(ch,ec);
+      },
+      onbufferingstart:function(){setSt('Buffering (retry)…','buf');bufSpinner.classList.add('on')},
+      onbufferingprogress:function(){},
+      onstreamcompleted:function(){setSt('Stream ended','');isPlaying=false;bufSpinner.classList.remove('on')},
+      oncurrentplaytime:function(){}
+    });
+    avplay.prepare();avplay.play();
+    ENGINE='avplay';avCont.classList.add('active');video.style.display='none';
+    bufSpinner.classList.add('on');
+  }catch(ex){
+    _avplayRetried=false;
+    avplayStop();video.style.display='';
+    setSt('AVPlay retry failed — trying Shaka…','buf');
     playWithShaka(ch,false);
   }
 }
@@ -1908,6 +2267,34 @@ function recfg(){
   });
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   DEFERRED SEEK — debounced AVPlay seekTo (500ms)
+   Prevents stutter from rapid arrow-key presses.
+════════════════════════════════════════════════════════════ */
+var pendingSeekMs=null;
+var seekDebounceTimer=null;
+
+function scheduleDeferredSeek(ms){
+  pendingSeekMs=ms;
+  clearTimeout(seekDebounceTimer);
+  seekDebounceTimer=setTimeout(executeDeferredSeek,500);
+}
+function executeDeferredSeek(){
+  if(pendingSeekMs===null||!avplay||ENGINE!=='avplay')return;
+  var ms=pendingSeekMs;pendingSeekMs=null;
+  try{
+    var dur=avplay.getDuration();
+    var target=Math.max(0,Math.min(dur,ms));
+    avplay.seekTo(target);
+  }catch(e){setSt('Seek failed','err')}
+}
+function avplaySeekRelative(deltaMs){
+  if(!avplay||ENGINE!=='avplay')return;
+  try{var cur=avplay.getCurrentTime();}catch(e){return}
+  scheduleDeferredSeek((cur||0)+deltaMs);
+}
+
 /* ════════════════════════════════════════════════════════════
    PLAY DEBOUNCE + MAIN ENTRY
 ════════════════════════════════════════════════════════════ */
@@ -2041,7 +2428,7 @@ function openExit(){
 }
 function closeExit(){
   var ov=$('exitOv');if(ov)ov.classList.remove('on');
-  zone='rows';resetHideTimer();syncFocusRows();
+  zone='rows';resetHideTimer();syncFocus();
 }
 function updateExitFocus(){
   var y=$('exitYes'),n=$('exitNo');
@@ -2066,7 +2453,7 @@ function doExit(){
 function openYP(){yellowPopup.classList.add('on');zone='yp';ypIdx=0;wakeUI();clearTimeout(hideTimer);
   setTimeout(function(){var it=QA('.yp-act',$('ypActs'));if(it[0]){it[0].focus({preventScroll:true})}},30)}
 function closeYP(){yellowPopup.classList.remove('on');ypForm.classList.remove('on');
-  zone='rows';resetHideTimer();syncFocusRows()}
+  zone='rows';resetHideTimer();syncFocus()}
 $('ypClose').addEventListener('click',closeYP);
 $('ypa-refresh').addEventListener('click',function(){
   if(typeof AppCache!=='undefined')AppCache.clearAllM3U();
@@ -2255,14 +2642,22 @@ var chHudEl=null,chHudNum=null,chHudName=null,chHudTimer=null;
 function initChHud(){chHudEl=$('chHud');chHudNum=$('chHudNum');chHudName=$('chHudName')}
 function showChHud(str){
   if(!chHudEl)return;
+  /* Always clear existing timer first (prevents stale fade) */
+  clearTimeout(chHudTimer);
   chHudNum.textContent=str||'—';
   var n=parseInt(str,10);
   chHudName.textContent=(n>=1&&n<=viewChs.length&&viewChs[n-1])?viewChs[n-1].name:'';
   chHudEl.classList.add('on');
-  clearTimeout(chHudTimer);
-  chHudTimer=setTimeout(function(){chHudEl.classList.remove('on')},1400);
+  /* Auto-fade after 1.2s */
+  chHudTimer=setTimeout(function(){
+    chHudEl.classList.remove('on');
+    chHudTimer=null;
+  },1200);
 }
-function hideChHud(){if(chHudEl)chHudEl.classList.remove('on');clearTimeout(chHudTimer)}
+function hideChHud(){
+  clearTimeout(chHudTimer);chHudTimer=null;
+  if(chHudEl)chHudEl.classList.remove('on');
+}
 
 function remoteDigit(d){
   rDialStr+=d;clearTimeout(rDialTimer);
@@ -2278,16 +2673,27 @@ function remoteDigit(d){
 /* ════════════════════════════════════════════════════════════
    FOCUS SYNC
 ════════════════════════════════════════════════════════════ */
-function syncFocusRows(){
-  if(zone==='tabs'){
-    var tabs=QA('.ntab',navTabs);
-    if(tabs[tabIdx])tabs[tabIdx].focus({preventScroll:true});
-  }else{
-    var cards=[].slice.call(strip.children);
-    var target=cards.find(function(c){return parseInt(c.dataset.i)===col-1});
-    if(target){target.tabIndex=0;target.focus({preventScroll:true})}
-  }
+/* syncFocus: canonical focus restoration after any modal closes */
+function syncFocus(){
+  requestAnimationFrame(function(){
+    var stripEl=document.getElementById('strip');
+    if(zone==='tabs'){
+      var tabs=QA('.ntab',navTabs);
+      if(tabs[tabIdx])tabs[tabIdx].focus({preventScroll:true});
+    }else if(zone==='rows'||zone==='search'){
+      if(!stripEl)return;
+      var cards=[].slice.call(stripEl.children);
+      var target=null;
+      for(var i=0;i<cards.length;i++){
+        if(parseInt(cards[i].dataset.i)===col-1){target=cards[i];break}
+      }
+      if(target){target.tabIndex=0;target.focus({preventScroll:true})}
+      else if(cards[0]){cards[0].focus({preventScroll:true})}
+    }
+  });
 }
+/* Alias — all existing callers still work */
+function syncFocusRows(){syncFocus()}
 
 /* ════════════════════════════════════════════════════════════
    CLOCK + BANDWIDTH
@@ -2298,10 +2704,14 @@ function tick(){
 }
 tick();setInterval(tick,10000);
 
+/* Bandwidth polling — Shaka only (AVPlay uses oncurrentplaytime) */
 setInterval(function(){
-  if(!shakaPlayer||!isPlaying||ENGINE!=='shaka')return;
-  try{var bw=shakaPlayer.getStats().estimatedBandwidth||0,mb=bw/1000000;
-    if(mb>0)sBw.textContent=mb.toFixed(1)+'M';}catch(e){}
+  if(!isPlaying)return;
+  if(ENGINE==='shaka'&&shakaPlayer){
+    try{var bw=shakaPlayer.getStats().estimatedBandwidth||0,mb=bw/1000000;
+      if(mb>0)sBw.textContent=mb.toFixed(1)+'M';}catch(e){}
+  }
+  /* AVPlay bandwidth set via oncurrentplaytime callback */
 },3000);
 
 function hideSplash(){
@@ -2512,6 +2922,11 @@ window.addEventListener('keydown',function(e){
       if(ENGINE==='avplay'&&avplay){try{avplay.pause()}catch(e2){}}
       else video.pause();
       break;
+    case kc===KC.REW||k==='MediaRewind':
+      e.preventDefault();
+      if(ENGINE==='avplay')avplaySeekRelative(-30000);
+      break;
+
     case kc===KC.PP||k==='MediaPlayPause':
       e.preventDefault();
       if(ENGINE==='avplay'&&avplay){
@@ -2592,7 +3007,7 @@ function loadAll(force){
       return loadNext(0);
     })
     .then(function(){
-      rebuildNavTabs();setTab(activeTab);
+      rebuildNavTabs();renderAllTabs();setTab(activeTab);
       var lastUrl=lsGet(LS.LCHU);
       if(lastUrl){
         for(var li=0;li<viewChs.length;li++){
@@ -2619,6 +3034,8 @@ function loadAll(force){
 
   /* 1. Try AVPlay */
   initAVPlay();
+  /* 2. Init Preact rendering layer — offline bundle ready immediately */
+  initPreactRenderer();
   initShaka().then(function(){
     $('splMsg').textContent='Loading channels…';
     rebuildNavTabs();
