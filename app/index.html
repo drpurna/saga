@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://unpkg.com">
 <link rel="dns-prefetch" href="https://jioplaylist.joinus-apiworker.workers.dev">
 <link rel="dns-prefetch" href="https://yupptv.yecic62314.workers.dev">
+<link rel="dns-prefetch" href="https://crichdhome.uhd2026.workers.dev">
 <link rel="dns-prefetch" href="https://raw.githubusercontent.com">
 <script src="./js/shaka.js"></script>
 <script src="./js/cache.js"></script>
@@ -1132,6 +1133,9 @@ html,body{
 (function(){
 'use strict';
 
+/* Apply default stretch mode immediately */
+document.addEventListener('DOMContentLoaded',function(){var v=document.getElementById('video');if(v)v.classList.add('stretch')});
+
 /* ── rIC polyfill ── */
 if(typeof requestIdleCallback==='undefined'){
   window.requestIdleCallback=function(cb){return setTimeout(function(){cb({timeRemaining:function(){return 50}})},16)};
@@ -1166,10 +1170,18 @@ var PLAY_DEB=120;
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,_src:'telugu'};
 var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
-/* YouTube live channels — benmoose39/YouTube_to_m3u (auto-updated) */
-var YOUTUBE_PL={name:'YouTube',url:'https://raw.githubusercontent.com/benmoose39/YouTube_to_m3u/main/youtube.m3u',builtIn:true,_src:'youtube'};
+var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/main/CricHd.m3u',builtIn:true,_src:'crichd'};
+var MOVIES_PL={name:'Movies',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'movies'};
+/* YouTube Live — via iptv-org (maintained, working HLS streams)
+   These are public broadcast channels hosted on YouTube that expose HLS
+   endpoints publicly. Invidious proxy resolves YouTube HLS CORS issues. */
+var YOUTUBE_PL={
+  name:'YouTube',
+  url:'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
+  builtIn:true,_src:'youtube'
+};
 
-var ASPECTS=['Contain','Stretch','Cover'];
+var ASPECTS=['Contain','Stretch (default)','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
 var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
@@ -1203,7 +1215,7 @@ var ccx;try{ccx=cc.getContext('2d',{willReadFrequently:true})}catch(e){ccx=cc.ge
 var shakaPlayer=null,avplay=null;
 var ENGINE='none'; /* 'avplay' | 'shaka' | 'native' | 'none' */
 var allChs=[],viewChs=[];
-var curUrl='',isPlaying=false,isMuted=false,aspectMode=0;
+var curUrl='',isPlaying=false,isMuted=false,aspectMode=1; /* default: stretch — no black bars */
 var favs=new Set(),pls=[],searchQ='';
 var activeTab='Telugu',showFavs=false;
 var col=0;
@@ -1393,6 +1405,8 @@ function canonicalTab(ch){
   if(ch._src==='telugu')t='Telugu';
   else if(ch._src==='jio')t='Jio';
   else if(ch._src==='yupp')t='YuppTV';
+  else if(ch._src==='crichd')t='CricHd';
+  else if(ch._src==='movies')t='Movies';
   else if(ch._src==='youtube')t='YouTube';
   else{
     var g=(ch.group||'').toLowerCase().trim();
@@ -1401,7 +1415,7 @@ function canonicalTab(ch){
     else if(g.indexOf('sport')>=0||g.indexOf('cricket')>=0)t='Sports';
     else if(g.indexOf('entertain')>=0||g.indexOf('movie')>=0||
        g.indexOf('music')>=0||g.indexOf('kids')>=0)t='Entertainment';
-    else if(ch._src&&!['telugu','jio','yupp',].includes(ch._src))t=ch._src;
+    else if(ch._src&&!['telugu','jio','yupp','crichd'].includes(ch._src))t=ch._src;
   }
   ch._tab=t;
   return t;
@@ -1531,11 +1545,11 @@ function loadPl(url,name,force,srcTag){
    NAV TABS
 ════════════════════════════════════════════════════════════ */
 function rebuildNavTabs(){
-  var builtIns=['Telugu','Jio','YuppTV','YouTube','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','YouTube','Favourites'];
   var cats=['News','Sports','Entertainment'];
   var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
   var seen=new Set();
-  var order=['Telugu','Jio','YuppTV'];
+  var order=['Telugu','Jio','YuppTV','CricHd','Movies','YouTube'];
   allChs.forEach(function(ch){
     var t=canonicalTab(ch);
     if(t&&!builtIns.includes(t)&&!cats.includes(t))order.push(t);
@@ -1550,10 +1564,19 @@ function rebuildNavTabs(){
   order.forEach(function(t){if(!seen.has(t)){seen.add(t);tabs.push(t)}});
 
   /* Render tabs via Preact if available, else vanilla DOM */
+  /* Build per-tab channel counts */
+  var tabCounts={};
+  allChs.forEach(function(ch){
+    var t=canonicalTab(ch);
+    if(t)tabCounts[t]=(tabCounts[t]||0)+1;
+  });
+  tabCounts['Favourites']=favs.size;
+
   if(_preactReady && window.__P_renderTabs) {
     window.__P_renderTabs({
       tabs: tabs,
       activeTab: activeTab,
+      counts: tabCounts,
       onTab: function(t) {
         if(t==='Favourites'){showFavs=true;activeTab='Favourites'}
         else{showFavs=false;activeTab=t}
@@ -1689,24 +1712,39 @@ function initPreactRenderer() {
 
     /* ── Nav Tab Component ── */
     function NavTab(props) {
-      var label = props.label, isActive = props.isActive, onClick = props.onClick;
+      var label = props.label, isActive = props.isActive,
+          onClick = props.onClick, count = props.count;
       return h('button', {
         className:'ntab' + (isActive ? ' on' : ''),
         'data-g': label,
         tabIndex: 0,
         onClick: onClick
-      }, label);
+      },
+        label,
+        count > 0 ? h('span', {
+          style:{
+            fontSize:'10px',fontWeight:'700',
+            marginLeft:'6px',
+            opacity: isActive ? '.9' : '.45',
+            background:'rgba(255,255,255,.12)',
+            padding:'1px 6px',borderRadius:'10px',
+            verticalAlign:'middle'
+          }
+        }, String(count)) : null
+      );
     }
 
     /* ── Nav Tabs Bar Component ── */
     function NavTabsBar(props) {
-      var tabs = props.tabs, activeTab = props.activeTab, onTab = props.onTab;
+      var tabs = props.tabs, activeTab = props.activeTab,
+          onTab = props.onTab, counts = props.counts || {};
       return h('div', {id:'navTabs'},
         tabs.map(function(t) {
           return h(NavTab, {
             key: t,
             label: t,
             isActive: t === activeTab,
+            count: counts[t] || 0,
             onClick: function() { onTab(t); }
           });
         })
@@ -1761,7 +1799,8 @@ function initPreactRenderer() {
       render(h(NavTabsBar, {
         tabs: state.tabs,
         activeTab: state.activeTab,
-        onTab: state.onTab
+        onTab: state.onTab,
+        counts: state.counts
       }), mount);
       return true;
     };
@@ -2056,6 +2095,9 @@ function playWithAVPlay(ch){
   try{
     avplay.open(url);
     avplay.setDisplayRect(0,0,1920,1080);
+    /* Reduce AVPlay buffer for lower live latency */
+    try{avplay.setStreamingProperty('PREBUFFER_MODE','FALSE')}catch(e){}
+    try{avplay.setStreamingProperty('ADAPTIVE_INFO','BITRATE_LIMIT=0|START_BITRATE=0|SET_MODE=MAX')}catch(e){}
     avplay.setDisplayMethod(
       aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
       aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
@@ -2143,6 +2185,9 @@ function avplayRetry(ch,errCode){
   try{
     avplay.open(ch.url);
     avplay.setDisplayRect(0,0,1920,1080);
+    /* Reduce AVPlay buffer for lower live latency */
+    try{avplay.setStreamingProperty('PREBUFFER_MODE','FALSE')}catch(e){}
+    try{avplay.setStreamingProperty('ADAPTIVE_INFO','BITRATE_LIMIT=0|START_BITRATE=0|SET_MODE=MAX')}catch(e){}
     avplay.setDisplayMethod(
       aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
       aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
@@ -2226,28 +2271,27 @@ function initShaka(){
     shakaPlayer.configure({
       abr:{
         enabled:!cfg.hq,
-        defaultBandwidthEstimate:10000000,
-        switchInterval:8,
+        defaultBandwidthEstimate:8000000,
+        switchInterval:6,
         bandwidthUpgradeTarget:0.85,
-        bandwidthDowngradeTarget:0.92,
-        /* Restrict to supported codecs — AV1 NOT supported on Tizen TV */
-        /* VP9 > H264 preferred when available */
-        restrictToElementCapabilities:true
+        bandwidthDowngradeTarget:0.95,
+        restrictToElementCapabilities:true  /* never pick AV1 on Tizen */
       },
       streaming:{
-        bufferingGoal:cfg.buf,
-        rebufferingGoal:2,
+        bufferingGoal:cfg.buf,            /* user-configurable: default 12s */
+        rebufferingGoal:1,                /* live IPTV: 1s to rebuffer */
         stallEnabled:true,
-        stallThreshold:1,
-        stallSkip:0.1,
-        retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:0.3,timeout:25000},
-        safeSeekOffset:2,
-        /* Abort requests for low-bandwidth segments to avoid stalls */
-        lowLatencyMode:false
+        stallThreshold:0.5,               /* detect stall faster */
+        stallSkip:0.3,                    /* skip forward on stall */
+        jumpLargeGaps:true,               /* skip discontinuities in live */
+        retryParameters:{maxAttempts:4,baseDelay:300,backoffFactor:1.5,fuzzFactor:0.2,timeout:20000},
+        safeSeekOffset:1,                 /* smaller for live */
+        lowLatencyMode:false,
+        useNativeHlsOnSafari:false,       /* force Shaka's HLS parser */
+        inaccurateManifestTolerance:10    /* tolerate IPTV manifest timing issues */
       },
-      /* Samsung Tizen OS9: VP9 HW decode supported, AV1 NOT */
+      /* Samsung Tizen OS9: VP9 HW decode supported, AV1 NOT supported */
       preferredVideoCodecs:['vp09','vp9','avc1','hvc1','hev1'],
-      /* HDR10 / HLG — enabled when TV reports HDR support */
       preferredDecodingAttributes:['smooth','powerEfficient'],
     });
     shakaPlayer.addEventListener('adaptation',updateQ);
@@ -2450,6 +2494,58 @@ function configureDRM(manifestUrl){
   }catch(e){}
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   YOUTUBE RESOLVER — proxy via Invidious to bypass CORS
+   Called before playWithShaka for youtube.com URLs.
+   Invidious instances return HLS without CORS restrictions.
+════════════════════════════════════════════════════════════ */
+var YT_INVIDIOUS = [
+  'https://invidious.nerdvpn.de',
+  'https://invidious.privacydev.net',
+  'https://inv.nadeko.net',
+  'https://invidious.lunar.icu'
+];
+var _ytInvIdx = 0;
+
+function extractYtId(url){
+  var m = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/v\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function resolveYtUrl(url, cb){
+  var id = extractYtId(url);
+  if(!id){ cb(url); return; }
+  /* Try Invidious instances in sequence */
+  function tryNext(idx){
+    if(idx >= YT_INVIDIOUS.length){ cb(url); return; }
+    var apiUrl = YT_INVIDIOUS[idx] + '/api/v1/videos/' + id + '?fields=adaptiveFormats,formatStreams,hlsUrl';
+    var ctrl = new AbortController();
+    var tid = setTimeout(function(){try{ctrl.abort()}catch(e){}}, 5000);
+    fetch(apiUrl, {signal:ctrl.signal})
+      .then(function(r){ clearTimeout(tid); return r.ok ? r.json() : null; })
+      .then(function(data){
+        if(!data){ tryNext(idx+1); return; }
+        /* Prefer hlsUrl if available */
+        if(data.hlsUrl){ cb(data.hlsUrl); return; }
+        /* Find best video+audio stream */
+        var streams = data.formatStreams || data.adaptiveFormats || [];
+        var best = null;
+        for(var i=0; i<streams.length; i++){
+          var s = streams[i];
+          if(s.type && s.type.indexOf('video/mp4')>=0 && s.url){
+            if(!best || (parseInt(s.quality)||0) > (parseInt(best.quality)||0))
+              best = s;
+          }
+        }
+        if(best && best.url){ cb(best.url); return; }
+        tryNext(idx+1);
+      })
+      .catch(function(){ clearTimeout(tid); tryNext(idx+1); });
+  }
+  tryNext(_ytInvIdx);
+}
+
 /* ════════════════════════════════════════════════════════════
    DEFERRED SEEK — debounced AVPlay seekTo (500ms)
    Prevents stutter from rapid arrow-key presses.
@@ -2520,6 +2616,21 @@ function _doPlay(){
   if(cfg.muteSwitch&&isPlaying)video.muted=true;
   isPlaying=false;nowQ.style.display='none';
   updateNowInfo(ch);
+
+  /* YouTube: resolve via Invidious proxy for CORS-blocked youtube.com URLs */
+  if(ch._src==='youtube' && (ch.url.indexOf('youtube.com')>=0 || ch.url.indexOf('youtu.be')>=0)){
+    setSt('Resolving YouTube stream…','buf');
+    bufSpinner.classList.add('on');
+    resolveYtUrl(ch.url, function(resolvedUrl){
+      bufSpinner.classList.remove('on');
+      var pCh = {name:ch.name,url:resolvedUrl,logo:ch.logo,group:ch.group,_src:ch._src,_col:ch._col};
+      setSt('Connecting YouTube…','buf');
+      if(cfg.engine==='shaka'){playWithShaka(pCh,false);return}
+      if(avReady)playWithAVPlay(pCh);
+      else playWithShaka(pCh,false);
+    });
+    return;
+  }
 
   /* CrichD: resolve the actual m3u8 from the proxy wrapper before playing */
   if(ch._src==='crichd' && ch.url.indexOf('dtv=')>=0){
@@ -2737,7 +2848,7 @@ function renderSettingsSect(s){
     var ab=$('soAspect');
     if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,YOUTUBE_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL,YOUTUBE_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     allSrc.forEach(function(p,i){
       html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
@@ -2790,8 +2901,9 @@ function renderSettingsSect(s){
         'BACK Close / go back'+
       '</div>'+
       '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
-        'Built-in: Telugu · Jio · YuppTV · YouTube<br>'+
-        'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · Direct (last resort)'+
+        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies · YouTube Live<br>'+
+        'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · HLS.js · Direct<br>'+
+        '<i style="color:rgba(255,255,255,.3);font-size:11px">AVPlay is Samsung\'s built-in player — same core as VLC (FFmpeg-based)</i>'+
       '</div></div>';
   }
 }
@@ -2912,7 +3024,7 @@ var KC={
   PLAY:415,PAUSE:19,PP:10252,STOP:413,FF:417,REW:412,
   RED:403,GREEN:404,YELLOW:405,BLUE:406,
   CHUP:427,CHDN:428,VOL_UP:447,VOL_DN:448,MUTE:449,
-  MENU:457,TOOLS:10135,EXTRA:10253,INFO2:10133,
+  MENU:457,INFO:10134,TOOLS:10135,EXTRA:10253,INFO2:10133,
 };
 function isUp(kc,k){return kc===KC.UP||kc===KC.TUP||k==='ArrowUp'||k==='Up'}
 function isDn(kc,k){return kc===KC.DN||kc===KC.TDN||k==='ArrowDown'||k==='Down'}
@@ -2920,7 +3032,7 @@ function isLt(kc,k){return kc===KC.LT||kc===KC.TLT||k==='ArrowLeft'||k==='Left'}
 function isRt(kc,k){return kc===KC.RT||kc===KC.TRT||k==='ArrowRight'||k==='Right'}
 function isOK(kc,k){return kc===KC.ENTER||k==='Enter'}
 function isBack(kc,k){return kc===KC.BACK||k==='Escape'||k==='BrowserBack'||kc===10009}
-function isSettings(kc,k){return kc===KC.MENU||kc===KC.INFO2||kc===KC.TOOLS||kc===KC.EXTRA||k==='Menu'||k==='Info'||k==='Tools'}
+function isSettings(kc,k){return kc===KC.MENU||kc===KC.INFO2||kc===KC.TOOLS||kc===KC.EXTRA||kc===10134||k==='Menu'||k==='Info'||k==='Tools'||k==='ColorF3Blue'}
 function isDig(e){var kc=e.keyCode;return(kc>=48&&kc<=57)||(kc>=96&&kc<=105)||(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')}
 function getDig(e){if(e.key&&e.key.length===1&&e.key>='0'&&e.key<='9')return e.key;if(e.keyCode>=96&&e.keyCode<=105)return String(e.keyCode-96);return String(e.keyCode-48)}
 
@@ -3055,6 +3167,7 @@ window.addEventListener('keydown',function(e){
   }
 
   /* ── TABS ── */
+  /* RED key also opens settings as secondary shortcut from any zone */
   if(zone==='tabs'){
     var tabs2=QA('.ntab',navTabs);
     if(isLt(kc,k)){e.preventDefault();tabIdx=Math.max(0,tabIdx-1);if(tabs2[tabIdx])tabs2[tabIdx].focus({preventScroll:true});return}
@@ -3181,6 +3294,8 @@ function loadAll(force){
     .then(function(){return loadPl(TELUGU_PL.url,TELUGU_PL.name,force,'telugu')})
     .then(function(){return loadPl(JIO_PL.url,JIO_PL.name,force,'jio')})
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
+    .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
+    .then(function(){return loadPl(MOVIES_PL.url,MOVIES_PL.name,force,'movies')})
     .then(function(){return loadPl(YOUTUBE_PL.url,YOUTUBE_PL.name,force,'youtube')})
     .then(function(){
       var customs=pls.filter(function(p){return!p.builtIn});
@@ -3230,7 +3345,7 @@ window.addEventListener('beforeunload',function(){
   loadStore();
   initChHud();
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==YOUTUBE_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url&&p.url!==YOUTUBE_PL.url;
   });
   $('splMsg').textContent='Initialising player…';
 
