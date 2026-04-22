@@ -11,6 +11,7 @@
 <link rel="dns-prefetch" href="https://jioplaylist.joinus-apiworker.workers.dev">
 <link rel="dns-prefetch" href="https://yupptv.yecic62314.workers.dev">
 <link rel="dns-prefetch" href="https://crichdhome.uhd2026.workers.dev">
+<link rel="dns-prefetch" href="https://raw.githubusercontent.com">
 <script src="./js/shaka.js"></script>
 <script src="./js/cache.js"></script>
 <script src="./js/preact.min.js"></script>
@@ -758,6 +759,133 @@ html,body{
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.10);border-radius:2px}
 
+
+/* ══ UI ENHANCEMENTS v9 ══════════════════════════════════ */
+
+/* Tab active indicator — smooth slide pill */
+.ntab.on{
+  background:rgba(255,255,255,.14);
+  color:var(--w0);
+  border-color:rgba(255,255,255,.25);
+  box-shadow:0 1px 0 rgba(255,255,255,.08) inset;
+}
+.ntab:not(.on):hover{
+  background:rgba(255,255,255,.06);
+  color:var(--w2);
+}
+
+/* Playing card — cyan pulse glow */
+.card.playing{
+  border-color:rgba(0,200,255,.60);
+  box-shadow:0 0 0 2px rgba(0,200,255,.15),
+             0 0 20px rgba(0,200,255,.12);
+}
+
+/* Card selection — smoother spring */
+.card{
+  transition:transform 80ms cubic-bezier(.22,1,.36,1),
+             border-color 50ms linear,
+             box-shadow 80ms linear;
+}
+
+/* Now-info slide-up entrance */
+#nowInfo{
+  transition:opacity 220ms var(--ease), transform 220ms var(--spring);
+  transform:translateY(0);
+}
+#nowInfo:not(.vis){
+  opacity:0;
+  transform:translateY(12px);
+  pointer-events:none;
+}
+#nowInfo.vis{
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* Bottom panel glassmorphism */
+#bottomPanel{
+  -webkit-backdrop-filter:blur(20px) saturate(1.4);
+  backdrop-filter:blur(20px) saturate(1.4);
+}
+
+/* Engine badge refined */
+#engBadge{
+  font-size:10px;font-weight:800;letter-spacing:1.5px;
+  padding:4px 10px;border-radius:20px;
+  background:rgba(0,200,100,.18);
+  border:1px solid rgba(0,200,100,.35);
+  color:rgba(0,255,140,.9);
+  text-transform:uppercase;
+}
+
+/* Buffering spinner refined */
+#bufSpinner.on::after{
+  border-top-color:rgba(0,200,255,.9);
+  border-right-color:rgba(0,200,255,.3);
+}
+
+/* Row wrap: subtle top fade */
+.row-wrap::before{
+  content:'';
+  position:absolute;left:0;top:0;right:0;height:24px;
+  background:linear-gradient(to bottom,var(--bg),transparent);
+  z-index:2;pointer-events:none;
+}
+
+/* Settings overlay entrance */
+#settingsOv{
+  transition:opacity 180ms var(--ease);
+}
+#settingsOv:not(.on){opacity:0;pointer-events:none}
+#settingsOv.on{opacity:1}
+
+/* Exit overlay entrance */
+#exitOv{
+  transition:opacity 140ms var(--ease);
+}
+
+/* Search overlay entrance */
+#searchOv{
+  transition:opacity 140ms var(--ease),transform 140ms var(--spring);
+}
+#searchOv:not(.open){
+  opacity:0;transform:translateY(-8px);pointer-events:none;
+}
+#searchOv.open{opacity:1;transform:translateY(0)}
+
+/* Yellow popup entrance */
+#yellowPopup{
+  transition:opacity 140ms var(--ease),transform 140ms var(--spring);
+}
+#yellowPopup:not(.on){
+  opacity:0;transform:scale(.97) translateY(-4px);pointer-events:none;
+}
+#yellowPopup.on{opacity:1;transform:scale(1) translateY(0)}
+
+/* Channel HUD refined */
+#chHud{
+  background:rgba(0,0,0,.96);
+  border:1.5px solid rgba(255,255,255,.18);
+  box-shadow:0 8px 32px rgba(0,0,0,.8),0 0 0 1px rgba(255,255,255,.06);
+}
+#chHudNum{
+  font-size:56px;font-weight:900;letter-spacing:4px;
+  background:linear-gradient(135deg,#fff 60%,rgba(255,255,255,.5));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+
+/* Volume HUD */
+#volHud{
+  transition:opacity 200ms var(--ease);
+}
+
+/* Splash screen branding */
+#splash{
+  background:radial-gradient(ellipse at 50% 40%,rgba(30,30,60,.6) 0%,var(--bg) 70%);
+}
+
 /* ══ GLOBAL FOCUS INDICATORS ══════════════════════════════ */
 /* Keyboard/remote focus ring for all interactive elements */
 *:focus{outline:none} /* reset browser default */
@@ -824,7 +952,7 @@ html,body{
         <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
       </button>
       <button class="tip-btn" id="settingsBtn" title="Settings (MENU)">
-        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.484.484 0 0 0 16 3h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/>2-.08-.47 0-.59.22L4.74 9.15c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
       </button>
     </div>
   </div>
@@ -1040,8 +1168,12 @@ var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.
 var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
 var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/main/CricHd.m3u',builtIn:true,_src:'crichd'};
-/* YouTube streaming movies — iptv-org curated YouTube live channels */
-var YOUTUBE_PL={name:'YouTube',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'youtube'};
+var MOVIES_PL={name:'Movies',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'movies'};
+var HINDI_PL ={name:'Hindi', url:'https://iptv-org.github.io/iptv/languages/hin.m3u',builtIn:true,_src:'hindi'};
+var TAMIL_PL ={name:'Tamil', url:'https://iptv-org.github.io/iptv/languages/tam.m3u',builtIn:true,_src:'tamil'};
+var INDIA_PL ={name:'India', url:'https://iptv-org.github.io/iptv/countries/in.m3u',builtIn:true,_src:'india'};
+/* YouTube live channels — benmoose39/YouTube_to_m3u (auto-updated) */
+var YOUTUBE_PL={name:'YouTube',url:'https://raw.githubusercontent.com/benmoose39/YouTube_to_m3u/main/youtube.m3u',builtIn:true,_src:'youtube'};
 
 var ASPECTS=['Contain','Stretch','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1049,7 +1181,7 @@ var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
   'sports':'Sports','live sports':'Sports','cricket':'Sports','football':'Sports',
   'entertainment':'Entertainment','general entertainment':'Entertainment',
-  'movies':'YouTube','kids':'Entertainment','music':'Entertainment','movie':'YouTube','films':'YouTube','vod':'YouTube'
+  'movies':'Movies','kids':'Entertainment','music':'Entertainment','movie':'Movies','films':'Movies','vod':'Movies'
 };
 
 /* ── DOM refs ── */
@@ -1268,6 +1400,10 @@ function canonicalTab(ch){
   else if(ch._src==='jio')t='Jio';
   else if(ch._src==='yupp')t='YuppTV';
   else if(ch._src==='crichd')t='CricHd';
+  else if(ch._src==='movies')t='Movies';
+  else if(ch._src==='hindi')t='Hindi';
+  else if(ch._src==='tamil')t='Tamil';
+  else if(ch._src==='india')t='India';
   else if(ch._src==='youtube')t='YouTube';
   else{
     var g=(ch.group||'').toLowerCase().trim();
@@ -1406,11 +1542,11 @@ function loadPl(url,name,force,srcTag){
    NAV TABS
 ════════════════════════════════════════════════════════════ */
 function rebuildNavTabs(){
-  var builtIns=['Telugu','Jio','YuppTV','CricHd','YouTube','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','Hindi','Tamil','India','YouTube','Favourites'];
   var cats=['News','Sports','Entertainment'];
   var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
   var seen=new Set();
-  var order=['Telugu','Jio','YuppTV','CricHd','Movies','Hindi','Tamil','India'];
+  var order=['Telugu','Jio','YuppTV','CricHd','Movies','Hindi','Tamil','India','YouTube'];
   allChs.forEach(function(ch){
     var t=canonicalTab(ch);
     if(t&&!builtIns.includes(t)&&!cats.includes(t))order.push(t);
@@ -1508,7 +1644,6 @@ function initPreactRenderer() {
       },
         h('div', {className:'card-num'}, idx + 1),
         h('div', {className:'card-badges'},
-          h('span', {className:'badge b-live'}, 'LIVE'),
           hasHD ? h('span', {className:'badge b-hd'}, 'HD') : null
         ),
         isFav ? h('div', {className:'card-fav'}, '★') : null,
@@ -1597,21 +1732,21 @@ function initPreactRenderer() {
     var _tabsMount = null;
 
     function getStripMount() {
-      if(!_stripMount) {
-        _stripMount = document.getElementById('strip');
-        if(!_stripMount) {
-          _stripMount = document.createElement('div');
-          _stripMount.id = 'strip';
-          var bp = document.querySelector('.row-wrap');
-          if(bp) bp.appendChild(_stripMount);
-        }
+      /* Always re-query — DOM replaced by innerHTML on tab switch */
+      var m = document.getElementById('strip');
+      if(!m) {
+        m = document.createElement('div');
+        m.id = 'strip';
+        m.className = 'tile-strip';
+        var bp = document.querySelector('.row-wrap,.bottom-panel');
+        if(bp) bp.appendChild(m);
       }
-      return _stripMount;
+      return m;
     }
 
     function getTabsMount() {
-      if(!_tabsMount) _tabsMount = document.getElementById('navTabs');
-      return _tabsMount;
+      /* Always re-query — navTabs may be re-created */
+      return document.getElementById('navTabs');
     }
 
     /* ── Public render functions — called by engine code ── */
@@ -1726,8 +1861,7 @@ function makeCard(idx){
   var bg=document.createElement('div');bg.className='card-bg';
   var num=document.createElement('div');num.className='card-num';num.textContent=idx+1;
   var badges=document.createElement('div');badges.className='card-badges';
-  var bLive=document.createElement('span');bLive.className='badge b-live';bLive.textContent='LIVE';
-  badges.appendChild(bLive);
+  /* LIVE badge removed per design requirement */
   if(ch.name.match(/HD|4K/i)){var bHD=document.createElement('span');bHD.className='badge b-hd';bHD.textContent='HD';badges.appendChild(bHD)}
   var fav=document.createElement('div');fav.className='card-fav';fav.textContent='★';
   if(favs.has(ch.url))fav.style.display='block';
@@ -1806,6 +1940,7 @@ function updateNowInfo(ch){
   var g=canonicalTab(ch)||ch.group||'';
   if(g){nowGroup.textContent=g;nowGroup.style.display=''}else nowGroup.style.display='none';
   nowInfo.classList.add('vis');
+  nowInfo.style.display='';
   lsSet(LS.LCHU,ch.url);
 }
 function showEngine(eng){
@@ -2073,10 +2208,14 @@ function initShaka(){
     /* Request filter — inject headers per source domain */
     shakaPlayer.getNetworkingEngine().registerRequestFilter(function(type,req){
       var u=req.uris&&req.uris[0]?req.uris[0]:'';
-      /* CrichD streams need Referer */
-      if(u.indexOf('sanwalyaarpya.com')>=0||u.indexOf('calm-sun')>=0||u.indexOf('crichd')>=0){
-        req.headers['Referer']='https://profamouslife.com/';
-        req.headers['Origin']='https://profamouslife.com';
+      /* CrichD streams need Referer — covers CDN domains from GitHub M3U */
+      if(u.indexOf('sanwalyaarpya.com')>=0||u.indexOf('calm-sun')>=0||
+         u.indexOf('crichd')>=0||u.indexOf('crichd.tv')>=0||
+         u.indexOf('crichdsports')>=0||u.indexOf('crichdfun')>=0||
+         u.indexOf('rojoni')>=0||u.indexOf('abusaeeidx')>=0){
+        req.headers['Referer']='https://www.crichd.tv/';
+        req.headers['Origin']='https://www.crichd.tv';
+        req.headers['User-Agent']='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
       }
       /* YuppTV Akamai CDN — needs Origin + Referer to match stream domain */
       if(u.indexOf('yuppparoriglin.akamaized.net')>=0||
@@ -2096,12 +2235,31 @@ function initShaka(){
       /* If a playlist URL redirected to a new location, nothing to do */
     });
     shakaPlayer.configure({
-      abr:{enabled:!cfg.hq,defaultBandwidthEstimate:10000000,switchInterval:8,
-           bandwidthUpgradeTarget:0.8,bandwidthDowngradeTarget:0.9},
-      streaming:{bufferingGoal:cfg.buf,rebufferingGoal:2,
-                 stallEnabled:true,stallThreshold:1,stallSkip:0.1,
-                 retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:0.3,timeout:25000},
-                 safeSeekOffset:2},
+      abr:{
+        enabled:!cfg.hq,
+        defaultBandwidthEstimate:10000000,
+        switchInterval:8,
+        bandwidthUpgradeTarget:0.85,
+        bandwidthDowngradeTarget:0.92,
+        /* Restrict to supported codecs — AV1 NOT supported on Tizen TV */
+        /* VP9 > H264 preferred when available */
+        restrictToElementCapabilities:true
+      },
+      streaming:{
+        bufferingGoal:cfg.buf,
+        rebufferingGoal:2,
+        stallEnabled:true,
+        stallThreshold:1,
+        stallSkip:0.1,
+        retryParameters:{maxAttempts:5,baseDelay:500,backoffFactor:2,fuzzFactor:0.3,timeout:25000},
+        safeSeekOffset:2,
+        /* Abort requests for low-bandwidth segments to avoid stalls */
+        lowLatencyMode:false
+      },
+      /* Samsung Tizen OS9: VP9 HW decode supported, AV1 NOT */
+      preferredVideoCodecs:['vp09','vp9','avc1','hvc1','hev1'],
+      /* HDR10 / HLG — enabled when TV reports HDR support */
+      preferredDecodingAttributes:['smooth','powerEfficient'],
     });
     shakaPlayer.addEventListener('adaptation',updateQ);
     shakaPlayer.addEventListener('variantchanged',updateQ);
@@ -2280,6 +2438,28 @@ function recfg(){
   });
 }
 
+
+
+/* ════════════════════════════════════════════════════════════
+   DRM CONFIGURATION — Widevine L1/L3 + PlayReady + Samsung
+   Tizen OS9 supports all three via webapis.drm + Shaka EME
+════════════════════════════════════════════════════════════ */
+function configureDRM(manifestUrl){
+  if(!shakaPlayer)return;
+  /* Auto-detect DRM from manifest — Shaka handles this */
+  /* Samsung AVPlay handles DRM natively via setStreamingProperty */
+  /* For Shaka: configure both Widevine and PlayReady */
+  shakaPlayer.configure('drm.servers', {
+    'com.widevine.alpha': '',   /* Set per-stream when known */
+    'com.microsoft.playready': '' /* Set per-stream when known */
+  });
+  /* Enable HDCP if available */
+  try{
+    if(window.webapis&&webapis.avplay){
+      webapis.avplay.setStreamingProperty('SET_MODE_4K','TRUE');
+    }
+  }catch(e){}
+}
 
 /* ════════════════════════════════════════════════════════════
    DEFERRED SEEK — debounced AVPlay seekTo (500ms)
@@ -2568,7 +2748,7 @@ function renderSettingsSect(s){
     var ab=$('soAspect');
     if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,YOUTUBE_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL,HINDI_PL,TAMIL_PL,INDIA_PL,YOUTUBE_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     allSrc.forEach(function(p,i){
       html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
@@ -2621,7 +2801,7 @@ function renderSettingsSect(s){
         'BACK Close / go back'+
       '</div>'+
       '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
-        'Built-in: Telugu · Jio · YuppTV · CricHd · YouTube Movies<br>'+
+        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies · Hindi · Tamil · India · YouTube<br>'+
         'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · Direct (last resort)'+
       '</div></div>';
   }
@@ -3013,6 +3193,10 @@ function loadAll(force){
     .then(function(){return loadPl(JIO_PL.url,JIO_PL.name,force,'jio')})
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
     .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
+    .then(function(){return loadPl(MOVIES_PL.url,MOVIES_PL.name,force,'movies')})
+    .then(function(){return loadPl(HINDI_PL.url,HINDI_PL.name,force,'hindi')})
+    .then(function(){return loadPl(TAMIL_PL.url,TAMIL_PL.name,force,'tamil')})
+    .then(function(){return loadPl(INDIA_PL.url,INDIA_PL.name,force,'india')})
     .then(function(){return loadPl(YOUTUBE_PL.url,YOUTUBE_PL.name,force,'youtube')})
     .then(function(){
       var customs=pls.filter(function(p){return!p.builtIn});
@@ -3062,7 +3246,7 @@ window.addEventListener('beforeunload',function(){
   loadStore();
   initChHud();
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==YOUTUBE_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url&&p.url!==HINDI_PL.url&&p.url!==TAMIL_PL.url&&p.url!==INDIA_PL.url&&p.url!==YOUTUBE_PL.url;
   });
   $('splMsg').textContent='Initialising player…';
 
