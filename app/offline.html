@@ -1,17 +1,109 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>SAGA IPTV — Offline</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}
-body{width:100vw;height:100vh;background:#080808;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-family:system-ui}
-.logo{font-size:80px;font-weight:900;letter-spacing:-3px;margin-bottom:24px}
-.msg{font-size:20px;color:rgba(255,255,255,.5);margin-bottom:40px}
-.hint{font-size:14px;color:rgba(255,255,255,.3);letter-spacing:1px}
-</style></head><body>
-<div class="logo">SAGA</div>
-<div class="msg">No internet connection</div>
-<div class="hint">PRESS BACK TO RETRY</div>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>SAGA IPTV — Offline</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100vw;height:100vh;overflow:hidden;
+  background:#080808;color:#fff;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-font-smoothing:antialiased;
+}
+.box{
+  text-align:center;
+  animation:fadeIn 400ms ease forwards;
+}
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.icon{
+  font-size:72px;margin-bottom:28px;
+  filter:drop-shadow(0 0 24px rgba(100,180,255,.3));
+}
+.title{
+  font-size:28px;font-weight:900;color:#fff;
+  letter-spacing:-.5px;margin-bottom:10px;
+}
+.sub{
+  font-size:15px;color:rgba(255,255,255,.45);
+  margin-bottom:40px;line-height:1.6;
+}
+.btn{
+  display:inline-block;
+  padding:14px 40px;
+  background:rgba(255,255,255,.1);
+  border:1.5px solid rgba(255,255,255,.25);
+  border-radius:14px;
+  color:#fff;font-size:16px;font-weight:700;
+  cursor:pointer;outline:none;
+  transition:background 120ms,transform 120ms;
+  letter-spacing:.3px;
+}
+.btn:focus,.btn:hover{
+  background:rgba(255,255,255,.2);
+  border-color:rgba(255,255,255,.6);
+  transform:scale(1.04);
+  outline:none;
+}
+.hint{
+  margin-top:22px;
+  font-size:12px;color:rgba(255,255,255,.22);
+  letter-spacing:1.2px;text-transform:uppercase;
+}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">📡</div>
+  <div class="title">No Internet Connection</div>
+  <div class="sub">
+    SAGA IPTV requires a network connection<br>
+    to load channels and stream content.
+  </div>
+  <button class="btn" id="retryBtn" autofocus>↺ Retry</button>
+  <div class="hint">or press BACK to exit</div>
+</div>
 <script>
-document.addEventListener('keydown',function(e){
-  if(e.keyCode===10009||e.keyCode===27)window.location.href='index.html';
+document.getElementById('retryBtn').addEventListener('click', function(){
+  window.location.href = 'index.html';
 });
+document.addEventListener('keydown', function(e){
+  var kc = e.keyCode, k = e.key;
+  /* OK / Enter — retry */
+  if(kc === 13 || k === 'Enter'){
+    e.preventDefault();
+    window.location.href = 'index.html';
+    return;
+  }
+  /* BACK / Escape — exit */
+  if(kc === 10009 || kc === 27 || k === 'Escape' || k === 'BrowserBack'){
+    e.preventDefault();
+    try{
+      if(window.tizen && tizen.application)
+        tizen.application.getCurrentApplication().exit();
+    }catch(ex){}
+    try{ window.close(); }catch(ex){}
+    return;
+  }
+  /* RED button — retry */
+  if(kc === 403){
+    e.preventDefault();
+    window.location.href = 'index.html';
+  }
+});
+/* Auto-retry every 8 seconds */
+var retryCount = 0;
+var autoTimer = setInterval(function(){
+  retryCount++;
+  if(retryCount >= 3){ clearInterval(autoTimer); return; }
+  /* Check connectivity */
+  var img = new Image();
+  img.onload = function(){ clearInterval(autoTimer); window.location.href = 'index.html'; };
+  img.onerror = function(){};
+  img.src = 'https://iptv-org.github.io/favicon.ico?t=' + Date.now();
+}, 8000);
 </script>
-</body></html>
+</body>
+</html>

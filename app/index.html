@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
 <title>SAGA IPTV</title>
+<link rel="preconnect" href="https://iptv-org.github.io">
+<link rel="preconnect" href="https://raw.githubusercontent.com">
+<link rel="preconnect" href="https://unpkg.com">
+<link rel="dns-prefetch" href="https://jioplaylist.joinus-apiworker.workers.dev">
+<link rel="dns-prefetch" href="https://yupptv.yecic62314.workers.dev">
+<link rel="dns-prefetch" href="https://crichdhome.uhd2026.workers.dev">
 <script src="./js/shaka.js"></script>
 <script src="./js/cache.js"></script>
 <script src="./js/preact.min.js"></script>
@@ -1033,11 +1039,9 @@ var PLAY_DEB=120;
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,_src:'telugu'};
 var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
-var CRICHD_PL={name:'CricHd',url:'https://crichdhome.uhd2026.workers.dev/',builtIn:true,_src:'crichd'};
-var MOVIES_PL={name:'Movies',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'movies'};
-var HINDI_PL ={name:'Hindi', url:'https://iptv-org.github.io/iptv/languages/hin.m3u',builtIn:true,_src:'hindi'};
-var TAMIL_PL ={name:'Tamil', url:'https://iptv-org.github.io/iptv/languages/tam.m3u',builtIn:true,_src:'tamil'};
-var INDIA_PL ={name:'India', url:'https://iptv-org.github.io/iptv/countries/in.m3u',builtIn:true,_src:'india'};
+var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/main/CricHd.m3u',builtIn:true,_src:'crichd'};
+/* YouTube streaming movies — iptv-org curated YouTube live channels */
+var YOUTUBE_PL={name:'YouTube',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'youtube'};
 
 var ASPECTS=['Contain','Stretch','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1045,7 +1049,7 @@ var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
   'sports':'Sports','live sports':'Sports','cricket':'Sports','football':'Sports',
   'entertainment':'Entertainment','general entertainment':'Entertainment',
-  'movies':'Movies','kids':'Entertainment','music':'Entertainment','movie':'Movies','films':'Movies','vod':'Movies'
+  'movies':'YouTube','kids':'Entertainment','music':'Entertainment','movie':'YouTube','films':'YouTube','vod':'YouTube'
 };
 
 /* ── DOM refs ── */
@@ -1076,7 +1080,7 @@ var allChs=[],viewChs=[];
 var curUrl='',isPlaying=false,isMuted=false,aspectMode=0;
 var favs=new Set(),pls=[],searchQ='';
 var activeTab='Telugu',showFavs=false;
-var col=0,scrollOff=0;
+var col=0;
 var hideTimer=null,uiVisible=true;
 var zone='rows'; /* rows|tabs|yp|settings|dialer|search|ar */
 var tabIdx=0,ypIdx=0,soSideIdx=0,soMainIdx=0,soSideZone=true;
@@ -1084,7 +1088,6 @@ var dialStr='',dialTimer=null,rDialStr='',rDialTimer=null;
 var playTimer=null,volTimer=null,osdTimer=null,engBadgeTimer=null;
 var currentVol=50;
 var cfg={hq:true,muteSwitch:false,buf:12,osd:true,engine:'auto'};
-var epgCache={};
 var avReady=false; /* AVPlay API available? */
 
 /* ════════════════════════════════════════════════════════════
@@ -1258,22 +1261,25 @@ function parseM3UChunked(txt,onDone){
    CATEGORY
 ════════════════════════════════════════════════════════════ */
 function canonicalTab(ch){
-  if(ch._src==='telugu')return'Telugu';
-  if(ch._src==='jio')return'Jio';
-  if(ch._src==='yupp')return'YuppTV';
-  if(ch._src==='crichd')return'CricHd';
-  if(ch._src==='movies')return'Movies';
-  if(ch._src==='hindi')return'Hindi';
-  if(ch._src==='tamil')return'Tamil';
-  if(ch._src==='india')return'India';
-  var g=(ch.group||'').toLowerCase().trim();
-  if(GROUP_MAP[g])return GROUP_MAP[g];
-  if(g.indexOf('news')>=0)return'News';
-  if(g.indexOf('sport')>=0||g.indexOf('cricket')>=0)return'Sports';
-  if(g.indexOf('entertain')>=0||g.indexOf('movie')>=0||
-     g.indexOf('music')>=0||g.indexOf('kids')>=0)return'Entertainment';
-  if(ch._src&&!['telugu','jio','yupp','crichd'].includes(ch._src))return ch._src;
-  return null;
+  /* Cache result to avoid repeated regex on large lists */
+  if(ch._tab!==undefined)return ch._tab;
+  var t=null;
+  if(ch._src==='telugu')t='Telugu';
+  else if(ch._src==='jio')t='Jio';
+  else if(ch._src==='yupp')t='YuppTV';
+  else if(ch._src==='crichd')t='CricHd';
+  else if(ch._src==='youtube')t='YouTube';
+  else{
+    var g=(ch.group||'').toLowerCase().trim();
+    if(GROUP_MAP[g])t=GROUP_MAP[g];
+    else if(g.indexOf('news')>=0)t='News';
+    else if(g.indexOf('sport')>=0||g.indexOf('cricket')>=0)t='Sports';
+    else if(g.indexOf('entertain')>=0||g.indexOf('movie')>=0||
+       g.indexOf('music')>=0||g.indexOf('kids')>=0)t='Entertainment';
+    else if(ch._src&&!['telugu','jio','yupp','crichd'].includes(ch._src))t=ch._src;
+  }
+  ch._tab=t;
+  return t;
 }
 function getViewChs(){
   var arr=[];
@@ -1343,13 +1349,14 @@ function loadPl(url,name,force,srcTag){
       var ctrl=new AbortController();
       var tid=setTimeout(function(){try{ctrl.abort()}catch(ex){}},28000);
       fetch(url,{signal:ctrl.signal}).then(function(resp){
-        clearTimeout(tid);
         if(!resp.ok)throw new Error('HTTP '+resp.status);
         return resp.text();
       }).then(function(txt){
+        clearTimeout(tid); /* clear after success */
         if(typeof AppCache!=='undefined')AppCache.setM3U(url,txt);
         process(txt);
       }).catch(function(e){
+        clearTimeout(tid); /* always clear — was the finally block */
         setSt('Error loading '+name+': '+String(e.message||e).slice(0,40),'err');
         resolve([]);
       });
@@ -1399,7 +1406,7 @@ function loadPl(url,name,force,srcTag){
    NAV TABS
 ════════════════════════════════════════════════════════════ */
 function rebuildNavTabs(){
-  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','Hindi','Tamil','India','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHd','YouTube','Favourites'];
   var cats=['News','Sports','Entertainment'];
   var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
   var seen=new Set();
@@ -1643,6 +1650,9 @@ function initPreactRenderer() {
   });
 }
 
+/* renderStrip is an alias for backward-compat */
+function renderStrip(){renderAll();}
+
 /* ── renderAll: called whenever state changes ── */
 function renderAll() {
   /* Sync strip scroll pixel offset */
@@ -1699,7 +1709,8 @@ function _vanillaRenderStrip(precomputedOff){
     frag.appendChild(makeCard(i));
   }
   strip.appendChild(frag);
-  strip.style.transform='translateX(0) translateZ(0)';
+  /* Apply horizontal scroll offset so vanilla matches Preact */
+  strip.style.transform='translateX(-'+precomputedOff+'px) translateZ(0)';
   updateStripFocus();
   /* vanilla fallback used until Preact loads */
 }
@@ -1904,6 +1915,7 @@ function initAVPlay(){
 }
 
 function avplayStop(){
+  _avplayRetried=false; /* reset retry flag on stop */
   if(!avplay)return;
   try{
     var st=avplay.getState();
@@ -1915,6 +1927,7 @@ function avplayStop(){
 
 function playWithAVPlay(ch){
   var url=ch.url;
+  _avplayRetried=false; /* reset per channel change */
   avplayStop();
   try{
     avplay.open(url);
@@ -2391,15 +2404,19 @@ function updateSearchCount(){
   if(sb)sb.addEventListener('click',openSearch);
   var si=$('searchInp');
   if(si){
+    var _searchDebTimer=null;
     si.addEventListener('input',function(){
-      searchQ=si.value.trim();
-      viewChs=getViewChs();col=Math.min(col,viewChs.length);
-      renderStrip();updateSearchCount();
+      clearTimeout(_searchDebTimer);
+      _searchDebTimer=setTimeout(function(){
+        searchQ=si.value.trim();
+        viewChs=getViewChs();col=Math.min(col,viewChs.length);
+        renderAll();updateSearchCount();
+      },300);
     });
     si.addEventListener('keydown',function(e){
       if(e.keyCode===27||e.keyCode===10009){
         e.preventDefault();
-        if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderStrip();updateSearchCount()}
+        if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderAll();updateSearchCount()}
         else closeSearch();
         return;
       }
@@ -2413,7 +2430,7 @@ function updateSearchCount(){
   var sc=$('searchClose');
   if(sc)sc.addEventListener('click',function(){
     searchQ='';var inp=$('searchInp');if(inp)inp.value='';
-    viewChs=getViewChs();renderStrip();closeSearch();
+    viewChs=getViewChs();renderAll();closeSearch();
   });
 })();
 
@@ -2551,7 +2568,7 @@ function renderSettingsSect(s){
     var ab=$('soAspect');
     if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL,HINDI_PL,TAMIL_PL,INDIA_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,YOUTUBE_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     allSrc.forEach(function(p,i){
       html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
@@ -2604,7 +2621,7 @@ function renderSettingsSect(s){
         'BACK Close / go back'+
       '</div>'+
       '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
-        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies · Hindi · Tamil · India<br>'+
+        'Built-in: Telugu · Jio · YuppTV · CricHd · YouTube Movies<br>'+
         'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · Direct (last resort)'+
       '</div></div>';
   }
@@ -2706,13 +2723,10 @@ tick();setInterval(tick,10000);
 
 /* Bandwidth polling — Shaka only (AVPlay uses oncurrentplaytime) */
 setInterval(function(){
-  if(!isPlaying)return;
-  if(ENGINE==='shaka'&&shakaPlayer){
-    try{var bw=shakaPlayer.getStats().estimatedBandwidth||0,mb=bw/1000000;
-      if(mb>0)sBw.textContent=mb.toFixed(1)+'M';}catch(e){}
-  }
-  /* AVPlay bandwidth set via oncurrentplaytime callback */
-},3000);
+  if(!isPlaying||ENGINE!=='shaka'||!shakaPlayer)return;
+  try{var bw=shakaPlayer.getStats().estimatedBandwidth||0,mb=bw/1000000;
+    if(mb>0)sBw.textContent=mb.toFixed(1)+'M';}catch(e){}
+},2000);
 
 function hideSplash(){
   $('splash').classList.add('off');
@@ -2770,7 +2784,7 @@ window.addEventListener('keydown',function(e){
   if(document.activeElement===si){
     /* handled by searchInp keydown listener */
     if(isBack(kc,k)){e.preventDefault();
-      if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderStrip();updateSearchCount()}
+      if(si.value){si.value='';searchQ='';viewChs=getViewChs();renderAll();updateSearchCount()}
       else closeSearch();
     }
     return;
@@ -2922,9 +2936,15 @@ window.addEventListener('keydown',function(e){
       if(ENGINE==='avplay'&&avplay){try{avplay.pause()}catch(e2){}}
       else video.pause();
       break;
+    case kc===KC.FF||k==='MediaFastForward':
+      e.preventDefault();
+      if(ENGINE==='avplay')avplaySeekRelative(30000);
+      else if(video&&isFinite(video.duration))video.currentTime=Math.min(video.duration,video.currentTime+30);
+      break;
     case kc===KC.REW||k==='MediaRewind':
       e.preventDefault();
       if(ENGINE==='avplay')avplaySeekRelative(-30000);
+      else if(video)video.currentTime=Math.max(0,(video.currentTime||0)-30);
       break;
 
     case kc===KC.PP||k==='MediaPlayPause':
@@ -2993,10 +3013,7 @@ function loadAll(force){
     .then(function(){return loadPl(JIO_PL.url,JIO_PL.name,force,'jio')})
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
     .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
-    .then(function(){return loadPl(MOVIES_PL.url,MOVIES_PL.name,force,'movies')})
-    .then(function(){return loadPl(HINDI_PL.url,HINDI_PL.name,force,'hindi')})
-    .then(function(){return loadPl(TAMIL_PL.url,TAMIL_PL.name,force,'tamil')})
-    .then(function(){return loadPl(INDIA_PL.url,INDIA_PL.name,force,'india')})
+    .then(function(){return loadPl(YOUTUBE_PL.url,YOUTUBE_PL.name,force,'youtube')})
     .then(function(){
       var customs=pls.filter(function(p){return!p.builtIn});
       function loadNext(i){
@@ -3021,6 +3038,23 @@ function loadAll(force){
     });
 }
 
+
+/* ════════════════════════════════════════════════════════════
+   CLEANUP — clear all timers on page unload
+════════════════════════════════════════════════════════════ */
+window.addEventListener('beforeunload',function(){
+  clearTimeout(hideTimer);
+  clearTimeout(playTimer);
+  clearTimeout(volTimer);
+  clearTimeout(osdTimer);
+  clearTimeout(engBadgeTimer);
+  clearTimeout(dialTimer);
+  clearTimeout(rDialTimer);
+  clearTimeout(chHudTimer);
+  clearTimeout(seekDebounceTimer);
+  if(typeof _searchDebTimer!=='undefined')clearTimeout(_searchDebTimer);
+});
+
 /* ════════════════════════════════════════════════════════════
    BOOT
 ════════════════════════════════════════════════════════════ */
@@ -3028,7 +3062,7 @@ function loadAll(force){
   loadStore();
   initChHud();
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url&&p.url!==HINDI_PL.url&&p.url!==TAMIL_PL.url&&p.url!==INDIA_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==YOUTUBE_PL.url;
   });
   $('splMsg').textContent='Initialising player…';
 
@@ -3036,6 +3070,8 @@ function loadAll(force){
   initAVPlay();
   /* 2. Init Preact rendering layer — offline bundle ready immediately */
   initPreactRenderer();
+  /* 3. Pre-warm EPG cache in background */
+  if(typeof SagaEPG!=='undefined')SagaEPG.prefetch();
   initShaka().then(function(){
     $('splMsg').textContent='Loading channels…';
     rebuildNavTabs();

@@ -1,59 +1,108 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <widget xmlns="http://www.w3.org/ns/widgets"
         xmlns:tizen="http://tizen.org/ns/widgets"
-        id="http://sagaiptv.app/SAGAiptvWeb"
-        version="2.0.0"
-        viewmodes="fullscreen">
+        id="http://sagaiptv.app/SagaIptvWb"
+        version="1.0.0"
+        viewmodes="maximized">
 
-  <tizen:application id="SAGAiptv.Web"
-                     package="SAGAiptvW"
-                     required_version="6.0"
+  <!-- ═══════════════════════════════════════════════════════════
+       APPLICATION IDENTITY
+       package  : exactly 10 alphanumeric chars [0-9a-zA-Z]{10}
+       id       : package + '.' + appname
+       ─────────────────────────────────────────────────────────
+       VERIFIED against: SamsungDForum/UDPStreaming, 
+       radiantmediaplayer/BasicProject, crunchyroll-tizen
+  ═══════════════════════════════════════════════════════════════ -->
+  <tizen:application id="SagaIptvWb.App"
+                     package="SagaIptvWb"
+                     required_version="3.0"
                      launch_mode="single"/>
 
+  <!-- ═══ App Name (required W3C widget element) ════════════════ -->
   <n>SAGA IPTV</n>
-  <icon src="icon.png"/>
-  <content src="index.html"/>
-  <description>SAGA IPTV — Shaka Player, Samsung Tizen OS9, M3U/HLS/DASH</description>
 
+  <!-- ═══ Icons — 6 sizes for launcher/smart hub/store ═════════ -->
+  <icon src="icon.png"/>
+  <icon src="icon_48.png"  width="48"  height="48"/>
+  <icon src="icon_72.png"  width="72"  height="72"/>
+  <icon src="icon_96.png"  width="96"  height="96"/>
+  <icon src="icon_128.png" width="128" height="128"/>
+  <icon src="icon_144.png" width="144" height="144"/>
+  <icon src="icon_512.png" width="512" height="512"/>
+
+  <!-- ═══ Content ═══════════════════════════════════════════════ -->
+  <content src="index.html"/>
+  <description>SAGA IPTV — Live TV player for Samsung Smart TV</description>
+
+  <!-- ═══ Network Access (required for all external URLs) ══════ -->
+  <access origin="*" subdomains="true"/>
+  <tizen:allow-navigation>*</tizen:allow-navigation>
+
+  <!-- ═══ Content Security Policy ══════════════════════════════ -->
   <tizen:content-security-policy>
-    default-src 'self';
-    script-src  'self' 'unsafe-inline';
-    style-src   'self' 'unsafe-inline';
+    default-src * 'unsafe-inline' blob: data:;
+    script-src  * 'unsafe-inline' blob:;
+    style-src   * 'unsafe-inline';
     media-src   * blob: data:;
     img-src     * data: blob:;
     connect-src *;
-    font-src    'self' data:;
+    font-src    * data:;
     worker-src  blob:;
-    object-src  'none';
   </tizen:content-security-policy>
 
+  <!-- ═══ Features ══════════════════════════════════════════════ -->
+  <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
   <feature name="http://tizen.org/feature/network.internet"/>
-  <feature name="http://tizen.org/feature/tv.display"/>
 
+  <!-- ═══ Privileges ════════════════════════════════════════════
+       Standard Tizen privileges + Samsung developer privileges
+       required for AVPlay, network, and TV hardware APIs.
+  ═══════════════════════════════════════════════════════════════ -->
+  <!-- Tizen standard -->
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
   <tizen:privilege name="http://tizen.org/privilege/fullscreen"/>
   <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
   <tizen:privilege name="http://tizen.org/privilege/volume.set"/>
-  <tizen:privilege name="http://tizen.org/privilege/mediacapture"/>
-  <tizen:privilege name="http://tizen.org/privilege/tv.audio"/>
+  <tizen:privilege name="http://tizen.org/privilege/application.info"/>
 
-  <tizen:profile name="tv"/>
+  <!-- Samsung developer privileges (required for AVPlay + network) -->  <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
+  <tizen:privilege name="http://developer.samsung.com/privilege/drmplay"/>
 
+  <!-- ═══ Target Platform — tv-samsung for physical Samsung TVs ═ -->
+  <tizen:profile name="tv-samsung"/>
+
+  <!-- ═══ App Settings ══════════════════════════════════════════
+       hwkey-event : 'enable' | 'disable'  (activationType enum)
+       background-support: needs tizen:background-category for Tizen 2.4+
+  ═══════════════════════════════════════════════════════════════ -->
   <tizen:setting
     screen-orientation="landscape"
     context-menu="disable"
     background-support="enable"
     encryption="disable"
     install-location="auto"
-    hwkey-event="true"/>
+    hwkey-event="enable"/>
 
-  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch"   value="true"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/screen.off.enable" value="false"/>
-  <tizen:metadata key="http://samsung.com/tv/metadata/background.enable" value="true"/>
+  <!-- Required for background-support=enable on Tizen 2.4+ -->
+  <tizen:background-category value="media"/>
 
+  <!-- ═══ Samsung TV Metadata ════════════════════════════════════ -->
+  <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch"
+                  value="true"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/screen.off.enable"
+                  value="false"/>
+  <tizen:metadata key="http://samsung.com/tv/metadata/background.enable"
+                  value="true"/>
+
+  <!-- ═══ App Control — default + eden_resume (smart hub resume) -->
   <tizen:app-control>
-    <tizen:src name="index.html"/>
+    <tizen:src name="index.html" reload="disable"/>
     <tizen:operation name="http://tizen.org/appcontrol/operation/default"/>
+  </tizen:app-control>
+  <tizen:app-control>
+    <tizen:src name="index.html" reload="disable"/>
+    <tizen:operation name="http://samsung.com/appcontrol/operation/eden_resume"/>
   </tizen:app-control>
 
 </widget>
