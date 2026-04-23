@@ -20,93 +20,100 @@
 <script src="./js/epg.js"></script>
 
 <style>
-/* ═══ CORE DESIGN & PERFORMANCE ═══ */
+/*══════════════════════════════════════════════════════
+  SAGA IPTV — Tizen OS9 Optimized (Enterprise V14.1)
+  Performance Focus: GPU Compositing + Async AVPlayer
+══════════════════════════════════════════════════════*/
 :root {
-  --topH: 110px;
-  --accent: #007aff;
   --bg: #060606;
+  --acc: #ffffff;
+  --topH: 110px;
+  --botH: 260px;
   --spring: cubic-bezier(0.18, 0.89, 0.32, 1.28);
-  --slow: 400ms;
-  --mid: 250ms;
 }
 
-* { box-sizing: border-box; -webkit-user-select: none; outline: none; }
+*, *::before, *::after { box-sizing: border-box; -webkit-user-select: none; outline: none; }
 body { 
-  background: var(--bg); color: #fff; margin: 0; 
+  background: var(--bg); color: #fff; margin: 0; padding: 0;
   font-family: 'Segoe UI', Roboto, sans-serif; 
   overflow: hidden; width: 1920px; height: 1080px; 
 }
 
-/* FIXED: 3-Column Layout for Centered Categories */
+/* ── CENTERED TOP BAR ── */
 #topBar {
   position: absolute; top: 0; left: 0; right: 0;
   height: var(--topH); z-index: 100;
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr; /* Mathematical centering */
+  align-items: center;
   padding: 0 60px;
   background: linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
-  transition: transform var(--mid) ease;
+  transition: transform 400ms var(--spring);
 }
+#topBar.hide { transform: translateY(-100%); }
 
-.brand { flex: 1; display: flex; align-items: center; }
-.brand img { height: 50px; }
+/* Logo Left */
+.brand { display: flex; align-items: center; }
+.brand img { height: 55px; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.5)); }
 
+/* CATEGORIES CENTERED & TRANSPARENT */
 #navTabs {
-  flex: 2; /* Center column gets double space */
+  grid-column: 2;
   display: flex; align-items: center; justify-content: center;
-  gap: 10px;
-  background: transparent !important; /* Fixed: Transparent categories */
+  gap: 12px;
+  background: transparent !important; /* Fixed: Transparent background */
 }
 
-.top-right { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 20px; }
-#searchIcon { font-size: 30px; opacity: 0.7; }
+/* Search/Clock Right */
+.top-right { grid-column: 3; display: flex; align-items: center; justify-content: flex-end; gap: 30px; }
+#clock { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.8; }
 
-/* NAV TAB STYLING */
 .tab {
-  padding: 8px 24px; border-radius: 40px; font-size: 22px; font-weight: 600;
-  color: rgba(255,255,255,0.4); transition: all var(--mid) ease;
-  border: 2px solid transparent;
+  padding: 10px 24px; border-radius: 40px; font-size: 22px; font-weight: 700;
+  color: rgba(255,255,255,0.45); transition: all 250ms ease;
+  border: 2px solid transparent; background: transparent;
 }
 .tab.focused { background: rgba(255,255,255,0.12); color: #fff; transform: scale(1.08); }
-.tab.active { color: var(--accent); border-bottom: 3px solid var(--accent); border-radius: 0; }
+.tab.active { color: #fff; border-bottom: 4px solid #fff; border-radius: 0; opacity: 1; }
 
-/* CHANNEL GRID & CARDS */
-#mainScroll {
-  position: absolute; inset: 0; top: var(--topH);
-  overflow: hidden; padding: 40px 60px;
+/* ── PLAYER LAYER ── */
+#playerWrap { position: fixed; inset: 0; z-index: 1; background: #000; }
+#video { width: 100%; height: 100%; display: none; }
+#avContainer { position: absolute; inset: 0; width: 1920px; height: 1080px; z-index: 2; display: none; }
+
+/* ── STRIP & CARDS ── */
+#mainUI { position: absolute; inset: 0; z-index: 50; pointer-events: none; }
+#stripArea {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: var(--botH); pointer-events: auto;
+  background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0) 100%);
+  padding: 20px 60px 40px;
+  transition: transform 400ms var(--spring);
 }
-.strip-row { display: flex; gap: 25px; transition: transform var(--slow) var(--spring); }
+#stripArea.hide { transform: translateY(100%); }
 
 .card {
-  position: relative; width: 320px; height: 180px;
-  background: #111; border-radius: 12px; overflow: hidden;
-  transition: transform var(--mid) ease, box-shadow var(--mid) ease;
-  border: 3px solid transparent;
+  width: 280px; height: 160px; background: #111; border-radius: 12px;
+  flex-shrink: 0; border: 3.5px solid transparent; transition: all 180ms ease;
+  overflow: hidden; transform: translateZ(0);
 }
-.card.focused { transform: scale(1.1); border-color: var(--accent); z-index: 10; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }
-
-/* GPU-FRIENDLY CARD BG (No Blurs) */
-.card-bg {
-  position: absolute; inset: 0; background-size: cover; background-position: center;
-  opacity: 0; transition: opacity 400ms linear; transform: translateZ(0); 
+.card.sel { 
+  transform: scale(1.12); border-color: #fff; z-index: 100;
+  box-shadow: 0 15px 45px rgba(0,0,0,0.9), 0 0 30px rgba(255,255,255,0.1);
 }
-.card-bg.on { opacity: 0.35; }
 
-/* PLAYER & SPINNER */
-#av-player-container { position: fixed; inset: 0; display: none; z-index: 1; background: #000; }
-#main-video { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; display: none; }
-
+/* ── SPINNER ── */
 #bufSpinner {
-  position: absolute; top: 50%; left: 50%; margin: -40px 0 0 -40px;
-  width: 80px; height: 80px; border: 6px solid rgba(255,255,255,0.1);
-  border-top-color: var(--accent); border-radius: 50%;
-  display: none; z-index: 150; animation: spin 1s linear infinite;
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 70px; height: 70px; border: 5px solid rgba(255,255,255,0.1);
+  border-top-color: #fff; border-radius: 50%; display: none; z-index: 200;
+  animation: spin 800ms linear infinite;
 }
 #bufSpinner.on { display: block; }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
 
-/* SPLASH SCREEN */
 #splash {
-  position: fixed; inset: 0; z-index: 1000; background: #000;
+  position: fixed; inset: 0; z-index: 9999; background: #000;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
 </style>
@@ -114,156 +121,165 @@ body {
 <body>
 
 <div id="splash">
-  <img src="icon.png" style="width:120px; margin-bottom:20px;">
-  <div id="splMsg" style="font-size:20px; color:#666;">Initialising...</div>
+  <div style="font-size: 80px; font-weight: 900; letter-spacing: -4px;">TV+</div>
+  <div id="splMsg" style="color: #555; margin-top: 20px; font-size: 18px; letter-spacing: 2px; text-transform: uppercase;">Initialising Hardware</div>
+</div>
+
+<div id="playerWrap">
+    <video id="video" crossorigin="anonymous"></video>
+    <object id="avContainer" type="application/avplayer"></object>
 </div>
 
 <div id="bufSpinner"></div>
-<div id="av-player-container"></div>
-<video id="main-video" crossorigin="anonymous"></video>
 
 <div id="topBar">
-  <div class="brand"><img src="icon.png"></div>
+  <div class="brand"><img src="icon.png" alt="SAGA"></div>
   <div id="navTabs"></div>
   <div class="top-right">
-    <div id="searchIcon">🔍</div>
-    <div id="clock" style="font-size:24px; font-weight:700;"></div>
+    <div id="searchBtn" style="font-size: 32px;">🔍</div>
+    <div id="clock">00:00</div>
   </div>
 </div>
 
-<div id="mainScroll">
-  <div id="stripCont"></div>
+<div id="mainUI">
+  <div id="stripArea">
+    <div id="stripLabel" style="font-size: 24px; font-weight: 700; margin-bottom: 15px; color: rgba(255,255,255,0.6);">Telugu Channels</div>
+    <div id="cardCont" style="display: flex; gap: 20px; transition: transform 400ms var(--spring);"></div>
+  </div>
 </div>
 
 <script>
-/* ═══ GLOBAL CONFIG ═══ */
-var CH_CACHE_TTL = 84 * 60 * 60 * 1000; // 3.5 Days
-var PLAY_DEB     = 650;                // Prevents remote spamming
-var allChs       = [];
-var curUrl       = '';
-var playTimer    = null;
-var ENGINE       = 'none';
-var activeTab    = 'Telugu';
+/* ══ CONFIG & STATE ══ */
+var M3U_CACHE_TTL = 84 * 60 * 60 * 1000; // 3.5 Days
+var DEBOUNCE_PLAY = 650;
+var allChs = [];
+var curCh = null;
+var playTimeout = null;
+var currentEngine = 'none';
 
-/* ═══ ASYNC AVPLAYER ENGINE (SUPER SOLID) ═══ */
-function playWithAVPlay(ch) {
-  if (!window.webapis || !window.webapis.avplay) return playWithShaka(ch);
+/* ══ ASYNC PLAYER ENGINE ══ */
+function playChannel(ch) {
+  if (!ch) return;
+  curCh = ch;
   
-  var url = ch.url;
-  curUrl = url;
-  
-  // 1. INSTANT STOP: Immediately free hardware to allow UI scrolling
-  avplayStop(); 
+  // 1. CLEAR PREVIOUS IMMEDIATELY
+  stopPlayerNow();
   document.getElementById('bufSpinner').classList.add('on');
 
-  try {
-    var av = webapis.avplay;
-    av.open(url);
-    av.setDisplayRect(0, 0, 1920, 1080);
-    
-    // 2. AGGRESSIVE QUALITY: Force highest quality immediately
+  // 2. TIZEN AVPLAY OPTIMIZATION
+  if (window.webapis && webapis.avplay) {
     try {
-      av.setStreamingProperty("ADAPTIVE_INFO", "BITRATE_LIMIT=0|START_BITRATE=HIGHEST|SET_MODE=AUTO");
-    } catch(e){}
+      var av = webapis.avplay;
+      av.open(ch.url);
+      av.setDisplayRect(0, 0, 1920, 1080);
+      
+      // AGGRESSIVE QUALITY SETTINGS
+      try {
+        av.setStreamingProperty("ADAPTIVE_INFO", "BITRATE_LIMIT=0|START_BITRATE=HIGHEST|SET_MODE=AUTO");
+      } catch(e){}
 
-    av.setListener({
-      onbufferingstart: function() { document.getElementById('bufSpinner').classList.add('on'); },
-      onbufferingcomplete: function() { document.getElementById('bufSpinner').classList.remove('on'); },
-      onerror: function(e) { console.error("AVP Error", e); avplayRetry(ch, e); }
-    });
+      av.setListener({
+        onbufferingstart: function() { document.getElementById('bufSpinner').classList.add('on'); },
+        onbufferingcomplete: function() { document.getElementById('bufSpinner').classList.remove('on'); },
+        onerror: function(e) { console.error("AVP Error", e); fallbackToShaka(ch); }
+      });
 
-    // 3. NON-BLOCKING LOAD: prepareAsync ensures the app stays responsive
-    av.prepareAsync(function() {
-      if (curUrl === url) {
-        av.play();
-        ENGINE = 'avplay';
-        document.getElementById('av-player-container').style.display = 'block';
-      } else {
-        avplayStop(); // User moved away during load
-      }
-    }, function(err) {
-      playWithShaka(ch);
-    });
+      // 3. ASYNC PREPARE (No Freezing)
+      av.prepareAsync(function() {
+        if (curCh && curCh.url === ch.url) {
+          av.play();
+          currentEngine = 'avplay';
+          document.getElementById('avContainer').style.display = 'block';
+        }
+      }, function(err) { fallbackToShaka(ch); });
 
-  } catch (e) {
-    playWithShaka(ch);
+    } catch (e) { fallbackToShaka(ch); }
+  } else {
+    fallbackToShaka(ch);
   }
 }
 
-function avplayStop() {
+function stopPlayerNow() {
+  clearTimeout(playTimeout);
   if (window.webapis && webapis.avplay) {
     try { 
       webapis.avplay.stop(); 
-      document.getElementById('av-player-container').style.display = 'none';
+      document.getElementById('avContainer').style.display = 'none';
     } catch(e){}
   }
+  var v = document.getElementById('video');
+  v.pause(); v.src = ""; v.load(); v.style.display = 'none';
+  document.getElementById('bufSpinner').classList.remove('on');
 }
 
-/* ═══ REMOTE READY NAVIGATION ═══ */
-function immediatePlay() {
-  clearTimeout(playTimer);
-  // Kill decoder on every tap to keep system thread free
-  avplayStop(); 
-  playTimer = setTimeout(_triggerPlay, PLAY_DEB);
-}
+/* ══ 84-HOUR CACHE ENGINE ══ */
+function initApp() {
+  updateClock();
+  setInterval(updateClock, 1000);
 
-function _triggerPlay() {
-  var ch = getFocusedChannel(); // your logic to get current focused item
-  if (ch) playWithAVPlay(ch);
-}
-
-/* ═══ BI-WEEKLY CACHE LOGIC (84 HOURS) ═══ */
-function boot() {
-  var lastTs = localStorage.getItem('saga_playlist_ts') || 0;
+  var lastUpdate = localStorage.getItem('saga_pl_timestamp') || 0;
   var now = Date.now();
 
-  AppCache.load('saga_channels').then(function(cached) {
-    if (cached && (now - lastTs < CH_CACHE_TTL)) {
-      // 100% OFFLINE START: No network hit, super fast boot
+  // Load from AppCache (IndexedDB)
+  AppCache.load('channels_full').then(function(cached) {
+    if (cached && (now - lastUpdate < M3U_CACHE_TTL)) {
+      console.log("Enterprise Cache: Hit (84h policy)");
       allChs = cached;
-      finishBoot();
-      console.log("Loaded from local 84h cache.");
+      bootUI();
     } else {
-      // CACHE EXPIRED: Update only twice a week
-      refreshPlaylist();
+      console.log("Enterprise Cache: Expired/Missing. Fetching workers...");
+      fetchPlaylistFromWorkers();
     }
   });
 }
 
-function refreshPlaylist() {
-  document.getElementById('splMsg').textContent = 'Updating playlist...';
-  // Your existing fetch logic for workers
-  // fetch('...').then(data => {
-  //    localStorage.setItem('saga_playlist_ts', Date.now());
-  //    AppCache.save('saga_channels', data);
-  //    allChs = data;
-  //    finishBoot();
-  // });
+function fetchPlaylistFromWorkers() {
+  document.getElementById('splMsg').textContent = 'Refreshing Playlist...';
+  // Worker fetching logic from V14 goes here
+  // After fetch completion:
+  // localStorage.setItem('saga_pl_timestamp', Date.now());
+  // AppCache.save('channels_full', data).then(bootUI);
 }
 
-function finishBoot() {
-  document.getElementById('splash').style.display = 'none';
-  renderUI(); // Preact render
-  updateClock();
-  setInterval(updateClock, 1000);
+function bootUI() {
+  document.getElementById('splash').style.opacity = '0';
+  setTimeout(function(){ document.getElementById('splash').style.display = 'none'; }, 500);
+  renderTabs();
+  renderGrid('Telugu');
 }
+
+/* ══ KEYBOARD / REMOTE OPTIMIZATION ══ */
+document.addEventListener('keydown', function(e) {
+  var key = e.keyCode;
+  
+  // IMMEDIATELY RELEASE DECODER ON ANY NAV KEY
+  if (key >= 37 && key <= 40) {
+    stopPlayerNow(); 
+    // Navigation logic...
+  }
+
+  // DEBOUNCED PLAY ON SELECT
+  if (key === 13) {
+    playTimeout = setTimeout(function() {
+      var selectedCh = getSelectedFromDOM(); // Your V14 logic
+      playChannel(selectedCh);
+    }, DEBOUNCE_PLAY);
+  }
+  
+  // TIZEN BACK KEY
+  if (key === 10009) {
+    e.preventDefault();
+    showExitOverlay(); // Your V14 logic
+  }
+});
 
 function updateClock() {
   var d = new Date();
-  document.getElementById('clock').textContent = d.getHours() + ":" + (d.getMinutes()<10?'0':'') + d.getMinutes();
+  var h = d.getHours(), m = d.getMinutes();
+  document.getElementById('clock').textContent = (h<10?'0':'')+h + ":" + (m<10?'0':'')+m;
 }
 
-/* ═══ SHAKA FALLBACK ═══ */
-function playWithShaka(ch) {
-  avplayStop();
-  var video = document.getElementById('main-video');
-  video.style.display = 'block';
-  // your existing Shaka init code here...
-  ENGINE = 'shaka';
-}
-
-window.onload = boot;
+window.onload = initApp;
 </script>
-
 </body>
 </html>
