@@ -94,13 +94,7 @@ html,body{
 #video.stretch{object-fit:fill}
 #video.cover{object-fit:cover}
 
-/* AVPlay placeholder — AVPlay renders outside DOM but needs a rect */
-#avContainer{
-  position:absolute;inset:0;width:100%;height:100%;
-  background:transparent;display:none;
-  z-index:2; /* must sit above #video so AVPlay surface covers it */
-}
-#avContainer.active{display:block}
+/* AVPlay <object> element — styled inline per Samsung docs requirement */
 
 /* ── PLAYER ENGINE BADGE ── */
 #engBadge{
@@ -128,42 +122,75 @@ html,body{
 }
 #vig.dim{opacity:.15}
 
+
 /* ══════════════════════════════════════════════════════
-   TOP BAR
+   TOP BAR — dark glass with solid bottom edge
 ══════════════════════════════════════════════════════ */
 #topBar{
   position:absolute;top:0;left:0;right:0;
   height:var(--topH);z-index:30;
-  display:flex;align-items:center;padding:0 44px;gap:0;
-  background:linear-gradient(to bottom,rgba(0,0,0,.92) 0%,transparent 100%);
+  display:flex;align-items:center;padding:0 32px;gap:0;
+  background:rgba(6,6,6,.97);
+  border-bottom:1px solid rgba(255,255,255,.10);
   will-change:transform,opacity;
   transition:transform var(--slow) var(--spring),opacity var(--mid);
 }
 #topBar.hide{transform:translateY(-115%);opacity:0;pointer-events:none}
 
 /* Brand */
-.brand{display:flex;align-items:center;gap:8px;margin-right:36px;flex-shrink:0}
-.brand-name{font-size:24px;font-weight:900;color:var(--w0);letter-spacing:-.5px}
+.brand{display:flex;align-items:center;gap:0;margin-right:24px;flex-shrink:0}
+.brand-name{
+  font-size:20px;font-weight:900;letter-spacing:-.3px;
+  color:#111;background:#fff;
+  padding:5px 13px;border-radius:8px;
+}
 
-
-/* Nav tabs */
-#navTabs{display:flex;align-items:center;gap:8px;flex:1;overflow:hidden;min-width:0}
+/* ── CATEGORY TABS — new theme ── */
+#navTabs{
+  display:flex;align-items:center;gap:5px;flex:1;overflow:hidden;min-width:0;
+}
 .ntab{
-  height:56px;padding:0 32px;border:2px solid transparent;border-radius:28px;
-  background:rgba(255,255,255,.07);color:var(--w2);
-  font-size:22px;font-weight:600;cursor:pointer;outline:none;
+  height:54px;padding:0 26px;
+  border:none;border-radius:10px;
+  background:rgba(255,255,255,.07);
+  color:rgba(255,255,255,.45);
+  font-size:20px;font-weight:700;cursor:pointer;outline:none;
   white-space:nowrap;flex-shrink:0;
-  transition:background var(--fast),color var(--fast),border-color var(--fast),
-             transform var(--fast);
+  position:relative;overflow:hidden;
+  transition:background 90ms,color 90ms,transform 80ms;
   transform:translateZ(0);
+  letter-spacing:-.2px;
 }
-.ntab.on{background:var(--w0);color:#111;font-weight:800;border-color:transparent}
-.ntab.focused{
-  background:var(--acc-hi);color:var(--w0);
-  border-color:rgba(255,255,255,.55);
-  outline:3px solid rgba(255,255,255,.6);outline-offset:2px;
-  transform:scale(1.06) translateZ(0);
+/* Active — bright white with bottom accent bar */
+.ntab.on{
+  background:rgba(255,255,255,.15);
+  color:#fff;font-weight:800;
+  box-shadow:inset 0 -3px 0 0 #fff;
 }
+/* Remote focus ring */
+.ntab.focused,.ntab:focus-visible{
+  background:rgba(255,255,255,.20);
+  color:#fff;
+  outline:2px solid rgba(255,255,255,.8);
+  outline-offset:2px;
+  transform:scale(1.04) translateZ(0);
+}
+.ntab:not(.on):not(.focused){
+  background:rgba(255,255,255,.05);
+}
+/* Channel count badge inside tab */
+.tab-count{
+  display:inline-block;
+  font-size:13px;font-weight:700;
+  margin-left:7px;
+  opacity:.5;
+  background:rgba(255,255,255,.14);
+  padding:2px 8px;border-radius:9px;
+  vertical-align:middle;
+  letter-spacing:0;
+}
+.ntab.on .tab-count{opacity:.75;background:rgba(255,255,255,.22)}
+
 
 /* Top-right icons */
 .top-right{display:flex;align-items:center;gap:8px;margin-left:20px;flex-shrink:0}
@@ -763,16 +790,10 @@ html,body{
 
 /* ══ UI ENHANCEMENTS v9 ══════════════════════════════════ */
 
-/* Tab active indicator — solid white pill */
-.ntab.on{
-  background:var(--w0);
-  color:#111;
-  border-color:transparent;
-  box-shadow:0 2px 16px rgba(255,255,255,.18);
-}
-.ntab:not(.on):hover{
-  background:rgba(255,255,255,.10);
-  color:var(--w1);
+/* Tab hover (mouse/pointer) */
+.ntab:not(.on):not(.focused):hover{
+  background:rgba(255,255,255,.11);
+  color:rgba(255,255,255,.75);
 }
 
 /* Playing card — cyan pulse glow */
@@ -932,7 +953,11 @@ html,body{
   <!-- PLAYER LAYER -->
   <div id="playerWrap">
     <video id="video" playsinline autoplay></video>
-    <div id="avContainer"></div>
+    <!-- AVPlay REQUIRES an <object type="application/avplayer"> element — NOT a div.
+         Samsung renders video into this element. Must exist in DOM before open() -->
+    <object id="avContainer" type="application/avplayer"
+      style="position:absolute;left:0;top:0;width:1920px;height:1080px;display:none;z-index:2">
+    </object>
   </div>
   <div id="engBadge"></div>
   <div id="bufSpinner"></div>
@@ -1611,10 +1636,17 @@ function rebuildNavTabs(){
     });
   } else {
     navTabs.innerHTML='';
-    tabs.forEach(function(t,idx){
+    tabs.forEach(function(t){
       var btn=document.createElement('button');
       btn.className='ntab'+(t===activeTab?' on':'');
-      btn.textContent=t;btn.dataset.g=t;btn.tabIndex=0;
+      btn.dataset.g=t;btn.tabIndex=0;
+      btn.textContent=t;
+      var cnt=tabCounts[t]||0;
+      if(cnt>0){
+        var sp=document.createElement('span');
+        sp.className='tab-count';sp.textContent=String(cnt);
+        btn.appendChild(sp);
+      }
       btn.addEventListener('click',function(){
         if(t==='Favourites'){showFavs=true;activeTab='Favourites'}
         else{showFavs=false;activeTab=t}
@@ -1740,16 +1772,7 @@ function initPreactRenderer() {
         onClick: onClick
       },
         label,
-        count > 0 ? h('span', {
-          style:{
-            fontSize:'14px', fontWeight:'700',
-            marginLeft:'7px',
-            opacity: isActive ? '.9' : '.45',
-            background:'rgba(255,255,255,.12)',
-            padding:'2px 8px', borderRadius:'12px',
-            verticalAlign:'middle'
-          }
-        }, String(count)) : null
+        count > 0 ? h('span', {className:'tab-count'}, String(count)) : null
       );
     }
 
@@ -2079,47 +2102,58 @@ function initAVPlay(){
 }
 
 function avplayStop(){
-  _avplayRetried=false; /* reset retry flag on stop */
+  _avplayRetried=false;
   if(!avplay)return;
   try{
     var st=avplay.getState();
     if(st==='PLAYING'||st==='PAUSED'||st==='READY')avplay.stop();
     avplay.close();
   }catch(e){}
-  avCont.classList.remove('active');
+  /* Hide the AVPlay object element, restore <video> */
+  avCont.style.display='none';
+  video.style.display='';
 }
 
 function playWithAVPlay(ch){
   var url=ch.url;
-  _avplayRetried=false; /* reset per channel change */
+  _avplayRetried=false;
   avplayStop();
   try{
-    /* CRITICAL: hide <video> and show avContainer BEFORE avplay.open()
-       AVPlay requires its container div to be visible when it attaches */
+    /* ── Official Samsung sequence (from developer.samsung.com/smarttv docs) ──
+       1. open(url)
+       2. setDisplayRect(x, y, w, h)   — required BEFORE prepare for video to render
+       3. setStreamingProperty / setDisplayMethod
+       4. setListener(...)
+       5. prepare()
+       6. play()
+       The <object type="application/avplayer"> must be in the DOM — AVPlay
+       renders video into it. Showing it before open() ensures the surface exists. */
     video.style.display='none';
-    avCont.classList.add('active');
+    avCont.style.display='block';  /* Show the <object> surface */
 
     avplay.open(url);
 
-    /* setDisplayObject — tells AVPlay which DOM element to render into.
-       Must be called after open() and before prepare(). */
-    try{avplay.setDisplayObject(avCont)}catch(e){}
-
-    /* setDisplayRect after setDisplayObject, before prepare */
+    /* setDisplayRect MUST come after open() and before prepare() */
     avplay.setDisplayRect(0,0,1920,1080);
-    /* Reduce AVPlay buffer for lower live latency */
-    try{avplay.setStreamingProperty('PREBUFFER_MODE','FALSE')}catch(e){}
-    try{avplay.setStreamingProperty('ADAPTIVE_INFO','BITRATE_LIMIT=0|START_BITRATE=0|SET_MODE=MAX')}catch(e){}
+
+    /* Display method */
     avplay.setDisplayMethod(
       aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
-      aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
-      'PLAYER_DISPLAY_MODE_ORIGINAL_SIZE'
+      aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':
+      'PLAYER_DISPLAY_MODE_FULL_SCREEN'
     );
-    /* Referer for CrichD streams */
+
+    /* Streaming properties */
+    try{avplay.setStreamingProperty('PREBUFFER_MODE','FALSE')}catch(e){}
+    try{avplay.setStreamingProperty('ADAPTIVE_INFO','BITRATE_LIMIT=0|START_BITRATE=0|SET_MODE=MAX')}catch(e){}
+
+    /* Source-specific headers */
     if(url.indexOf('sanwalyaarpya')>=0||url.indexOf('calm-sun')>=0||url.indexOf('crichd')>=0){
       try{avplay.setStreamingProperty('CUSTOM_MESSAGE','Referer:https://profamouslife.com/')}catch(e){}
-      try{avplay.setStreamingProperty('USER_AGENT','Mozilla/5.0')}catch(e){}
+      try{avplay.setStreamingProperty('USERAGENT','Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/537.36')}catch(e){}
     }
+
+    /* Listener BEFORE prepare() */
     avplay.setListener({
       onbufferingstart:function(){
         setSt('Buffering…','buf');
@@ -2131,8 +2165,6 @@ function playWithAVPlay(ch){
         setPlaying(true);
         bufSpinner.classList.remove('on');
         showEngine('avplay');
-        /* Re-apply display rect after buffering completes — fixes blank video on some Tizen builds */
-        try{avplay.setDisplayRect(0,0,1920,1080)}catch(e){}
         updateStripFocus();
         scheduleOsdHide();
       },
@@ -2140,15 +2172,13 @@ function playWithAVPlay(ch){
         bufSpinner.classList.remove('on');
         setSt('AVPlay error '+errCode+' — retrying…','buf');
         setPlaying(false);
-        /* Retry once with desktop UA before falling back to Shaka */
         avplayRetry(ch,errCode);
       },
       onstreamcompleted:function(){
         setSt('Stream ended','');setPlaying(false);
         bufSpinner.classList.remove('on');
       },
-      oncurrentplaytime:function(ms){
-        /* Update bandwidth display using AVPlay currentplaytime */
+      oncurrentplaytime:function(){
         if(isPlaying&&ENGINE==='avplay'){
           try{
             var info=avplay.getCurrentStreamInfo();
@@ -2163,31 +2193,28 @@ function playWithAVPlay(ch){
         }
       }
     });
+
     avplay.prepare();
-    /* setDisplayRect again after prepare() — required on certain Tizen firmware versions */
-    try{avplay.setDisplayRect(0,0,1920,1080)}catch(e){}
     avplay.play();
     ENGINE='avplay';
     setSt('Connecting [AVPlay]…','buf');
     bufSpinner.classList.add('on');
     updateNowInfo(ch);
+
   }catch(ex){
-    setSt('AVPlay open failed — trying Shaka…','buf');
+    setSt('AVPlay failed: '+String(ex.message||ex).slice(0,40)+' — trying Shaka…','buf');
     avplayStop();
-    video.style.display='';
-    avCont.classList.remove('active');
     playWithShaka(ch,false);
   }
 }
 
 
 /* ════════════════════════════════════════════════════════════
-   AVPLAY ERROR RETRY — try with desktop UA before Shaka fallback
+   AVPLAY ERROR RETRY — retry with desktop UA before falling to Shaka
 ════════════════════════════════════════════════════════════ */
 var _avplayRetried=false;
 function avplayRetry(ch,errCode){
   if(_avplayRetried){
-    /* Already retried — fall back to Shaka */
     _avplayRetried=false;
     avplayStop();
     setSt('AVPlay error '+errCode+' — trying Shaka…','buf');
@@ -2195,57 +2222,45 @@ function avplayRetry(ch,errCode){
     return;
   }
   _avplayRetried=true;
-  setSt('Retrying with desktop UA…','buf');
+  setSt('Retrying [AVPlay + desktop UA]…','buf');
   avplayStop();
   try{
-    /* Same display order as playWithAVPlay — hide video, show container first */
     video.style.display='none';
-    avCont.classList.add('active');
+    avCont.style.display='block';
 
     avplay.open(ch.url);
-    try{avplay.setDisplayObject(avCont)}catch(e){}
     avplay.setDisplayRect(0,0,1920,1080);
-    /* Reduce AVPlay buffer for lower live latency */
+    avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');
     try{avplay.setStreamingProperty('PREBUFFER_MODE','FALSE')}catch(e){}
-    try{avplay.setStreamingProperty('ADAPTIVE_INFO','BITRATE_LIMIT=0|START_BITRATE=0|SET_MODE=MAX')}catch(e){}
-    avplay.setDisplayMethod(
-      aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
-      aspectMode===1?'PLAYER_DISPLAY_MODE_FULL_SCREEN':
-      'PLAYER_DISPLAY_MODE_ORIGINAL_SIZE'
-    );
-    /* Different UA — desktop Chrome */
-    avplay.setStreamingProperty('USER_AGENT',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+    try{avplay.setStreamingProperty('USERAGENT',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')}catch(e){}
     if(ch.url.indexOf('sanwalyaarpya')>=0||ch.url.indexOf('calm-sun')>=0){
       try{avplay.setStreamingProperty('CUSTOM_MESSAGE','Referer:https://profamouslife.com/')}catch(e){}
     }
     avplay.setListener({
+      onbufferingstart:function(){setSt('Buffering (retry)…','buf');bufSpinner.classList.add('on')},
+      onbufferingprogress:function(){},
       onbufferingcomplete:function(){
         setSt('Streaming · '+ch.name+' [AVPlay]','ok');
         setPlaying(true);bufSpinner.classList.remove('on');
-        showEngine('avplay');
-        try{avplay.setDisplayRect(0,0,1920,1080)}catch(e){}
-        updateStripFocus();scheduleOsdHide();
+        showEngine('avplay');updateStripFocus();scheduleOsdHide();
         _avplayRetried=false;
       },
       onerror:function(ec){
         bufSpinner.classList.remove('on');
-        _avplayRetried=true; /* mark so next call falls through */
+        _avplayRetried=true;
         avplayRetry(ch,ec);
       },
-      onbufferingstart:function(){setSt('Buffering (retry)…','buf');bufSpinner.classList.add('on')},
-      onbufferingprogress:function(){},
       onstreamcompleted:function(){setSt('Stream ended','');setPlaying(false);bufSpinner.classList.remove('on')},
       oncurrentplaytime:function(){}
     });
     avplay.prepare();
-    try{avplay.setDisplayRect(0,0,1920,1080)}catch(e){}
     avplay.play();
     ENGINE='avplay';
     bufSpinner.classList.add('on');
   }catch(ex){
     _avplayRetried=false;
-    avplayStop();video.style.display='';avCont.classList.remove('active');
+    avplayStop();
     setSt('AVPlay retry failed — trying Shaka…','buf');
     playWithShaka(ch,false);
   }
