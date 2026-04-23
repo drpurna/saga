@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline'; media-src * blob: data:; img-src * data: blob:; connect-src *; style-src 'self' 'unsafe-inline';">
-<title>SAGA IPTV</title>
+<title>TV+</title>
 <link rel="preconnect" href="https://iptv-org.github.io">
 <link rel="preconnect" href="https://raw.githubusercontent.com">
 <link rel="preconnect" href="https://unpkg.com">
@@ -138,11 +138,12 @@ html,body{
 #topBar.hide{transform:translateY(-115%);opacity:0;pointer-events:none}
 
 /* Brand */
-.brand{display:flex;align-items:center;gap:0;margin-right:24px;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:0;margin-right:28px;flex-shrink:0}
 .brand-name{
-  font-size:20px;font-weight:900;letter-spacing:-.3px;
-  color:#111;background:#fff;
-  padding:5px 13px;border-radius:8px;
+  font-size:28px;font-weight:900;letter-spacing:-.5px;
+  color:#ffffff;
+  background:transparent;
+  padding:0;
 }
 
 /* ── CATEGORY TABS — new theme ── */
@@ -193,11 +194,11 @@ html,body{
 
 
 /* Top-right icons */
-.top-right{display:flex;align-items:center;gap:8px;margin-left:20px;flex-shrink:0}
+.top-right{display:flex;align-items:center;gap:10px;margin-left:20px;flex-shrink:0}
 #topClock{
-  font-size:15px;font-weight:700;color:var(--w2);
+  font-size:18px;font-weight:700;color:var(--w2);
   font-variant-numeric:tabular-nums;letter-spacing:.5px;
-  margin-right:4px;
+  margin-right:6px;
 }
 .tip-btn{
   width:48px;height:48px;border-radius:50%;
@@ -276,12 +277,12 @@ html,body{
 
 .row-wrap{padding:0 44px}
 .row-label{
-  font-size:19px;font-weight:700;color:var(--w1);
+  font-size:22px;font-weight:700;color:var(--w1);
   margin-bottom:10px;display:flex;align-items:center;gap:10px;
 }
 .row-count{
-  font-size:13px;font-weight:600;color:var(--w3);
-  background:var(--b1);border-radius:10px;padding:3px 11px;
+  font-size:15px;font-weight:600;color:var(--w3);
+  background:var(--b1);border-radius:10px;padding:3px 12px;
   border:1px solid var(--b1);
 }
 
@@ -340,7 +341,7 @@ html,body{
   border-radius:0 0 12.5px 12.5px;z-index:3;
 }
 .card-name{
-  font-size:13px;font-weight:700;color:var(--w0);
+  font-size:16px;font-weight:700;color:var(--w0);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   text-align:center;
 }
@@ -376,11 +377,11 @@ html,body{
 ══════════════════════════════════════════════════════ */
 #statusBar{
   position:absolute;bottom:0;left:0;right:0;
-  height:28px;z-index:35;
+  height:34px;z-index:35;
   display:flex;align-items:center;gap:10px;
   padding:0 44px;
-  background:rgba(0,0,0,.80);
-  font-size:11px;color:var(--w3);
+  background:rgba(0,0,0,.85);
+  font-size:14px;color:var(--w3);
   will-change:opacity;transition:opacity var(--mid);
 }
 #statusBar.hide{opacity:0}
@@ -513,95 +514,112 @@ html,body{
   display:flex;align-items:center;padding:26px 50px 18px;
   border-bottom:1px solid var(--b1);flex-shrink:0;gap:16px;
 }
-.so-title{font-size:22px;font-weight:900;color:var(--w0);flex:1;letter-spacing:-.4px}
+.so-title{font-size:26px;font-weight:900;color:var(--w0);flex:1;letter-spacing:-.4px}
 .so-close{
   background:var(--b1);border:1px solid var(--b2);
-  color:var(--w1);font-size:13px;font-weight:700;cursor:pointer;outline:none;
-  padding:9px 22px;border-radius:10px;
+  color:var(--w1);font-size:16px;font-weight:700;cursor:pointer;outline:none;
+  padding:12px 28px;border-radius:12px;
   transition:background var(--fast),transform var(--fast);
 }
 .so-close.focused,.so-close:focus{
   background:var(--acc-hi);color:var(--w0);
-  outline:2px solid rgba(255,255,255,.45);outline-offset:2px;
+  outline:2.5px solid rgba(255,255,255,.55);outline-offset:2px;
   transform:scale(1.04);
 }
 .so-body{display:flex;flex:1;overflow:hidden}
 .so-side{
-  width:240px;flex-shrink:0;border-right:1px solid var(--b1);
+  width:280px;flex-shrink:0;border-right:1px solid var(--b1);
   padding:14px 0;overflow-y:auto;scrollbar-width:none;
 }
 .so-side::-webkit-scrollbar{display:none}
-.so-main{flex:1;overflow-y:auto;padding:24px 48px;scrollbar-width:none}
+.so-main{flex:1;overflow-y:auto;padding:28px 56px;scrollbar-width:none}
 .so-main::-webkit-scrollbar{display:none}
 .so-slbl{
-  font-size:10px;font-weight:700;color:var(--w3);
-  letter-spacing:1.4px;text-transform:uppercase;padding:10px 24px 5px;
+  font-size:11px;font-weight:700;color:var(--w3);
+  letter-spacing:1.6px;text-transform:uppercase;padding:12px 28px 6px;
 }
 .so-nav{
-  display:flex;align-items:center;gap:12px;padding:14px 24px;
-  cursor:pointer;outline:none;font-size:13px;font-weight:600;color:var(--w3);
+  display:flex;align-items:center;gap:14px;padding:18px 28px;
+  cursor:pointer;outline:none;font-size:17px;font-weight:600;color:var(--w3);
   border-left:3px solid transparent;
   transition:background var(--fast),color var(--fast),border-left-color var(--fast);
 }
-.so-nav.on{color:var(--w0);background:rgba(255,255,255,.05);border-left-color:var(--w0)}
+.so-nav.on{color:var(--w0);background:rgba(255,255,255,.06);border-left-color:var(--w0)}
 .so-nav.focused,.so-nav:focus{
-  background:rgba(255,255,255,.09);color:var(--w0);
-  outline:none;border-left-color:rgba(255,255,255,.5);
+  background:rgba(255,255,255,.10);color:var(--w0);
+  outline:none;border-left-color:rgba(255,255,255,.6);
 }
-.so-nav svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}
+.so-nav svg{width:20px;height:20px;fill:currentColor;flex-shrink:0}
 
 /* Settings rows */
 .srow{
   display:flex;align-items:center;justify-content:space-between;
-  padding:16px 10px;border-bottom:1px solid var(--b1);
-  cursor:pointer;outline:none;border-radius:8px;
+  padding:20px 14px;border-bottom:1px solid var(--b1);
+  cursor:pointer;outline:none;border-radius:10px;
   transition:background var(--fast);
 }
 .srow:last-child{border-bottom:none}
 .srow.focused,.srow:focus{
-  background:rgba(255,255,255,.05);
-  outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
+  background:rgba(255,255,255,.07);
+  outline:2.5px solid rgba(255,255,255,.5);outline-offset:2px;
 }
 .srow-l{flex:1;margin-right:20px}
-.srow-t{font-size:16px;font-weight:600;color:var(--w0)}
-.srow-d{font-size:10px;color:var(--w3);margin-top:3px;line-height:1.5}
+.srow-t{font-size:19px;font-weight:600;color:var(--w0)}
+.srow-d{font-size:13px;color:var(--w3);margin-top:4px;line-height:1.5}
 
-/* One UI toggle */
-.tog{position:relative;width:52px;height:28px;flex-shrink:0}
+/* Remote-navigable option rows (engine, buffer) */
+.opt-row{
+  display:flex;align-items:center;gap:16px;
+  padding:18px 16px;border-radius:12px;
+  background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.08);
+  cursor:pointer;outline:none;margin-bottom:8px;
+  transition:background 80ms,border-color 80ms,transform 60ms;
+  transform:translateZ(0);
+}
+.opt-row.focused,.opt-row:focus{
+  background:rgba(255,255,255,.12);
+  border-color:rgba(255,255,255,.55);
+  outline:2.5px solid rgba(255,255,255,.6);outline-offset:2px;
+  transform:translateX(4px) translateZ(0);
+}
+.opt-row-on{
+  background:rgba(255,255,255,.10);
+  border-color:rgba(255,255,255,.40);
+}
+.opt-check{
+  font-size:22px;color:var(--w0);flex-shrink:0;width:26px;text-align:center;
+}
+.opt-info{flex:1}
+.opt-label{font-size:19px;font-weight:700;color:var(--w0)}
+.opt-desc{font-size:13px;color:var(--w3);margin-top:3px}
+
+/* One UI toggle — larger for TV */
+.tog{position:relative;width:64px;height:34px;flex-shrink:0}
 .tog input{opacity:0;width:0;height:0;position:absolute}
 .tog-t{
   position:absolute;inset:0;cursor:pointer;
-  background:rgba(255,255,255,.18);border-radius:14px;
+  background:rgba(255,255,255,.18);border-radius:17px;
   transition:background 200ms;
 }
 .tog-t::before{
-  content:'';position:absolute;width:20px;height:20px;top:4px;left:4px;
+  content:'';position:absolute;width:26px;height:26px;top:4px;left:4px;
   background:#fff;border-radius:50%;
   box-shadow:0 1px 5px rgba(0,0,0,.5);
   transition:transform 200ms var(--spring);
   will-change:transform;
 }
 .tog input:checked+.tog-t{background:rgba(255,255,255,.82)}
-.tog input:checked+.tog-t::before{transform:translateX(24px);background:#111}
+.tog input:checked+.tog-t::before{transform:translateX(30px);background:#111}
 
-.oui-sel{
-  width:100%;padding:12px 14px;margin-top:8px;
-  background:var(--s2);border:1px solid var(--b2);
-  border-radius:10px;color:var(--w0);font-size:13px;outline:none;appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E");
-  background-repeat:no-repeat;background-position:right 14px center;
-  transition:border-color var(--fast);
-}
-.oui-sel:focus{border-color:rgba(255,255,255,.45);outline:2px solid rgba(255,255,255,.3);outline-offset:2px}
 .so-btn{
-  display:flex;align-items:center;gap:9px;width:100%;padding:14px 16px;
-  border:1px solid var(--b2);background:var(--s2);color:var(--w0);
-  font-size:13px;font-weight:700;cursor:pointer;outline:none;
-  border-radius:10px;margin-top:8px;
+  display:flex;align-items:center;gap:10px;width:100%;padding:18px 20px;
+  border:1.5px solid var(--b2);background:var(--s2);color:var(--w0);
+  font-size:17px;font-weight:700;cursor:pointer;outline:none;
+  border-radius:12px;margin-top:10px;
   transition:background var(--fast),transform var(--fast);
 }
 .so-btn.focused,.so-btn:focus{
-  background:var(--s3);outline:2px solid rgba(255,255,255,.35);outline-offset:2px;
+  background:var(--s3);outline:2.5px solid rgba(255,255,255,.5);outline-offset:2px;
   transform:scale(1.01);
 }
 .src-card{
@@ -615,8 +633,8 @@ html,body{
 }
 .src-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);flex-shrink:0}
 .src-i{flex:1;min-width:0}
-.src-n{font-size:13px;font-weight:700;color:var(--w0)}
-.src-u{font-size:10px;color:var(--w3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-n{font-size:17px;font-weight:700;color:var(--w0)}
+.src-u{font-size:12px;color:var(--w3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .src-del{
   background:none;border:none;color:var(--w3);cursor:pointer;
   font-size:15px;padding:5px 8px;outline:none;
@@ -942,7 +960,7 @@ html,body{
 
 <!-- SPLASH -->
 <div id="splash">
-  <div class="spl-logo">SAGA</div>
+  <div class="spl-logo">TV+</div>
   <div class="spl-tag">Native Edition</div>
   <div class="spl-bar"><div class="spl-fill"></div></div>
   <div class="spl-msg" id="splMsg">Initialising…</div>
@@ -968,8 +986,7 @@ html,body{
   <!-- TOP BAR -->
   <div id="topBar">
     <div class="brand">
-      <span class="brand-name">SAGA IPTV</span>
-      
+      <span class="brand-name">TV<span style="font-size:1.1em;vertical-align:super;font-size:0.65em;margin-left:1px">+</span></span>
     </div>
     <div id="navTabs"></div>
     <div class="top-right">
@@ -1137,7 +1154,7 @@ html,body{
   <div id="exitOv">
     <div class="exit-box">
       <div class="exit-icon">📺</div>
-      <div class="exit-title">Exit SAGA IPTV?</div>
+      <div class="exit-title">Exit TV+?</div>
       <div class="exit-sub">Your favourites and settings will be saved.</div>
       <div class="exit-btns">
         <button class="exit-btn exit-btn-yes" id="exitYes">✓ Exit</button>
@@ -1196,16 +1213,7 @@ var PLAY_DEB=120;
 var TELUGU_PL={name:'Telugu',url:'https://iptv-org.github.io/iptv/languages/tel.m3u',builtIn:true,_src:'telugu'};
 var JIO_PL   ={name:'Jio',   url:'https://jioplaylist.joinus-apiworker.workers.dev/playlist.m3u',builtIn:true,_src:'jio'};
 var YUPP_PL  ={name:'YuppTV',url:'https://yupptv.yecic62314.workers.dev/',builtIn:true,_src:'yupp'};
-var CRICHD_PL={name:'CricHd',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/main/CricHd.m3u',builtIn:true,_src:'crichd'};
-var MOVIES_PL={name:'Movies',url:'https://iptv-org.github.io/iptv/categories/movies.m3u',builtIn:true,_src:'movies'};
-/* YouTube Live — via iptv-org (maintained, working HLS streams)
-   These are public broadcast channels hosted on YouTube that expose HLS
-   endpoints publicly. Invidious proxy resolves YouTube HLS CORS issues. */
-var YOUTUBE_PL={
-  name:'YouTube',
-  url:'https://iptv-org.github.io/iptv/categories/entertainment.m3u',
-  builtIn:true,_src:'youtube'
-};
+var CRICHD_PL={name:'CricHD',url:'https://raw.githubusercontent.com/abusaeeidx/CricHd-playlists-Auto-Update-permanent/main/CricHd.m3u',builtIn:true,_src:'crichd'};
 
 var ASPECTS=['Contain','Stretch (default)','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
@@ -1456,7 +1464,7 @@ function canonicalTab(ch){
   if(ch._src==='telugu')t='Telugu';
   else if(ch._src==='jio')t='Jio';
   else if(ch._src==='yupp')t='YuppTV';
-  else if(ch._src==='crichd')t='CricHd';
+  else if(ch._src==='crichd')t='CricHD';
   else if(ch._src==='movies')t='Movies';
   else if(ch._src==='youtube')t='YouTube';
   else{
@@ -1596,11 +1604,11 @@ function loadPl(url,name,force,srcTag){
    NAV TABS
 ════════════════════════════════════════════════════════════ */
 function rebuildNavTabs(){
-  var builtIns=['Telugu','Jio','YuppTV','CricHd','Movies','YouTube','Favourites'];
+  var builtIns=['Telugu','Jio','YuppTV','CricHD','Favourites'];
   var cats=['News','Sports','Entertainment'];
   var customNames=pls.filter(function(p){return!p.builtIn}).map(function(p){return p.name});
   var seen=new Set();
-  var order=['Telugu','Jio','YuppTV','CricHd','Movies','YouTube'];
+  var order=['Telugu','Jio','YuppTV','CricHD'];
   allChs.forEach(function(ch){
     var t=canonicalTab(ch);
     if(t&&!builtIns.includes(t)&&!cats.includes(t))order.push(t);
@@ -2281,14 +2289,16 @@ function initShaka(){
     /* Request filter — inject headers per source domain */
     shakaPlayer.getNetworkingEngine().registerRequestFilter(function(type,req){
       var u=req.uris&&req.uris[0]?req.uris[0]:'';
-      /* CrichD streams need Referer — covers CDN domains from GitHub M3U */
-      if(u.indexOf('sanwalyaarpya.com')>=0||u.indexOf('calm-sun')>=0||
-         u.indexOf('crichd')>=0||u.indexOf('crichd.tv')>=0||
-         u.indexOf('crichdsports')>=0||u.indexOf('crichdfun')>=0||
-         u.indexOf('rojoni')>=0||u.indexOf('abusaeeidx')>=0){
-        req.headers['Referer']='https://www.crichd.tv/';
-        req.headers['Origin']='https://www.crichd.tv';
-        req.headers['User-Agent']='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+      /* CricHD: streams from abusaeeidx M3U need Referer to avoid 403 */
+      if(u.indexOf('crichd')>=0||u.indexOf('crichdsports')>=0||
+         u.indexOf('crichdfun')>=0||u.indexOf('cricsport')>=0||
+         u.indexOf('sanwalyaarpya')>=0||u.indexOf('calm-sun')>=0||
+         u.indexOf('rojoni')>=0||u.indexOf('abusaeeidx')>=0||
+         u.indexOf('jhilik')>=0||u.indexOf('ultrahdiptv')>=0||
+         u.indexOf('streamglobal')>=0||u.indexOf('sportshub')>=0){
+        req.headers['Referer']='https://crichd.vip/';
+        req.headers['Origin']='https://crichd.vip';
+        req.headers['User-Agent']='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
       }
       /* YuppTV Akamai CDN — needs Origin + Referer to match stream domain */
       if(u.indexOf('yuppparoriglin.akamaized.net')>=0||
@@ -2616,36 +2626,6 @@ function avplaySeekRelative(deltaMs){
    PLAY DEBOUNCE + MAIN ENTRY
 ════════════════════════════════════════════════════════════ */
 function immediatePlay(){clearTimeout(playTimer);playTimer=setTimeout(_doPlay,PLAY_DEB)}
-function resolveCrichdUrl(ch, cb){
-  /* Extract crichd.uhd2026.workers.dev/?v=X from the calm-sun wrapper */
-  var href = ch.url || '';
-  var dtvMatch = href.match(/[?&]dtv=([^&\s]+)/);
-  var innerUrl = dtvMatch ? dtvMatch[1] : '';
-  /* If it already looks like a direct m3u8, use it */
-  if(innerUrl.indexOf('.m3u8') >= 0){ cb(innerUrl); return; }
-  /* Fetch the inner URL and scan for m3u8 in the response */
-  if(!innerUrl || innerUrl.indexOf('http') < 0){ cb(ch.url); return; }
-  var ctrl = new AbortController();
-  var tid = setTimeout(function(){try{ctrl.abort()}catch(e){}}, 6000);
-  fetch(innerUrl, {signal:ctrl.signal}).then(function(r){
-    clearTimeout(tid);
-    if(!r.ok){ cb(ch.url); return; }
-    return r.text();
-  }).then(function(txt){
-    if(!txt){ cb(ch.url); return; }
-    /* Look for m3u8 URL in JSON or JS */
-    var m = txt.match(/https?:\/\/[^"'\s<>]+\.m3u8[^"'\s<>]*/);
-    if(m){ cb(m[0]); return; }
-    /* Try JSON stream fields */
-    try{
-      var j = JSON.parse(txt);
-      var u = j.url||j.stream||j.m3u8||j.hls||j.source||
-              (j.data&&(j.data.url||j.data.m3u8))||null;
-      if(u && u.indexOf('http')===0){ cb(u); return; }
-    }catch(e){}
-    cb(ch.url); /* fallback */
-  }).catch(function(){ clearTimeout(tid); cb(ch.url); });
-}
 
 function _doPlay(){
   var ch=getFocusedCh();
@@ -2656,41 +2636,15 @@ function _doPlay(){
   setPlaying(false);nowQ.style.display='none';
   updateNowInfo(ch);
 
-  /* YouTube: resolve via Invidious proxy for CORS-blocked youtube.com URLs */
-  if(ch._src==='youtube' && (ch.url.indexOf('youtube.com')>=0 || ch.url.indexOf('youtu.be')>=0)){
-    setSt('Resolving YouTube stream…','buf');
-    bufSpinner.classList.add('on');
-    resolveYtUrl(ch.url, function(resolvedUrl){
-      bufSpinner.classList.remove('on');
-      var pCh = {name:ch.name,url:resolvedUrl,logo:ch.logo,group:ch.group,_src:ch._src,_col:ch._col};
-      setSt('Connecting YouTube…','buf');
-      if(cfg.engine==='shaka'){playWithShaka(pCh,false);return}
-      if(avReady)playWithAVPlay(pCh);
-      else playWithShaka(pCh,false);
-    });
-    return;
-  }
-
-  /* CrichD: resolve the actual m3u8 from the proxy wrapper before playing */
-  if(ch._src==='crichd' && ch.url.indexOf('dtv=')>=0){
-    setSt('Resolving CricHd stream…','buf');
-    bufSpinner.classList.add('on');
-    resolveCrichdUrl(ch, function(resolvedUrl){
-      bufSpinner.classList.remove('on');
-      var playableCh = {name:ch.name,url:resolvedUrl,logo:ch.logo,group:ch.group,_src:ch._src,_col:ch._col};
-      setSt('Connecting CricHd…','buf');
-      if(cfg.engine==='shaka'){playWithShaka(playableCh,false);return}
-      if(cfg.engine==='avplay'&&avReady){playWithAVPlay(playableCh);return}
-      if(avReady)playWithAVPlay(playableCh);
-      else playWithShaka(playableCh,false);
-    });
-    return;
-  }
-
-  /* Engine selection */
+  /* Engine selection — CricHD streams play directly via Shaka with Referer injected */
   if(cfg.engine==='shaka'){playWithShaka(ch,false);return}
   if(cfg.engine==='avplay'&&avReady){playWithAVPlay(ch);return}
-  /* auto: AVPlay first, Shaka fallback */
+  /* auto: AVPlay first on non-crichd (AVPlay can't inject Referer reliably),
+     for CricHD prefer Shaka which can inject headers via request filter */
+  if(ch._src==='crichd'){
+    playWithShaka(ch,false);
+    return;
+  }
   if(avReady)playWithAVPlay(ch);
   else playWithShaka(ch,false);
 }
@@ -2849,50 +2803,85 @@ function renderSettingsSect(s){
   var nav=soSide.querySelector('.so-nav[data-s="'+s+'"]');
   if(nav){QA('.so-nav',soSide).forEach(function(x){x.classList.remove('on')});nav.classList.add('on')}
   if(s==='playback'){
-    soMain.innerHTML=
-      '<div class="srow" tabindex="0">'+
-        '<div class="srow-l"><div class="srow-t">Player Engine</div><div class="srow-d">Auto = AVPlay first, Shaka fallback. Force to override.</div></div>'+
-      '</div>'+
-      '<select class="oui-sel" id="cfgEngine" tabindex="0">'+
-        '<option value="auto"'+(cfg.engine==='auto'?' selected':'')+'>Auto (AVPlay → Shaka)</option>'+
-        '<option value="avplay"'+(cfg.engine==='avplay'?' selected':'')+'>Force AVPlay (Native)</option>'+
-        '<option value="shaka"'+(cfg.engine==='shaka'?' selected':'')+'>Force Shaka Player</option>'+
-      '</select>'+
-      '<div style="margin-top:18px"></div>'+
-      '<div class="srow" tabindex="0">'+
-        '<div class="srow-l"><div class="srow-t">Force Highest Quality</div><div class="srow-d">Lock max bitrate — prevents quality drops</div></div>'+
-        '<label class="tog"><input type="checkbox" id="cfgHQ"'+(cfg.hq?' checked':'')+'>'+
-        '<span class="tog-t"></span></label></div>'+
-      '<div class="srow" tabindex="0">'+
-        '<div class="srow-l"><div class="srow-t">Mute on Channel Switch</div><div class="srow-d">Silence during zap, restore after 700 ms</div></div>'+
-        '<label class="tog"><input type="checkbox" id="cfgMute"'+(cfg.muteSwitch?' checked':'')+'>'+
-        '<span class="tog-t"></span></label></div>'+
-      '<div style="margin-top:16px;font-size:13px;color:rgba(255,255,255,.45);font-weight:700">Buffer Goal (Shaka)</div>'+
-      '<select class="oui-sel" id="cfgBuf" tabindex="0">'+
-        '<option value="6"'+(cfg.buf==6?' selected':'')+'>6 s — Ultra Low Latency</option>'+
-        '<option value="8"'+(cfg.buf==8?' selected':'')+'>8 s — Low Latency</option>'+
-        '<option value="12"'+(cfg.buf==12?' selected':'')+'>12 s — Balanced</option>'+
-        '<option value="20"'+(cfg.buf==20?' selected':'')+'>20 s — Stable</option>'+
-      '</select>';
+    var engines=[
+      {val:'auto', label:'Auto',  desc:'AVPlay first, Shaka fallback'},
+      {val:'avplay',label:'AVPlay', desc:'Samsung native player (primary)'},
+      {val:'shaka', label:'Shaka',  desc:'Web player — better for IPTV'}
+    ];
+    var bufOpts=[
+      {val:6,  label:'6 s',  desc:'Ultra Low Latency'},
+      {val:8,  label:'8 s',  desc:'Low Latency'},
+      {val:12, label:'12 s', desc:'Balanced (default)'},
+      {val:20, label:'20 s', desc:'Stable'}
+    ];
+    var html='<div class="srow-t" style="font-size:18px;font-weight:700;color:var(--w0);margin-bottom:12px">Player Engine</div>';
+    engines.forEach(function(e){
+      var active=cfg.engine===e.val;
+      html+='<div class="opt-row'+(active?' opt-row-on':'')+'" tabindex="0" data-engine="'+e.val+'">'
+           +'<div class="opt-check">'+(active?'●':'○')+'</div>'
+           +'<div class="opt-info"><div class="opt-label">'+e.label+'</div><div class="opt-desc">'+e.desc+'</div></div>'
+           +'</div>';
+    });
+    html+='<div style="height:24px"></div>'
+         +'<div class="srow-t" style="font-size:18px;font-weight:700;color:var(--w0);margin-bottom:12px">Buffer Size (Shaka)</div>';
+    bufOpts.forEach(function(b){
+      var active=cfg.buf==b.val;
+      html+='<div class="opt-row'+(active?' opt-row-on':'')+'" tabindex="0" data-buf="'+b.val+'">'
+           +'<div class="opt-check">'+(active?'●':'○')+'</div>'
+           +'<div class="opt-info"><div class="opt-label">'+b.label+'</div><div class="opt-desc">'+b.desc+'</div></div>'
+           +'</div>';
+    });
+    html+='<div style="height:24px"></div>'
+         +'<div class="srow" tabindex="0" id="rowHQ">'
+         +'<div class="srow-l"><div class="srow-t">Force Highest Quality</div><div class="srow-d">Lock max bitrate — prevents quality drops</div></div>'
+         +'<label class="tog"><input type="checkbox" id="cfgHQ"'+(cfg.hq?' checked':'')+'><span class="tog-t"></span></label></div>'
+         +'<div class="srow" tabindex="0" id="rowMute">'
+         +'<div class="srow-l"><div class="srow-t">Mute on Channel Switch</div><div class="srow-d">Silence during zap, restores after 700ms</div></div>'
+         +'<label class="tog"><input type="checkbox" id="cfgMute"'+(cfg.muteSwitch?' checked':'')+'><span class="tog-t"></span></label></div>';
+    soMain.innerHTML=html;
+    /* Wire engine buttons */
+    QA('[data-engine]',soMain).forEach(function(el){
+      el.addEventListener('click',function(){
+        cfg.engine=el.dataset.engine;saveCfg();
+        renderSettingsSect('playback');
+        setTimeout(function(){
+          var items=QA('[tabindex="0"]',soMain);
+          var idx=0;for(var i=0;i<items.length;i++){if(items[i].dataset.engine===cfg.engine){idx=i;break}}
+          if(items[idx])items[idx].focus({preventScroll:true});
+        },30);
+      });
+    });
+    /* Wire buffer buttons */
+    QA('[data-buf]',soMain).forEach(function(el){
+      el.addEventListener('click',function(){
+        cfg.buf=parseInt(el.dataset.buf);saveCfg();recfg();
+        renderSettingsSect('playback');
+        setTimeout(function(){
+          var items=QA('[tabindex="0"]',soMain);
+          var idx=0;for(var i=0;i<items.length;i++){if(parseInt(items[i].dataset.buf)===cfg.buf){idx=i;break}}
+          if(items[idx])items[idx].focus({preventScroll:true});
+        },30);
+      });
+    });
     wireSettings();
   }else if(s==='display'){
     soMain.innerHTML=
       '<div class="srow" tabindex="0">'+
-        '<div class="srow-l"><div class="srow-t">OSD Auto-hide</div><div class="srow-d">Channel info fades after 5 s during playback</div></div>'+
+        '<div class="srow-l"><div class="srow-t">OSD Auto-hide</div><div class="srow-d">Channel info fades after 6s during playback</div></div>'+
         '<label class="tog"><input type="checkbox" id="cfgOsd"'+(cfg.osd?' checked':'')+'>'+
         '<span class="tog-t"></span></label></div>'+
-      '<div style="margin-top:14px;font-size:13px;color:rgba(255,255,255,.55);font-weight:700;margin-bottom:6px">Aspect Ratio</div>'+
-      '<button class="so-btn" id="soAspect" tabindex="0">⬜ Cycle: '+ASPECTS[aspectMode]+'</button>';
+      '<div style="margin-top:20px;font-size:18px;font-weight:700;color:var(--w0);margin-bottom:8px">Aspect Ratio</div>'+
+      '<button class="so-btn" id="soAspect" tabindex="0" style="font-size:17px;padding:18px 20px">⬜ Cycle: '+ASPECTS[aspectMode]+'</button>';
     wireSettings();
     var ab=$('soAspect');
     if(ab)ab.addEventListener('click',function(){cycleAspect();ab.textContent='⬜ Cycle: '+ASPECTS[aspectMode]});
   }else if(s==='sources'){
-    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL,MOVIES_PL,YOUTUBE_PL].concat(pls.filter(function(p){return!p.builtIn}));
+    var allSrc=[TELUGU_PL,JIO_PL,YUPP_PL,CRICHD_PL].concat(pls.filter(function(p){return!p.builtIn}));
     var html='';
     allSrc.forEach(function(p,i){
       html+='<div class="src-card" tabindex="0" data-i="'+i+'">'+
-        '<div class="src-dot" style="'+(p.builtIn?'background:rgba(255,255,255,.3)':'')+'"></div>'+
-        '<div class="src-i"><div class="src-n">'+esc(p.name)+(p.builtIn?' <small style="opacity:.3">(built-in)</small>':'')+
+        '<div class="src-dot" style="'+(p.builtIn?'background:rgba(255,255,255,.35)':'')+'"></div>'+
+        '<div class="src-i"><div class="src-n">'+esc(p.name)+(p.builtIn?' <small style="opacity:.35;font-size:13px">(built-in)</small>':'')+
         '</div><div class="src-u">'+esc(p.url)+'</div></div>'+
         (p.builtIn?'':'<button class="src-del" data-del="'+i+'" title="Remove">✕</button>')+
       '</div>';
@@ -2927,32 +2916,29 @@ function renderSettingsSect(s){
   }else if(s==='about'){
     soMain.innerHTML=
       '<div style="padding:8px 0">'+
-      '<div style="font-size:30px;font-weight:900;color:#fff;margin-bottom:6px">SAGA IPTV</div>'+
-      '<div style="font-size:12px;color:rgba(255,255,255,.38);margin-bottom:22px;letter-spacing:.3px">Native Edition v1.0 · Samsung Tizen OS9 · AVPlay + Shaka</div>'+
-      '<div style="font-size:13px;color:rgba(255,255,255,.55);line-height:2.1">'+
-        '<b style="color:rgba(255,255,255,.8)">Remote Keys</b><br>'+
-        '↑↓←→ Navigate · OK Play<br>'+
+      '<div style="font-size:34px;font-weight:900;color:#fff;margin-bottom:6px">TV+</div>'+
+      '<div style="font-size:15px;color:rgba(255,255,255,.38);margin-bottom:24px;letter-spacing:.3px">Native Edition · Samsung Tizen OS9 · AVPlay + Shaka</div>'+
+      '<div style="font-size:16px;color:rgba(255,255,255,.6);line-height:2.2">'+
+        '<b style="color:rgba(255,255,255,.85)">Remote Keys</b><br>'+
+        '↑↓←→ Navigate &nbsp;·&nbsp; OK Play<br>'+
         'CH▲▼ Previous / Next channel<br>'+
-        'RED Next tab · GREEN Aspect ratio<br>'+
-        'YELLOW Quick actions · BLUE Search<br>'+
+        'RED Next tab &nbsp;·&nbsp; GREEN Aspect ratio<br>'+
+        'YELLOW Quick actions &nbsp;·&nbsp; BLUE Search<br>'+
         'MENU / INFO Settings<br>'+
         '0–9 Quick channel jump<br>'+
         'BACK Close / go back'+
       '</div>'+
-      '<div style="margin-top:24px;font-size:11px;color:rgba(255,255,255,.22)">'+
-        'Built-in: Telugu · Jio · YuppTV · CricHd · Movies · YouTube Live<br>'+
-        'Engines: Samsung AVPlay (primary) · Shaka Player (fallback) · HLS.js · Direct<br>'+
-        '<i style="color:rgba(255,255,255,.3);font-size:11px">AVPlay is Samsung\'s built-in player — same core as VLC (FFmpeg-based)</i>'+
+      '<div style="margin-top:28px;font-size:13px;color:rgba(255,255,255,.22)">'+
+        'Built-in: Telugu · Jio · YuppTV · CricHD<br>'+
+        'Engines: AVPlay (primary) · Shaka · HLS.js · Direct'+
       '</div></div>';
   }
 }
 
 function wireSettings(){
-  var eng=$('cfgEngine'),hq=$('cfgHQ'),mu=$('cfgMute'),bu=$('cfgBuf'),os=$('cfgOsd');
-  if(eng)eng.onchange=function(){cfg.engine=this.value;saveCfg()};
+  var hq=$('cfgHQ'),mu=$('cfgMute'),os=$('cfgOsd');
   if(hq)hq.onchange=function(){cfg.hq=this.checked;saveCfg();recfg()};
   if(mu)mu.onchange=function(){cfg.muteSwitch=this.checked;saveCfg()};
-  if(bu)bu.onchange=function(){cfg.buf=parseInt(this.value);saveCfg();recfg()};
   if(os)os.onchange=function(){cfg.osd=this.checked;saveCfg()};
 }
 
@@ -3199,6 +3185,7 @@ window.addEventListener('keydown',function(e){
     if(isOK(kc,k)){e.preventDefault();
       var f=document.activeElement;
       if(f&&f.classList.contains('srow')){var cb=f.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;cb.dispatchEvent(new Event('change',{bubbles:true}))}}
+      else if(f&&(f.classList.contains('opt-row')||f.dataset.engine||f.dataset.buf))f.click();
       else if(f&&f.classList.contains('so-nav'))f.click();
       else if(f)f.click();
       return;}
@@ -3334,8 +3321,6 @@ function loadAll(force){
     .then(function(){return loadPl(JIO_PL.url,JIO_PL.name,force,'jio')})
     .then(function(){return loadPl(YUPP_PL.url,YUPP_PL.name,force,'yupp')})
     .then(function(){return loadPl(CRICHD_PL.url,CRICHD_PL.name,force,'crichd')})
-    .then(function(){return loadPl(MOVIES_PL.url,MOVIES_PL.name,force,'movies')})
-    .then(function(){return loadPl(YOUTUBE_PL.url,YOUTUBE_PL.name,force,'youtube')})
     .then(function(){
       var customs=pls.filter(function(p){return!p.builtIn});
       function loadNext(i){
@@ -3384,7 +3369,7 @@ window.addEventListener('beforeunload',function(){
   loadStore();
   initChHud();
   pls=pls.filter(function(p){
-    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url&&p.url!==MOVIES_PL.url&&p.url!==YOUTUBE_PL.url;
+    return!p.builtIn&&p.url!==TELUGU_PL.url&&p.url!==JIO_PL.url&&p.url!==YUPP_PL.url&&p.url!==CRICHD_PL.url;
   });
   $('splMsg').textContent='Initialising player…';
 
