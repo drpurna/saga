@@ -2916,6 +2916,14 @@ var AppCache = (function () {
     if (_dbInit) return _dbInit;
     _dbFail = false;
     _dbInit = new Promise(function (resolve) {
+      /* Tizen IDB watchdog — if open never fires, bail after 3s */
+      var _idbDone = false;
+      var _idbTimer = setTimeout(function () {
+        if (!_idbDone) { _idbDone = true; _dbFail = true; _dbFailedAt = Date.now(); _dbInit = null; resolve(null); }
+      }, 3000);
+      function _idbResolve(val) {
+        if (_idbDone) return; _idbDone = true; clearTimeout(_idbTimer); resolve(val);
+      }
       try {
         var req = indexedDB.open(IDB_NAME, IDB_VER);
         req.onupgradeneeded = function (e) {
@@ -2928,12 +2936,12 @@ var AppCache = (function () {
         req.onsuccess = function (e) {
           _db = e.target.result;
           _db.onversionchange = function () { _db.close(); _db = null; _dbInit = null; };
-          resolve(_db);
+          _idbResolve(_db);
         };
         req.onerror = req.onblocked = function (e) {
-          _dbFail = true; _dbFailedAt = Date.now(); _dbInit = null; resolve(null);
+          _dbFail = true; _dbFailedAt = Date.now(); _dbInit = null; _idbResolve(null);
         };
-      } catch (e) { _dbFail = true; _dbFailedAt = Date.now(); _dbInit = null; resolve(null); }
+      } catch (e) { _dbFail = true; _dbFailedAt = Date.now(); _dbInit = null; _idbResolve(null); }
     });
     return _dbInit;
   }
@@ -3283,7 +3291,7 @@ global.SagaEPG = {
   var _splashTimer = setTimeout(function(){
     var s = document.getElementById('splash');
     if(s){ s.classList.add('off'); setTimeout(function(){ s.style.display='none'; }, 500); }
-  }, 9000);
+  }, 4000);
   /* cancelled by hideSplash() in normal boot */
   window.__cancelSplashTimer = function(){ clearTimeout(_splashTimer); };
 })();
@@ -3436,11 +3444,13 @@ function saveChCache(){
   },{timeout:3000});
 }
 function loadChCache(){
-  return AppCache.getChannelCache(CH_CACHE_KEY).then(function(raw){
+  var timeout = new Promise(function(resolve){ setTimeout(function(){ resolve(null); }, 4000); });
+  var fetch = AppCache.getChannelCache(CH_CACHE_KEY).then(function(raw){
     if(!raw)return null;
     try{var d=JSON.parse(raw);if(d&&d.chs&&d.chs.length>0&&(Date.now()-(d.ts||0))<CH_CACHE_TTL)return d}catch(e){}
     return null;
   }).catch(function(){return null});
+  return Promise.race([fetch, timeout]);
 }
 
 /* ════════════════════════════════════════════
@@ -4297,8 +4307,8 @@ window.addEventListener('beforeunload',function(){
   loadStore();
   pls=pls.filter(function(p){return!p.builtIn&&!BUILTINS.some(function(b){return b.url===p.url})});
   $('splMsg').textContent='Initialising player…';
-  initAVPlay();
-  if(typeof SagaEPG!=='undefined')SagaEPG.prefetch();
+  try{initAVPlay();}catch(e){}
+  try{if(typeof SagaEPG!=='undefined')SagaEPG.prefetch();}catch(e){}
   initShaka().then(function(){
     $('splMsg').textContent='Loading channels…';
     rebuildNavTabs();
