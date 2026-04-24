@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-  <title>OncoTrack RT Pro | Patient Follow-up & RT Status</title>
+  <title>OncoTrack RT Pro | Undo · Consultant Stats · Data Sync</title>
   <!-- Tailwind CSS + Font Awesome + Google Fonts -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { font-family: 'Inter', sans-serif; }
     body { background: #f4f7fc; }
@@ -17,129 +17,93 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 10px; }
     ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
-    .status-badge { @apply px-2.5 py-1 rounded-full text-xs font-medium; }
+    .stats-card { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); }
   </style>
 </head>
 <body class="antialiased">
 
   <div class="max-w-7xl mx-auto px-4 py-6 md:py-8">
-    <!-- Header + stats -->
+    <!-- Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
       <div>
         <h1 class="text-3xl font-bold text-slate-800 flex items-center gap-2">
           <i class="fas fa-radiation text-indigo-600"></i> 
           OncoTrack RT Pro
         </h1>
-        <p class="text-slate-500 text-sm mt-1">First visit · RT milestones · Consultant & diagnosis tracking</p>
+        <p class="text-slate-500 text-sm">First visit · Toggle RT status · Consultant analytics</p>
       </div>
-      <div class="flex gap-3 text-sm bg-white rounded-xl shadow-sm px-4 py-2">
-        <div class="flex items-center gap-1"><i class="fas fa-user-friends text-indigo-500"></i> <span id="totalPatientsCount">0</span></div>
-        <div class="w-px h-5 bg-slate-200"></div>
-        <div class="flex items-center gap-1"><i class="fas fa-check-circle text-emerald-500"></i> <span id="rtAppliedCount">0</span> applied</div>
-        <div class="w-px h-5 bg-slate-200"></div>
-        <div class="flex items-center gap-1"><i class="fas fa-play-circle text-blue-500"></i> <span id="rtStartedCount">0</span> started</div>
+      <div class="flex gap-2">
+        <button id="exportDataBtn" class="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1"><i class="fas fa-download"></i> Export JSON</button>
+        <label for="importFileInput" class="bg-slate-50 text-slate-700 hover:bg-slate-100 px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1 cursor-pointer"><i class="fas fa-upload"></i> Import JSON</label>
+        <input type="file" id="importFileInput" accept=".json" class="hidden">
       </div>
     </div>
 
-    <!-- Add Patient Form -->
+    <!-- Add Patient Form (includes consultant & diagnosis) -->
     <div class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-slate-100">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">Full name</label>
-          <input type="text" id="patientName" placeholder="e.g. John Carter" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-300">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">MRN (unique)</label>
-          <input type="text" id="patientMrn" placeholder="MRN-XXXX" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">First visit date</label>
-          <input type="date" id="patientFirstVisit" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">Consultant</label>
-          <select id="patientConsultant" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white">
-            <option value="Dr.Purna">Dr. Purna</option>
-            <option value="Dr.Praveen">Dr. Praveen</option>
-            <option value="Dr.Geetha">Dr. Geetha</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">Diagnosis</label>
-          <input type="text" id="patientDiagnosis" placeholder="e.g. Left breast CA" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm">
-        </div>
-        <div class="lg:col-span-5 flex justify-end">
-          <button id="addPatientBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-6 py-2.5 rounded-xl transition-smooth flex items-center gap-2 shadow-sm"><i class="fas fa-plus"></i> Add patient</button>
-        </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+        <div><label class="text-xs font-semibold text-slate-500">Full name</label><input type="text" id="patientName" placeholder="e.g. John Carter" class="w-full border rounded-xl px-3 py-2.5 text-sm"></div>
+        <div><label class="text-xs font-semibold text-slate-500">MRN (unique)</label><input type="text" id="patientMrn" placeholder="MRN-XXXX" class="w-full border rounded-xl px-3 py-2.5 text-sm"></div>
+        <div><label class="text-xs font-semibold text-slate-500">First visit date</label><input type="date" id="patientFirstVisit" class="w-full border rounded-xl px-3 py-2.5 text-sm"></div>
+        <div><label class="text-xs font-semibold text-slate-500">Consultant</label><select id="patientConsultant" class="w-full border rounded-xl px-3 py-2.5 text-sm bg-white"><option value="Dr.Purna">Dr. Purna</option><option value="Dr.Praveen">Dr. Praveen</option><option value="Dr.Geetha">Dr. Geetha</option></select></div>
+        <div><label class="text-xs font-semibold text-slate-500">Diagnosis</label><input type="text" id="patientDiagnosis" placeholder="e.g. Left breast CA" class="w-full border rounded-xl px-3 py-2.5 text-sm"></div>
+        <div><button id="addPatientBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-5 py-2.5 rounded-xl flex items-center gap-2 justify-center"><i class="fas fa-plus"></i> Add</button></div>
       </div>
     </div>
 
-    <!-- Filters: search + Month/Year + Consultant -->
-    <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-4 items-end border">
-      <div class="flex-1 min-w-[180px]">
-        <label class="text-xs font-semibold text-slate-500"><i class="fas fa-search"></i> Search (name / MRN)</label>
-        <input type="text" id="searchInput" placeholder="Search patient..." class="w-full border rounded-lg px-3 py-2 text-sm">
-      </div>
-      <div class="w-32">
-        <label class="text-xs font-semibold text-slate-500">Month (First visit)</label>
-        <select id="filterMonth" class="w-full border rounded-lg px-2 py-2 text-sm bg-white">
-          <option value="">All months</option>
-          <option value="0">January</option><option value="1">February</option><option value="2">March</option>
-          <option value="3">April</option><option value="4">May</option><option value="5">June</option>
-          <option value="6">July</option><option value="7">August</option><option value="8">September</option>
-          <option value="9">October</option><option value="10">November</option><option value="11">December</option>
-        </select>
-      </div>
-      <div class="w-32">
-        <label class="text-xs font-semibold text-slate-500">Year (First visit)</label>
-        <select id="filterYear" class="w-full border rounded-lg px-2 py-2 text-sm bg-white">
-          <option value="">All years</option>
-        </select>
-      </div>
-      <div class="w-48">
-        <label class="text-xs font-semibold text-slate-500">Consultant</label>
-        <select id="filterConsultant" class="w-full border rounded-lg px-2 py-2 text-sm bg-white">
-          <option value="">All consultants</option>
-          <option value="Dr.Purna">Dr. Purna</option>
-          <option value="Dr.Praveen">Dr. Praveen</option>
-          <option value="Dr.Geetha">Dr. Geetha</option>
-        </select>
-      </div>
+    <!-- Filters: search + Month/Year + Consultant (dynamic stats update) -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-5 flex flex-wrap gap-4 items-end border">
+      <div class="flex-1 min-w-[160px]"><label class="text-xs font-semibold text-slate-500"><i class="fas fa-search"></i> Search</label><input type="text" id="searchInput" placeholder="Name / MRN" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+      <div class="w-32"><label class="text-xs font-semibold text-slate-500">Month (First visit)</label><select id="filterMonth" class="w-full border rounded-lg px-2 py-2 text-sm"><option value="">All months</option><option value="0">Jan</option><option value="1">Feb</option><option value="2">Mar</option><option value="3">Apr</option><option value="4">May</option><option value="5">Jun</option><option value="6">Jul</option><option value="7">Aug</option><option value="8">Sep</option><option value="9">Oct</option><option value="10">Nov</option><option value="11">Dec</option></select></div>
+      <div class="w-32"><label class="text-xs font-semibold text-slate-500">Year</label><select id="filterYear" class="w-full border rounded-lg px-2 py-2 text-sm"><option value="">All years</option></select></div>
+      <div class="w-44"><label class="text-xs font-semibold text-slate-500">Consultant filter</label><select id="filterConsultant" class="w-full border rounded-lg px-2 py-2 text-sm"><option value="">All consultants</option><option value="Dr.Purna">Dr. Purna</option><option value="Dr.Praveen">Dr. Praveen</option><option value="Dr.Geetha">Dr. Geetha</option></select></div>
       <button id="resetFiltersBtn" class="text-sm text-slate-500 hover:text-indigo-600 border px-3 py-2 rounded-lg"><i class="fas fa-undo-alt"></i> Reset</button>
+    </div>
+
+    <!-- Consultant-Wise Stats Cards (additional column) + Dynamic applied/started based on filter -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <!-- Dr. Purna Card -->
+      <div class="bg-gradient-to-br from-indigo-50 to-white rounded-2xl shadow-sm p-4 border border-indigo-100">
+        <div class="flex justify-between items-center"><h3 class="font-bold text-indigo-800"><i class="fas fa-user-md"></i> Dr. Purna</h3><i class="fas fa-chart-line text-indigo-300"></i></div>
+        <div class="flex gap-4 mt-2 text-sm"><div><span class="text-xs text-slate-500">RT applied</span><br><span id="statAppliedPurna" class="text-xl font-bold text-emerald-600">0</span></div><div><span class="text-xs text-slate-500">RT started</span><br><span id="statStartedPurna" class="text-xl font-bold text-blue-600">0</span></div></div>
+      </div>
+      <!-- Dr. Praveen Card -->
+      <div class="bg-gradient-to-br from-sky-50 to-white rounded-2xl shadow-sm p-4 border border-sky-100">
+        <div class="flex justify-between items-center"><h3 class="font-bold text-sky-800"><i class="fas fa-user-md"></i> Dr. Praveen</h3><i class="fas fa-chart-line text-sky-300"></i></div>
+        <div class="flex gap-4 mt-2"><div><span class="text-xs text-slate-500">RT applied</span><br><span id="statAppliedPraveen" class="text-xl font-bold text-emerald-600">0</span></div><div><span class="text-xs text-slate-500">RT started</span><br><span id="statStartedPraveen" class="text-xl font-bold text-blue-600">0</span></div></div>
+      </div>
+      <!-- Dr. Geetha Card -->
+      <div class="bg-gradient-to-br from-rose-50 to-white rounded-2xl shadow-sm p-4 border border-rose-100">
+        <div class="flex justify-between items-center"><h3 class="font-bold text-rose-800"><i class="fas fa-user-md"></i> Dr. Geetha</h3><i class="fas fa-chart-line text-rose-300"></i></div>
+        <div class="flex gap-4 mt-2"><div><span class="text-xs text-slate-500">RT applied</span><br><span id="statAppliedGeetha" class="text-xl font-bold text-emerald-600">0</span></div><div><span class="text-xs text-slate-500">RT started</span><br><span id="statStartedGeetha" class="text-xl font-bold text-blue-600">0</span></div></div>
+      </div>
+    </div>
+
+    <!-- Dynamic Stats Bar (based on current filters - shows filtered counts) -->
+    <div class="bg-white rounded-xl shadow-sm p-3 mb-5 flex justify-between items-center text-sm border">
+      <div><i class="fas fa-chart-simple text-indigo-500"></i> <span class="font-semibold">Filtered statistics</span> <span class="text-slate-400">(applies current search/month/year/consultant)</span></div>
+      <div class="flex gap-4"><span><i class="fas fa-check-circle text-emerald-500"></i> RT applied: <span id="filteredAppliedCount" class="font-bold">0</span></span><span><i class="fas fa-play-circle text-blue-500"></i> RT started: <span id="filteredStartedCount" class="font-bold">0</span></span><span><i class="fas fa-users text-slate-500"></i> Patients: <span id="filteredPatientCount" class="font-bold">0</span></span></div>
     </div>
 
     <!-- Patients Grid -->
     <div id="patientsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- dynamic -->
+      <!-- dynamic cards -->
     </div>
 
     <!-- Edit Modal -->
-    <div id="editModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-overlay" style="display: none;">
+    <div id="editModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 modal-overlay">
       <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-        <div class="bg-indigo-50 px-6 py-4 border-b border-indigo-100 flex justify-between items-center">
-          <h3 class="text-xl font-bold text-indigo-800"><i class="fas fa-user-edit mr-2"></i>Edit patient</h3>
-          <button id="closeModalBtn" class="text-slate-500 hover:text-slate-700 text-xl">&times;</button>
-        </div>
+        <div class="bg-indigo-50 px-6 py-4 border-b flex justify-between items-center"><h3 class="text-xl font-bold text-indigo-800"><i class="fas fa-user-edit mr-2"></i>Edit patient</h3><button id="closeModalBtn" class="text-slate-500 text-xl">&times;</button></div>
         <div class="p-6 space-y-4">
           <input type="hidden" id="editPatientId">
-          <div><label class="block text-sm font-medium text-slate-700">Full name</label><input id="editName" class="w-full border rounded-lg px-3 py-2"></div>
-          <div><label class="block text-sm font-medium text-slate-700">MRN</label><input id="editMrn" class="w-full border rounded-lg px-3 py-2"></div>
-          <div><label class="block text-sm font-medium text-slate-700">First visit date</label><input id="editFirstVisit" type="date" class="w-full border rounded-lg px-3 py-2"></div>
-          <div><label class="block text-sm font-medium text-slate-700">Consultant</label>
-            <select id="editConsultant" class="w-full border rounded-lg px-3 py-2">
-              <option value="Dr.Purna">Dr. Purna</option><option value="Dr.Praveen">Dr. Praveen</option><option value="Dr.Geetha">Dr. Geetha</option>
-            </select>
-          </div>
-          <div><label class="block text-sm font-medium text-slate-700">Diagnosis</label><input id="editDiagnosis" class="w-full border rounded-lg px-3 py-2"></div>
-          <div class="grid grid-cols-2 gap-3">
-            <div><label class="block text-sm font-medium text-slate-700">RT applied date</label><input id="editRtApplied" type="date" class="w-full border rounded-lg px-3 py-2"></div>
-            <div><label class="block text-sm font-medium text-slate-700">RT started date</label><input id="editRtStarted" type="date" class="w-full border rounded-lg px-3 py-2"></div>
-          </div>
-          <div class="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg"><i class="fas fa-exclamation-triangle"></i> Once RT applied / started dates are set, they cannot be cleared (only overwritten with new dates).</div>
-          <div class="flex justify-end gap-3 pt-2">
-            <button id="modalCancelBtn" class="px-4 py-2 border rounded-lg text-slate-600">Cancel</button>
-            <button id="modalSaveBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Save changes</button>
-          </div>
+          <div><label class="text-sm font-medium">Full name</label><input id="editName" class="w-full border rounded-lg px-3 py-2"></div>
+          <div><label class="text-sm font-medium">MRN</label><input id="editMrn" class="w-full border rounded-lg px-3 py-2"></div>
+          <div><label class="text-sm font-medium">First visit</label><input id="editFirstVisit" type="date" class="w-full border rounded-lg px-3 py-2"></div>
+          <div><label class="text-sm font-medium">Consultant</label><select id="editConsultant" class="w-full border rounded-lg px-3 py-2"><option>Dr.Purna</option><option>Dr.Praveen</option><option>Dr.Geetha</option></select></div>
+          <div><label class="text-sm font-medium">Diagnosis</label><input id="editDiagnosis" class="w-full border rounded-lg px-3 py-2"></div>
+          <div class="grid grid-cols-2 gap-3"><div><label>RT applied date</label><input id="editRtApplied" type="date" class="w-full border rounded-lg px-3 py-2"></div><div><label>RT started date</label><input id="editRtStarted" type="date" class="w-full border rounded-lg px-3 py-2"></div></div>
+          <div class="text-xs text-amber-600 bg-amber-50 p-2 rounded-lg"><i class="fas fa-exchange-alt"></i> Tip: RT status can be toggled ON/OFF by clicking the buttons on patient card.</div>
+          <div class="flex justify-end gap-3"><button id="modalCancelBtn" class="px-4 py-2 border rounded-lg">Cancel</button><button id="modalSaveBtn" class="px-5 py-2 bg-indigo-600 text-white rounded-lg">Save</button></div>
         </div>
       </div>
     </div>
@@ -150,84 +114,100 @@
   <script>
     // --- DATA MODEL ---
     let patients = [];
-    const STORAGE_KEY = "ontrack_rt_pro_v2";
-
-    // Consultants list
+    const STORAGE_KEY = "ontrack_rt_pro_v3";
     const CONSULTANTS = ["Dr.Purna", "Dr.Praveen", "Dr.Geetha"];
 
-    // Migrate old data from previous version (dob -> firstVisit, add consultant & diagnosis if missing)
-    function migrateLegacyPatients(loadedPatients) {
-      return loadedPatients.map(p => {
-        // if old field "dob" exists and no "firstVisit", migrate
-        let firstVisit = p.firstVisit || p.dob || "";
-        // remove legacy dob if needed
-        if (p.dob && !p.firstVisit) delete p.dob;
-        return {
-          id: p.id,
-          name: p.name || "",
-          mrn: p.mrn || "",
-          firstVisit: firstVisit,
-          consultant: p.consultant && CONSULTANTS.includes(p.consultant) ? p.consultant : "Dr.Purna",
+    // Helper functions
+    function showToast(msg, isErr = false) {
+      const toast = document.getElementById("toastMsg");
+      toast.innerText = msg;
+      toast.classList.remove("translate-y-20", "opacity-0");
+      toast.classList.add("translate-y-0", "opacity-100");
+      if (isErr) toast.classList.add("bg-red-700"); else toast.classList.remove("bg-red-700");
+      setTimeout(() => { toast.classList.add("translate-y-20", "opacity-0"); }, 2500);
+    }
+
+    function saveToLocalStorage() { localStorage.setItem(STORAGE_KEY, JSON.stringify(patients)); }
+
+    // Load data
+    function loadFromStorage() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        patients = JSON.parse(stored);
+        patients = patients.map(p => ({
+          ...p,
+          firstVisit: p.firstVisit || "",
+          consultant: CONSULTANTS.includes(p.consultant) ? p.consultant : "Dr.Purna",
           diagnosis: p.diagnosis || "",
           rtAppliedDate: p.rtAppliedDate || null,
           rtStartedDate: p.rtStartedDate || null,
           followUpNotes: Array.isArray(p.followUpNotes) ? p.followUpNotes : []
-        };
-      });
-    }
-
-    function loadFromStorage() {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        let raw = JSON.parse(stored);
-        patients = migrateLegacyPatients(raw);
+        }));
       } else {
-        // Demo patients with new fields (firstVisit, consultant, diagnosis)
         patients = [
-          { id: "p1", name: "Eleanor Chen", mrn: "MRN-1001", firstVisit: "2025-02-05", consultant: "Dr.Purna", diagnosis: "Cervical Cancer", rtAppliedDate: "2025-02-10", rtStartedDate: "2025-02-18", followUpNotes: [{ id: "n1", dateTime: "2025-02-20T09:30:00", note: "First RT session, fatigue" }] },
-          { id: "p2", name: "James O'Connell", mrn: "MRN-1002", firstVisit: "2025-03-01", consultant: "Dr.Praveen", diagnosis: "Prostate Adenocarcinoma", rtAppliedDate: "2025-03-01", rtStartedDate: null, followUpNotes: [{ id: "n3", dateTime: "2025-03-05T11:00:00", note: "Simulation done" }] },
-          { id: "p3", name: "Maria Santos", mrn: "MRN-1003", firstVisit: "2024-11-12", consultant: "Dr.Geetha", diagnosis: "Breast Cancer, left", rtAppliedDate: null, rtStartedDate: null, followUpNotes: [] },
+          { id: "p1", name: "Eleanor Chen", mrn: "MRN-1001", firstVisit: "2025-02-05", consultant: "Dr.Purna", diagnosis: "Cervical Cancer", rtAppliedDate: "2025-02-10", rtStartedDate: "2025-02-18", followUpNotes: [] },
+          { id: "p2", name: "James O'Connell", mrn: "MRN-1002", firstVisit: "2025-03-01", consultant: "Dr.Praveen", diagnosis: "Prostate Adenocarcinoma", rtAppliedDate: "2025-03-01", rtStartedDate: null, followUpNotes: [] },
+          { id: "p3", name: "Maria Santos", mrn: "MRN-1003", firstVisit: "2024-11-12", consultant: "Dr.Geetha", diagnosis: "Breast Cancer", rtAppliedDate: null, rtStartedDate: null, followUpNotes: [] },
           { id: "p4", name: "Robert Kim", mrn: "MRN-1004", firstVisit: "2025-04-10", consultant: "Dr.Purna", diagnosis: "Lung Nodules", rtAppliedDate: "2025-04-12", rtStartedDate: "2025-04-18", followUpNotes: [] }
         ];
       }
-      renderDashboard();
-      populateYearFilter();
+      renderAll();
     }
 
-    function saveToLocalStorage() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(patients));
+    // Toggle RT status: undo by repeated click
+    function toggleRtApplied(patientId) {
+      const patient = patients.find(p => p.id === patientId);
+      if (!patient) return;
+      const today = new Date().toISOString().slice(0,10);
+      if (patient.rtAppliedDate) {
+        // Undo: remove RT applied date
+        patient.rtAppliedDate = null;
+        // Also remove RT started if exists because logically started cannot be without applied
+        if (patient.rtStartedDate) {
+          patient.rtStartedDate = null;
+          showToast(`RT applied & started undone`, false);
+        } else {
+          showToast(`RT applied undone`, false);
+        }
+      } else {
+        patient.rtAppliedDate = today;
+        showToast(`✅ RT applied set to ${today} (click again to undo)`, false);
+      }
+      saveToLocalStorage();
+      renderAll();
     }
 
-    function showToast(message, isError = false) {
-      const toast = document.getElementById("toastMsg");
-      toast.innerText = message;
-      toast.classList.remove("translate-y-20", "opacity-0");
-      toast.classList.add("translate-y-0", "opacity-100");
-      if (isError) toast.classList.add("bg-red-700");
-      else toast.classList.remove("bg-red-700");
-      setTimeout(() => {
-        toast.classList.add("translate-y-20", "opacity-0");
-        toast.classList.remove("translate-y-0", "opacity-100");
-        if (isError) toast.classList.remove("bg-red-700");
-      }, 2700);
+    function toggleRtStarted(patientId) {
+      const patient = patients.find(p => p.id === patientId);
+      if (!patient) return;
+      if (!patient.rtAppliedDate && !patient.rtStartedDate) {
+        showToast("❌ Cannot start RT: mark RT applied first", true);
+        return;
+      }
+      if (patient.rtStartedDate) {
+        // Undo: remove RT started
+        patient.rtStartedDate = null;
+        showToast(`RT started undone`, false);
+      } else {
+        const today = new Date().toISOString().slice(0,10);
+        patient.rtStartedDate = today;
+        showToast(`🎯 RT started set to ${today} (click again to undo)`, false);
+      }
+      saveToLocalStorage();
+      renderAll();
     }
 
-    function isMrnUnique(mrn, excludeId = null) {
-      return !patients.some(p => p.mrn === mrn && p.id !== excludeId);
-    }
-
-    // Add patient with new fields
+    // CRUD operations
     function addPatient(name, mrn, firstVisit, consultant, diagnosis) {
-      if (!name.trim()) { showToast("Patient name required", true); return false; }
+      if (!name.trim()) { showToast("Name required", true); return false; }
       if (!mrn.trim()) { showToast("MRN required", true); return false; }
-      if (!isMrnUnique(mrn)) { showToast("MRN already exists", true); return false; }
-      if (!consultant || !CONSULTANTS.includes(consultant)) consultant = "Dr.Purna";
+      if (patients.some(p => p.mrn === mrn)) { showToast("MRN must be unique", true); return false; }
       const newPatient = {
         id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
         name: name.trim(),
         mrn: mrn.trim(),
         firstVisit: firstVisit || "",
-        consultant: consultant,
+        consultant: consultant || "Dr.Purna",
         diagnosis: diagnosis || "",
         rtAppliedDate: null,
         rtStartedDate: null,
@@ -235,259 +215,143 @@
       };
       patients.push(newPatient);
       saveToLocalStorage();
-      renderDashboard();
-      populateYearFilter();
+      renderAll();
       showToast(`✅ ${name} added`);
       return true;
     }
 
-    // update with immutable rules: cannot clear RT applied/started if they were set
     function updatePatient(patientId, updatedFields) {
       const index = patients.findIndex(p => p.id === patientId);
       if (index === -1) return false;
       const current = patients[index];
-      
-      // MRN uniqueness check
-      if (updatedFields.mrn !== undefined && updatedFields.mrn !== current.mrn) {
-        if (!isMrnUnique(updatedFields.mrn, patientId)) {
-          showToast("MRN conflict", true);
-          return false;
-        }
+      if (updatedFields.mrn && updatedFields.mrn !== current.mrn && patients.some(p => p.mrn === updatedFields.mrn && p.id !== patientId)) {
+        showToast("MRN conflict", true); return false;
       }
-      // Prevent clearing existing rtAppliedDate
-      let newRtApplied = updatedFields.rtAppliedDate;
-      if (newRtApplied === "" || newRtApplied === null) {
-        if (current.rtAppliedDate) {
-          showToast("❌ RT applied date cannot be cleared once set. You can only update to another date.", true);
-          return false;
-        }
-        newRtApplied = null;
-      }
-      // Prevent clearing existing rtStartedDate
-      let newRtStarted = updatedFields.rtStartedDate;
-      if (newRtStarted === "" || newRtStarted === null) {
-        if (current.rtStartedDate) {
-          showToast("❌ RT started date cannot be cleared once set. You can only update to another date.", true);
-          return false;
-        }
-        newRtStarted = null;
-      }
-      
-      patients[index] = { 
-        ...current, 
-        ...updatedFields, 
-        rtAppliedDate: newRtApplied,
-        rtStartedDate: newRtStarted
-      };
+      patients[index] = { ...current, ...updatedFields };
       saveToLocalStorage();
-      renderDashboard();
-      populateYearFilter();
+      renderAll();
       showToast("Patient updated");
       return true;
     }
 
     function deletePatient(patientId) {
-      if (confirm("⚠️ Permanently delete patient & all data?")) {
+      if (confirm("Delete patient permanently?")) {
         patients = patients.filter(p => p.id !== patientId);
         saveToLocalStorage();
-        renderDashboard();
-        populateYearFilter();
+        renderAll();
         showToast("Patient removed");
       }
     }
 
-    // RT marking: cannot undo, only overwrite with new date (but never set null)
-    function markRtApplied(patientId) {
-      const patient = patients.find(p => p.id === patientId);
-      if (!patient) return;
-      const today = new Date().toISOString().slice(0,10);
-      if (patient.rtAppliedDate && patient.rtAppliedDate === today) {
-        showToast("RT already applied today", false);
-        return;
-      }
-      if (patient.rtAppliedDate) {
-        if (confirm(`RT already applied on ${patient.rtAppliedDate}. Overwrite with today's date?`)) {
-          patient.rtAppliedDate = today;
-          saveToLocalStorage();
-          renderDashboard();
-          showToast(`RT applied date updated to ${today}`);
-        }
-      } else {
-        patient.rtAppliedDate = today;
+    function addFollowUp(patientId, note) {
+      if (!note.trim()) { showToast("Note empty", true); return; }
+      const p = patients.find(p => p.id === patientId);
+      if (p) {
+        p.followUpNotes.push({ id: Date.now() + Math.random(), dateTime: new Date().toISOString(), note: note.trim() });
         saveToLocalStorage();
-        renderDashboard();
-        showToast(`✅ RT applied marked on ${today} (cannot be undone)`);
+        renderAll();
+        showToast("Note added");
       }
-    }
-
-    function markRtStarted(patientId) {
-      const patient = patients.find(p => p.id === patientId);
-      if (!patient) return;
-      if (!patient.rtAppliedDate) {
-        showToast("❌ Cannot start RT: mark 'RT applied' first", true);
-        return;
-      }
-      const today = new Date().toISOString().slice(0,10);
-      if (patient.rtStartedDate && patient.rtStartedDate === today) {
-        showToast("RT already started today", false);
-        return;
-      }
-      if (patient.rtStartedDate) {
-        if (confirm(`RT was started on ${patient.rtStartedDate}. Overwrite to today?`)) {
-          patient.rtStartedDate = today;
-          saveToLocalStorage();
-          renderDashboard();
-          showToast(`RT start date updated to ${today}`);
-        }
-      } else {
-        patient.rtStartedDate = today;
-        saveToLocalStorage();
-        renderDashboard();
-        showToast(`🎯 RT started marked on ${today} (cannot be undone)`);
-      }
-    }
-
-    // Follow-up notes
-    function addFollowUp(patientId, noteText) {
-      if (!noteText.trim()) { showToast("Enter note", true); return false; }
-      const patient = patients.find(p => p.id === patientId);
-      if (!patient) return false;
-      const newNote = {
-        id: Date.now().toString() + Math.random().toString(36).substr(2, 4),
-        dateTime: new Date().toISOString(),
-        note: noteText.trim()
-      };
-      patient.followUpNotes.push(newNote);
-      saveToLocalStorage();
-      renderDashboard();
-      showToast("Follow-up added");
-      return true;
     }
 
     function deleteFollowUp(patientId, noteId) {
-      const patient = patients.find(p => p.id === patientId);
-      if (patient) {
-        patient.followUpNotes = patient.followUpNotes.filter(n => n.id !== noteId);
-        saveToLocalStorage();
-        renderDashboard();
-        showToast("Note deleted");
-      }
+      const p = patients.find(p => p.id === patientId);
+      if (p) { p.followUpNotes = p.followUpNotes.filter(n => n.id != noteId); saveToLocalStorage(); renderAll(); showToast("Note deleted"); }
     }
 
-    // Format helpers
-    function formatDate(dateStr) { if (!dateStr) return "—"; const d = new Date(dateStr); return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString(); }
-    function formatDateTime(isoString) { if (!isoString) return ""; const d = new Date(isoString); return d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-    function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
-
     // Filters state
-    let currentSearch = "", currentMonth = "", currentYear = "", currentConsultantFilter = "";
-    
-    function filterPatientsList() {
+    let searchTerm = "", monthFilter = "", yearFilter = "", consultantFilter = "";
+    function getFilteredPatients() {
       let filtered = [...patients];
-      if (currentSearch) {
-        const lower = currentSearch.toLowerCase();
-        filtered = filtered.filter(p => p.name.toLowerCase().includes(lower) || p.mrn.toLowerCase().includes(lower));
-      }
-      // first visit month/year filter
-      if (currentMonth !== "" && currentYear !== "") {
+      if (searchTerm) { const s = searchTerm.toLowerCase(); filtered = filtered.filter(p => p.name.toLowerCase().includes(s) || p.mrn.toLowerCase().includes(s)); }
+      if (monthFilter !== "" && yearFilter !== "") {
         filtered = filtered.filter(p => {
           if (!p.firstVisit) return false;
-          const date = new Date(p.firstVisit);
-          if (isNaN(date.getTime())) return false;
-          return date.getMonth() === parseInt(currentMonth) && date.getFullYear() === parseInt(currentYear);
+          const d = new Date(p.firstVisit);
+          return !isNaN(d) && d.getMonth() === parseInt(monthFilter) && d.getFullYear() === parseInt(yearFilter);
         });
-      } else if (currentMonth !== "" && currentYear === "") {
-        // if month selected but year not, show none to avoid mismatch (requirement: month+year together)
-        filtered = [];
-      } else if (currentYear !== "" && currentMonth === "") {
-        filtered = [];
-      }
-      // consultant filter
-      if (currentConsultantFilter) {
-        filtered = filtered.filter(p => p.consultant === currentConsultantFilter);
-      }
+      } else if (monthFilter !== "" || yearFilter !== "") { filtered = []; } // require both
+      if (consultantFilter) filtered = filtered.filter(p => p.consultant === consultantFilter);
       return filtered;
     }
 
-    function populateYearFilter() {
-      const yearSelect = document.getElementById("filterYear");
-      const yearsSet = new Set();
+    // Update consultant stats cards (global, not filtered)
+    function updateConsultantStats() {
+      const stats = { "Dr.Purna": { applied: 0, started: 0 }, "Dr.Praveen": { applied: 0, started: 0 }, "Dr.Geetha": { applied: 0, started: 0 } };
       patients.forEach(p => {
-        if (p.firstVisit) {
-          const y = new Date(p.firstVisit).getFullYear();
-          if (!isNaN(y)) yearsSet.add(y);
+        if (stats[p.consultant]) {
+          if (p.rtAppliedDate) stats[p.consultant].applied++;
+          if (p.rtStartedDate) stats[p.consultant].started++;
         }
       });
-      let years = Array.from(yearsSet).sort((a,b)=>b-a);
-      yearSelect.innerHTML = '<option value="">All years</option>';
-      years.forEach(y => { yearSelect.innerHTML += `<option value="${y}">${y}</option>`; });
-      if (currentYear && years.includes(parseInt(currentYear))) yearSelect.value = currentYear;
-      else currentYear = "";
+      document.getElementById("statAppliedPurna").innerText = stats["Dr.Purna"].applied;
+      document.getElementById("statStartedPurna").innerText = stats["Dr.Purna"].started;
+      document.getElementById("statAppliedPraveen").innerText = stats["Dr.Praveen"].applied;
+      document.getElementById("statStartedPraveen").innerText = stats["Dr.Praveen"].started;
+      document.getElementById("statAppliedGeetha").innerText = stats["Dr.Geetha"].applied;
+      document.getElementById("statStartedGeetha").innerText = stats["Dr.Geetha"].started;
     }
 
+    // Update filtered stats counters
+    function updateFilteredStats() {
+      const filtered = getFilteredPatients();
+      const applied = filtered.filter(p => p.rtAppliedDate).length;
+      const started = filtered.filter(p => p.rtStartedDate).length;
+      document.getElementById("filteredAppliedCount").innerText = applied;
+      document.getElementById("filteredStartedCount").innerText = started;
+      document.getElementById("filteredPatientCount").innerText = filtered.length;
+    }
+
+    function populateYearDropdown() {
+      const years = [...new Set(patients.map(p => p.firstVisit ? new Date(p.firstVisit).getFullYear() : null).filter(y => y && !isNaN(y)))].sort((a,b)=>b-a);
+      const yearSelect = document.getElementById("filterYear");
+      yearSelect.innerHTML = '<option value="">All years</option>';
+      years.forEach(y => { yearSelect.innerHTML += `<option value="${y}">${y}</option>`; });
+      if (yearFilter && years.includes(parseInt(yearFilter))) yearSelect.value = yearFilter;
+      else yearFilter = "";
+    }
+
+    // Render main patient cards
     function renderDashboard() {
-      const filtered = filterPatientsList();
+      const filtered = getFilteredPatients();
       const container = document.getElementById("patientsContainer");
-      const totalCount = patients.length;
-      const appliedCount = patients.filter(p => p.rtAppliedDate).length;
-      const startedCount = patients.filter(p => p.rtStartedDate).length;
-      document.getElementById("totalPatientsCount").innerText = totalCount;
-      document.getElementById("rtAppliedCount").innerText = appliedCount;
-      document.getElementById("rtStartedCount").innerText = startedCount;
-
-      if (filtered.length === 0) {
-        container.innerHTML = `<div class="col-span-full flex flex-col items-center justify-center py-16 bg-white rounded-2xl shadow-sm"><i class="fas fa-filter text-4xl text-slate-300 mb-2"></i><p class="text-slate-500">No patients match filters. Adjust criteria or add patient.</p></div>`;
-        return;
-      }
-
+      if (filtered.length === 0) { container.innerHTML = `<div class="col-span-full text-center py-16 bg-white rounded-2xl"><i class="fas fa-filter text-4xl text-slate-300"></i><p class="text-slate-500 mt-2">No patients match filters.</p></div>`; return; }
       container.innerHTML = filtered.map(patient => {
-        const rtAppliedDate = patient.rtAppliedDate;
-        const rtStartedDate = patient.rtStartedDate;
-        const appliedStatus = rtAppliedDate ? `<span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-medium"><i class="fas fa-calendar-check"></i> ${formatDate(rtAppliedDate)}</span>` : `<span class="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full text-xs"><i class="far fa-clock"></i> Not applied</span>`;
-        const startedStatus = rtStartedDate ? `<span class="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full text-xs font-medium"><i class="fas fa-play-circle"></i> ${formatDate(rtStartedDate)}</span>` : `<span class="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full text-xs"><i class="far fa-hourglass"></i> Not started</span>`;
-        
-        const followUpsHtml = patient.followUpNotes.length === 0 ? `<div class="text-center text-xs text-slate-400 py-2"><i class="far fa-comment-dots"></i> No notes</div>` :
-          `<div class="space-y-2 max-h-40 overflow-y-auto pr-1">` + patient.followUpNotes.slice().reverse().map(note => `
-            <div class="bg-slate-50 p-2 rounded-lg flex justify-between items-start gap-2 text-sm">
-              <div class="flex-1"><div class="text-[11px] text-slate-500 font-mono">${formatDateTime(note.dateTime)}</div><div class="text-slate-700 break-words">${escapeHtml(note.note)}</div></div>
-              <button class="delete-note-btn text-slate-400 hover:text-red-500" data-patient-id="${patient.id}" data-note-id="${note.id}"><i class="fas fa-trash-alt text-xs"></i></button>
-            </div>
-          `).join('') + `</div>`;
-
+        const appliedBadge = patient.rtAppliedDate ? `<span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-medium"><i class="fas fa-calendar-check"></i> ${new Date(patient.rtAppliedDate).toLocaleDateString()}</span>` : `<span class="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full text-xs"><i class="far fa-clock"></i> Not applied</span>`;
+        const startedBadge = patient.rtStartedDate ? `<span class="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full text-xs font-medium"><i class="fas fa-play-circle"></i> ${new Date(patient.rtStartedDate).toLocaleDateString()}</span>` : `<span class="inline-flex items-center gap-1 text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full text-xs"><i class="far fa-hourglass"></i> Not started</span>`;
+        const followupsHtml = patient.followUpNotes.length === 0 ? `<div class="text-center text-xs text-slate-400 py-2">No notes</div>` :
+          `<div class="space-y-2 max-h-40 overflow-y-auto">${patient.followUpNotes.slice().reverse().map(n => `<div class="bg-slate-50 p-2 rounded-lg flex justify-between text-sm"><div><div class="text-[11px] text-slate-500">${new Date(n.dateTime).toLocaleString()}</div><div>${escapeHtml(n.note)}</div></div><button class="delete-note-btn text-slate-400 hover:text-red-500" data-pid="${patient.id}" data-nid="${n.id}"><i class="fas fa-trash-alt text-xs"></i></button></div>`).join('')}</div>`;
         return `
           <div class="bg-white rounded-2xl shadow-md border border-slate-100 overflow-hidden card-hover">
-            <div class="p-5 pb-2 border-b border-slate-100 flex justify-between items-start flex-wrap gap-2">
-              <div><h2 class="text-xl font-bold text-slate-800">${escapeHtml(patient.name)}</h2>
-                <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs mt-1"><span class="font-mono text-slate-500">${escapeHtml(patient.mrn)}</span>
-                <span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full"><i class="fas fa-user-md"></i> ${escapeHtml(patient.consultant)}</span></div>
-                <div class="text-xs text-slate-400 mt-0.5"><i class="far fa-calendar-alt"></i> First visit: ${formatDate(patient.firstVisit)}</div>
-                ${patient.diagnosis ? `<div class="text-xs text-slate-500 bg-slate-50 inline-block px-2 py-0.5 rounded mt-1"><i class="fas fa-stethoscope"></i> ${escapeHtml(patient.diagnosis)}</div>` : ''}
-              </div>
+            <div class="p-5 pb-2 border-b flex justify-between items-start flex-wrap gap-2">
+              <div><h2 class="text-xl font-bold text-slate-800">${escapeHtml(patient.name)}</h2><div class="flex gap-2 text-xs mt-1"><span class="font-mono text-slate-500">${escapeHtml(patient.mrn)}</span><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full"><i class="fas fa-user-md"></i> ${patient.consultant}</span></div><div class="text-xs text-slate-400 mt-0.5"><i class="far fa-calendar-alt"></i> First visit: ${patient.firstVisit ? new Date(patient.firstVisit).toLocaleDateString() : "—"}</div>${patient.diagnosis ? `<div class="text-xs bg-slate-50 inline-block px-2 py-0.5 rounded mt-1">🧬 ${escapeHtml(patient.diagnosis)}</div>` : ''}</div>
               <div class="flex gap-1"><button class="edit-patient-btn text-indigo-600 hover:bg-indigo-50 p-2 rounded-full" data-id="${patient.id}"><i class="fas fa-pen-alt"></i></button><button class="delete-patient-btn text-red-500 hover:bg-red-50 p-2 rounded-full" data-id="${patient.id}"><i class="fas fa-trash"></i></button></div>
             </div>
             <div class="p-5 space-y-4">
-              <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl"><div><div class="text-xs uppercase font-semibold text-slate-500"><i class="fas fa-radiation"></i> RT applied</div><div>${appliedStatus}</div></div><div><div class="text-xs uppercase font-semibold text-slate-500"><i class="fas fa-play"></i> RT started</div><div>${startedStatus}</div></div></div>
-              <div class="flex flex-wrap gap-2"><button class="rt-applied-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1" data-id="${patient.id}"><i class="fas fa-check-circle"></i> Mark RT applied</button><button class="rt-started-btn bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1" data-id="${patient.id}"><i class="fas fa-arrow-right"></i> Mark RT started</button></div>
-              <div><div class="flex items-center justify-between mb-2"><h4 class="text-sm font-semibold text-slate-700"><i class="fas fa-notes-medical mr-1 text-indigo-500"></i> Follow-up</h4><div class="flex gap-1"><input type="text" id="followup-input-${patient.id}" placeholder="Add note..." class="text-xs border rounded-lg px-2 py-1 w-36"><button class="add-followup-btn bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg text-xs" data-id="${patient.id}"><i class="fas fa-plus"></i> Add</button></div></div><div class="mt-2">${followUpsHtml}</div></div>
+              <div class="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl"><div><div class="text-xs uppercase font-semibold">RT applied</div><div>${appliedBadge}</div></div><div><div class="text-xs uppercase font-semibold">RT started</div><div>${startedBadge}</div></div></div>
+              <div class="flex flex-wrap gap-2"><button class="toggle-applied-btn bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1" data-id="${patient.id}"><i class="fas fa-check-circle"></i> ${patient.rtAppliedDate ? "Undo RT applied" : "Mark RT applied"}</button><button class="toggle-started-btn bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1" data-id="${patient.id}"><i class="fas fa-arrow-right"></i> ${patient.rtStartedDate ? "Undo RT started" : "Mark RT started"}</button></div>
+              <div><div class="flex justify-between items-center mb-2"><h4 class="text-sm font-semibold"><i class="fas fa-notes-medical text-indigo-500"></i> Follow-ups</h4><div class="flex gap-1"><input id="note-input-${patient.id}" placeholder="Add note..." class="text-xs border rounded-lg px-2 py-1 w-36"><button class="add-note-btn bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg text-xs" data-id="${patient.id}">Add</button></div></div>${followupsHtml}</div>
             </div>
           </div>
         `;
       }).join('');
-      attachCardEvents();
+      attachDynamicEvents();
     }
 
-    function attachCardEvents() {
-      document.querySelectorAll('.rt-applied-btn').forEach(btn => btn.addEventListener('click', (e) => markRtApplied(btn.dataset.id)));
-      document.querySelectorAll('.rt-started-btn').forEach(btn => btn.addEventListener('click', (e) => markRtStarted(btn.dataset.id)));
+    function escapeHtml(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m){if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+    function attachDynamicEvents() {
+      document.querySelectorAll('.toggle-applied-btn').forEach(btn => btn.addEventListener('click', (e) => toggleRtApplied(btn.dataset.id)));
+      document.querySelectorAll('.toggle-started-btn').forEach(btn => btn.addEventListener('click', (e) => toggleRtStarted(btn.dataset.id)));
       document.querySelectorAll('.delete-patient-btn').forEach(btn => btn.addEventListener('click', (e) => deletePatient(btn.dataset.id)));
       document.querySelectorAll('.edit-patient-btn').forEach(btn => btn.addEventListener('click', (e) => openEditModal(btn.dataset.id)));
-      document.querySelectorAll('.add-followup-btn').forEach(btn => btn.addEventListener('click', (e) => { const pid = btn.dataset.id; const inp = document.getElementById(`followup-input-${pid}`); if(inp && inp.value.trim()) addFollowUp(pid, inp.value); else showToast("Write note", true); inp.value = ""; }));
-      document.querySelectorAll('.delete-note-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); deleteFollowUp(btn.dataset.patientId, btn.dataset.noteId); }));
+      document.querySelectorAll('.add-note-btn').forEach(btn => btn.addEventListener('click', (e) => { const pid = btn.dataset.id; const inp = document.getElementById(`note-input-${pid}`); if(inp.value.trim()) addFollowUp(pid, inp.value); inp.value = ""; }));
+      document.querySelectorAll('.delete-note-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); deleteFollowUp(btn.dataset.pid, btn.dataset.nid); }));
     }
 
-    function openEditModal(patientId) {
-      const p = patients.find(p => p.id === patientId);
-      if (!p) return;
+    function openEditModal(id) {
+      const p = patients.find(p=>p.id===id);
+      if(!p) return;
       document.getElementById("editPatientId").value = p.id;
       document.getElementById("editName").value = p.name;
       document.getElementById("editMrn").value = p.mrn;
@@ -504,49 +368,89 @@
     document.getElementById("modalCancelBtn").addEventListener("click", closeModal);
     document.getElementById("modalSaveBtn").addEventListener("click", () => {
       const id = document.getElementById("editPatientId").value;
-      const newName = document.getElementById("editName").value.trim();
-      const newMrn = document.getElementById("editMrn").value.trim();
-      const newFirstVisit = document.getElementById("editFirstVisit").value;
-      const newConsultant = document.getElementById("editConsultant").value;
-      const newDiagnosis = document.getElementById("editDiagnosis").value.trim();
-      let newRtApplied = document.getElementById("editRtApplied").value || null;
-      let newRtStarted = document.getElementById("editRtStarted").value || null;
-      if (!newName) { showToast("Name required", true); return; }
-      if (!newMrn) { showToast("MRN required", true); return; }
-      updatePatient(id, { name: newName, mrn: newMrn, firstVisit: newFirstVisit, consultant: newConsultant, diagnosis: newDiagnosis, rtAppliedDate: newRtApplied, rtStartedDate: newRtStarted });
+      const name = document.getElementById("editName").value.trim();
+      const mrn = document.getElementById("editMrn").value.trim();
+      const firstVisit = document.getElementById("editFirstVisit").value;
+      const consultant = document.getElementById("editConsultant").value;
+      const diagnosis = document.getElementById("editDiagnosis").value.trim();
+      let rtApplied = document.getElementById("editRtApplied").value || null;
+      let rtStarted = document.getElementById("editRtStarted").value || null;
+      if(!name || !mrn) { showToast("Name & MRN required", true); return; }
+      updatePatient(id, { name, mrn, firstVisit, consultant, diagnosis, rtAppliedDate: rtApplied, rtStartedDate: rtStarted });
       closeModal();
     });
 
-    // Filter listeners
-    document.getElementById("searchInput").addEventListener("input", (e) => { currentSearch = e.target.value; renderDashboard(); });
-    document.getElementById("filterMonth").addEventListener("change", (e) => { currentMonth = e.target.value; renderDashboard(); });
-    document.getElementById("filterYear").addEventListener("change", (e) => { currentYear = e.target.value; renderDashboard(); });
-    document.getElementById("filterConsultant").addEventListener("change", (e) => { currentConsultantFilter = e.target.value; renderDashboard(); });
-    document.getElementById("resetFiltersBtn").addEventListener("click", () => {
-      document.getElementById("searchInput").value = ""; currentSearch = "";
-      document.getElementById("filterMonth").value = ""; currentMonth = "";
-      document.getElementById("filterYear").value = ""; currentYear = "";
-      document.getElementById("filterConsultant").value = ""; currentConsultantFilter = "";
-      renderDashboard();
+    // Import/Export functionality for cross-device sharing
+    document.getElementById("exportDataBtn").addEventListener("click", () => {
+      const dataStr = JSON.stringify(patients, null, 2);
+      const blob = new Blob([dataStr], {type: "application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ontrack_patients_${new Date().toISOString().slice(0,19)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("Data exported successfully");
+    });
+    document.getElementById("importFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if(Array.isArray(imported)) {
+            patients = imported.map(p => ({ ...p, followUpNotes: p.followUpNotes || [] }));
+            saveToLocalStorage();
+            renderAll();
+            showToast("Data imported successfully! Now shared across devices.");
+          } else throw new Error();
+        } catch(err) { showToast("Invalid JSON file", true); }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
     });
 
+    function renderAll() {
+      updateConsultantStats();
+      populateYearDropdown();
+      renderDashboard();
+      updateFilteredStats();
+    }
+
+    // Add filter event listeners
+    document.getElementById("searchInput").addEventListener("input", (e) => { searchTerm = e.target.value; renderDashboard(); updateFilteredStats(); });
+    document.getElementById("filterMonth").addEventListener("change", (e) => { monthFilter = e.target.value; renderDashboard(); updateFilteredStats(); });
+    document.getElementById("filterYear").addEventListener("change", (e) => { yearFilter = e.target.value; renderDashboard(); updateFilteredStats(); });
+    document.getElementById("filterConsultant").addEventListener("change", (e) => { consultantFilter = e.target.value; renderDashboard(); updateFilteredStats(); });
+    document.getElementById("resetFiltersBtn").addEventListener("click", () => {
+      document.getElementById("searchInput").value = ""; searchTerm = "";
+      document.getElementById("filterMonth").value = ""; monthFilter = "";
+      document.getElementById("filterYear").value = ""; yearFilter = "";
+      document.getElementById("filterConsultant").value = ""; consultantFilter = "";
+      renderDashboard(); updateFilteredStats();
+    });
     document.getElementById("addPatientBtn").addEventListener("click", () => {
       const name = document.getElementById("patientName").value;
       const mrn = document.getElementById("patientMrn").value;
       const firstVisit = document.getElementById("patientFirstVisit").value;
       const consultant = document.getElementById("patientConsultant").value;
       const diagnosis = document.getElementById("patientDiagnosis").value;
-      if (addPatient(name, mrn, firstVisit, consultant, diagnosis)) {
+      if(addPatient(name,mrn,firstVisit,consultant,diagnosis)) {
         document.getElementById("patientName").value = "";
         document.getElementById("patientMrn").value = "";
         document.getElementById("patientFirstVisit").value = "";
         document.getElementById("patientDiagnosis").value = "";
-        document.getElementById("patientConsultant").value = "Dr.Purna";
       }
     });
-
     window.addEventListener("click", (e) => { if(e.target === document.getElementById("editModal")) closeModal(); });
     loadFromStorage();
+
+    // Add note about cross-device sharing in UI
+    const shareNote = document.createElement("div");
+    shareNote.className = "text-xs text-center text-slate-400 mt-6 border-t pt-4";
+    shareNote.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Data stored locally in this browser. Use <strong>Export JSON</strong> → transfer file to another device → <strong>Import JSON</strong> to share data across devices.';
+    document.querySelector(".max-w-7xl").appendChild(shareNote);
   </script>
 </body>
 </html>
