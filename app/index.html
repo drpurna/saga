@@ -81,7 +81,7 @@ html,body{
 }
 #video{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:contain;display:block;background:#000;
+  object-fit:fill;display:block;background:#000;
   transform:translateZ(0);will-change:transform;
 }
 #video.stretch{object-fit:fill}
@@ -3325,7 +3325,7 @@ var PL_REFRESH_KEY='saga:lastRefreshV15';
 var CH_CACHE_KEY='saga:chCacheV15';
 var CH_CACHE_TTL=3.5*24*60*60*1000;
 
-var ASPECTS=['Contain','Stretch (default)','Cover'];
+var ASPECTS=['Stretch','Contain','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
 var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
@@ -3364,7 +3364,7 @@ var shakaPlayer=null,avplay=null;
 var ENGINE='none';
 var avReady=false;
 var allChs=[],viewChs=[];
-var curUrl='',isPlaying=false,isMuted=false,aspectMode=1;
+var curUrl='',isPlaying=false,isMuted=false,aspectMode=0;
 var favs=new Set(),pls=[],searchQ='';
 var activeTab='Telugu',showFavs=false;
 var col=0,renderFrom=0;
@@ -3759,11 +3759,11 @@ function resetOsd(){
 ════════════════════════════════════════════ */
 function cycleAspect(){
   aspectMode=(aspectMode+1)%ASPECTS.length;
-  if(aspectMode===0)video.style.objectFit='contain';
-  else if(aspectMode===1)video.style.objectFit='fill';
+  if(aspectMode===0)video.style.objectFit='fill';
+  else if(aspectMode===1)video.style.objectFit='contain';
   else video.style.objectFit='cover';
   setSt('Aspect: '+ASPECTS[aspectMode],'');
-  try{if(avplay&&ENGINE==='avplay'){avplay.setDisplayMethod(aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':'PLAYER_DISPLAY_MODE_FULL_SCREEN')}}catch(e){}
+  try{if(avplay&&ENGINE==='avplay'){avplay.setDisplayMethod(aspectMode===1?'PLAYER_DISPLAY_MODE_LETTER_BOX':aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':'PLAYER_DISPLAY_MODE_FULL_SCREEN')}}catch(e){}
 }
 function toggleFav(){
   var ch=getFocusedCh();if(!ch)return;
@@ -3799,7 +3799,7 @@ function playWithAVPlay(ch){
     /* setDisplayRect MUST be after open(), before prepareAsync */
     avplay.setDisplayRect(0,0,1920,1080);
     avplay.setDisplayMethod(
-      aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
+      aspectMode===1?'PLAYER_DISPLAY_MODE_LETTER_BOX':
       aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':
       'PLAYER_DISPLAY_MODE_FULL_SCREEN'
     );
@@ -3923,10 +3923,11 @@ function initShaka(){
         rebufferingGoal:1,
         stallEnabled:true,stallThreshold:0.4,stallSkip:0.25,
         jumpLargeGaps:true,
-        retryParameters:{maxAttempts:3,baseDelay:250,backoffFactor:1.4,fuzzFactor:0.2,timeout:18000},
-        safeSeekOffset:1,lowLatencyMode:false,inaccurateManifestTolerance:10
+        retryParameters:{maxAttempts:4,baseDelay:200,backoffFactor:1.3,fuzzFactor:0.2,timeout:20000},
+        safeSeekOffset:2,lowLatencyMode:false,inaccurateManifestTolerance:3,
+        liveSync:{enabled:false}
       },
-      preferredVideoCodecs:['vp09','vp9','avc1','hvc1','hev1'],
+      preferredVideoCodecs:['avc1','hvc1','hev1'],
       preferredDecodingAttributes:['smooth','powerEfficient'],
     });
 
@@ -3958,7 +3959,18 @@ function playWithShaka(ch,tryAVFirst){
   updateNowInfo(ch);setSt('Connecting [Shaka]…','buf');bufSpinner.classList.add('on');
   var loadUrl=ch.url;
   if(ch._src==='yupp'&&ch.url.indexOf('dtv=')>=0){var m=ch.url.match(/[?&]dtv=([^&\s]+)/);if(m){try{loadUrl=decodeURIComponent(m[1])}catch(e){loadUrl=m[1]}}}
-  shakaPlayer.load(loadUrl).then(function(){return video.play()}).then(function(){
+  shakaPlayer.load(loadUrl).then(function(){
+    try{
+      if(shakaPlayer.isLive()){
+        shakaPlayer.configure({streaming:{safeSeekOffset:0,liveSync:{enabled:true,targetLatency:3,targetLatencyTolerance:1,maxPlaybackRate:1.1,minPlaybackRate:0.95,panicMode:false}}});
+        var sr=shakaPlayer.seekRange();
+        if(sr&&isFinite(sr.end))video.currentTime=Math.max(sr.start,sr.end-2);
+      }else{
+        shakaPlayer.configure({streaming:{safeSeekOffset:2,liveSync:{enabled:false}}});
+      }
+    }catch(e){}
+    return video.play();
+  }).then(function(){
     setPlaying(true);bufSpinner.classList.remove('on');
     setSt('Streaming · '+ch.name+' [Shaka]','ok');showEngine('shaka');
     if(cfg.hq)setTimeout(lockHQ,3000);updateQ();_syncStripClasses();
