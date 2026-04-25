@@ -63,7 +63,7 @@ html,body{
   background:var(--bg);color:var(--w0);
   font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
   -webkit-font-smoothing:antialiased;
-  font-size:19px;
+  font-size:16px;
 }
 
 /* ── ROOT ── */
@@ -123,8 +123,8 @@ html,body{
   position:absolute;top:0;left:0;right:0;
   height:var(--topH);z-index:30;
   display:flex;align-items:center;padding:0 32px;gap:0;
-  background:rgba(6,6,6,.97);
-  border-bottom:1px solid rgba(255,255,255,.10);
+  background:linear-gradient(180deg,rgba(0,0,0,.88) 0%,rgba(0,0,0,.60) 65%,transparent 100%);
+  border-bottom:none;
   will-change:transform,opacity;
   transition:transform var(--slow) var(--spring),opacity var(--mid);
 }
@@ -142,34 +142,31 @@ html,body{
 /* ── CATEGORY TABS — new theme ── */
 #navTabs{
   flex:1;display:flex;align-items:center;justify-content:center;
-  gap:4px;overflow:hidden;min-width:0;
+  gap:2px;overflow:hidden;min-width:0;
   background:transparent;
 }
 .ntab{
-  height:60px;padding:0 32px;
-  border:none;border-radius:12px;
+  height:42px;padding:0 20px;
+  border:none;border-radius:21px;
   background:transparent;
-  color:rgba(255,255,255,.42);
-  font-size:24px;font-weight:700;cursor:pointer;outline:none;
+  color:rgba(255,255,255,.38);
+  font-size:19px;font-weight:600;cursor:pointer;outline:none;
   white-space:nowrap;flex-shrink:0;
-  position:relative;overflow:hidden;
-  transition:color 90ms,transform 80ms;
+  position:relative;
+  transition:background 130ms,color 110ms,transform 80ms;
   transform:translateZ(0);
-  letter-spacing:-.2px;
+  letter-spacing:0;
 }
-/* Active — bright white, transparent bg, no underline */
 .ntab.on{
-  background:transparent;
-  color:#fff;font-weight:900;
+  background:rgba(255,255,255,.16);
+  color:#fff;font-weight:800;
   box-shadow:none;
 }
-/* Remote focus — outline only */
 .ntab.focused,.ntab:focus-visible{
-  background:transparent;
+  background:rgba(255,255,255,.24);
   color:#fff;
-  outline:2px solid rgba(255,255,255,.75);
-  outline-offset:3px;
-  transform:scale(1.06) translateZ(0);
+  outline:none;
+  transform:scale(1.05) translateZ(0);
 }
 .ntab:not(.on):not(.focused){
   background:transparent;
@@ -177,15 +174,14 @@ html,body{
 /* Channel count badge inside tab */
 .tab-count{
   display:inline-block;
-  font-size:13px;font-weight:700;
-  margin-left:7px;
-  opacity:.5;
-  background:rgba(255,255,255,.14);
-  padding:2px 8px;border-radius:9px;
+  font-size:12px;font-weight:600;
+  margin-left:5px;
+  opacity:.40;
+  background:transparent;padding:0;
   vertical-align:middle;
   letter-spacing:0;
 }
-.ntab.on .tab-count{opacity:.75;background:rgba(255,255,255,.22)}
+.ntab.on .tab-count{opacity:.55;background:transparent}
 
 
 /* Top-right icons */
@@ -705,24 +701,25 @@ html,body{
 }
 #exitOv.on{display:flex}
 .exit-box{
-  background:var(--s1);border:1.5px solid var(--b2);
-  border-radius:24px;padding:40px 50px;
+  background:rgba(10,10,10,.98);border:1px solid rgba(255,255,255,.09);
+  border-radius:28px;padding:44px 56px;
   text-align:center;animation:popIn 120ms var(--spring);
-  min-width:380px;
+  min-width:400px;
 }
-.exit-icon{font-size:48px;margin-bottom:16px}
-.exit-title{font-size:24px;font-weight:900;color:var(--w0);margin-bottom:8px;letter-spacing:-.3px}
-.exit-sub{font-size:14px;color:var(--w3);margin-bottom:32px}
-.exit-btns{display:flex;gap:14px;justify-content:center}
+.exit-icon{font-size:30px;margin-bottom:16px;color:rgba(255,255,255,.40);line-height:1;}
+.exit-title{font-size:23px;font-weight:800;color:#fff;margin-bottom:7px;letter-spacing:-.3px}
+.exit-sub{font-size:14px;color:rgba(255,255,255,.32);margin-bottom:32px;}
+.exit-btns{display:flex;gap:12px;justify-content:center}
 .exit-btn{
-  min-width:130px;padding:14px 24px;border-radius:14px;
-  font-size:16px;font-weight:800;cursor:pointer;outline:none;border:2px solid transparent;
+  min-width:136px;padding:14px 24px;border-radius:13px;
+  font-size:16px;font-weight:700;cursor:pointer;outline:none;
+  border:1px solid rgba(255,255,255,.10);
   transition:background var(--fast),transform var(--fast),border-color var(--fast);
-  transform:translateZ(0);
+  transform:translateZ(0);background:rgba(255,255,255,.05);color:rgba(255,255,255,.60);
 }
-.exit-btn-yes{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.35)}
-.exit-btn-no{background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.18)}
-.exit-btn.focused{transform:scale(1.08) translateZ(0);border-color:var(--w0);box-shadow:0 0 0 3px rgba(255,255,255,.2)}
+.exit-btn-yes{background:rgba(255,255,255,.08);color:rgba(255,255,255,.88);border-color:rgba(255,255,255,.20)}
+.exit-btn-no{background:transparent;color:rgba(255,255,255,.36);border-color:rgba(255,255,255,.07)}
+.exit-btn.focused{transform:scale(1.07) translateZ(0);background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.60);color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.10)}
 
 /* ══ CHANNEL NUMBER HUD — top-right digit popup ══ */
 #chHud{
@@ -3709,11 +3706,12 @@ function _makeCard(idx){
   var grad=document.createElement('div');grad.className='card-grad';
   var nm=document.createElement('div');nm.className='card-name';nm.textContent=ch.name;grad.appendChild(nm);
   if(ch.logo){
-    var img=new Image();img.className='card-img';img.alt=ch.name;img.crossOrigin='anonymous';img.loading='lazy';
+    var img=new Image();img.className='card-img';img.alt=ch.name;img.crossOrigin='anonymous';
     img.onload=function(){bg.style.backgroundImage='url('+this.src+')';bg.classList.add('on');
       if(!ch._col)extractColour(img,function(c){if(c){ch._col=c;inner.style.background=c}})};
     img.onerror=function(){if(!inner.querySelector('.card-fb')){var fb=document.createElement('div');fb.className='card-fb';fb.textContent='📺';inner.insertBefore(fb,inner.firstChild)}};
-    img.src=ch.logo;inner.appendChild(img);
+    if(window._imgIO){img.dataset.src=ch.logo;window._imgIO.observe(img);}else{img.src=ch.logo;}
+    inner.appendChild(img);
   }else{
     var fb2=document.createElement('div');fb2.className='card-fb';fb2.textContent='📺';inner.appendChild(fb2);
   }
@@ -3913,11 +3911,12 @@ function initShaka(){
     shakaPlayer.configure({
       abr:{
         enabled:true,
-        defaultBandwidthEstimate:10000000,  /* assume 10 Mbps → start at HD */
-        switchInterval:3,                    /* re-evaluate every 3s */
-        bandwidthUpgradeTarget:0.70,         /* upgrade when using 70% of capacity → fast climb */
-        bandwidthDowngradeTarget:0.95,       /* downgrade only at 95% → very reluctant to drop */
-        restrictToElementCapabilities:true
+        defaultBandwidthEstimate:25000000,
+        switchInterval:2,
+        bandwidthUpgradeTarget:0.60,
+        bandwidthDowngradeTarget:0.95,
+        restrictToElementCapabilities:true,
+        restrictions:{minHeight:0,maxHeight:Infinity}
       },
       streaming:{
         bufferingGoal:cfg.buf,
@@ -3976,7 +3975,7 @@ function updateQ(){
 }
 function lockHQ(){
   if(!shakaPlayer||!isPlaying)return;
-  try{var t=shakaPlayer.getVariantTracks();if(!t.length)return;var best=t[0];for(var i=1;i<t.length;i++){if(t[i].bandwidth>best.bandwidth)best=t[i]}shakaPlayer.selectVariantTrack(best,false)}catch(e){}
+  try{shakaPlayer.configure({abr:{enabled:true,restrictions:{minHeight:0,maxHeight:Infinity},switchInterval:2,bandwidthUpgradeTarget:0.60}});}catch(e){}
 }
 function recfg(){if(!shakaPlayer)return;shakaPlayer.configure({abr:{enabled:!cfg.hq},streaming:{bufferingGoal:cfg.buf}})}
 
@@ -4326,6 +4325,11 @@ window.addEventListener('beforeunload',function(){
    BOOT — instant cache → network in background
 ════════════════════════════════════════════ */
 (function boot(){
+  try{
+    window._imgIO=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){if(en.isIntersecting){var im=en.target;if(im.dataset.src){im.src=im.dataset.src;delete im.dataset.src;}window._imgIO.unobserve(im);}});
+    },{root:null,rootMargin:'200px',threshold:0});
+  }catch(e){window._imgIO=null;}
   loadStore();
   pls=pls.filter(function(p){return!p.builtIn&&!BUILTINS.some(function(b){return b.url===p.url})});
   $('splMsg').textContent='Initialising player…';
