@@ -81,7 +81,7 @@ html,body{
 }
 #video{
   position:absolute;inset:0;width:100%;height:100%;
-  object-fit:fill;display:block;background:#000;
+  object-fit:contain;display:block;background:#000;
   transform:translateZ(0);will-change:transform;
 }
 #video.stretch{object-fit:fill}
@@ -3325,7 +3325,7 @@ var PL_REFRESH_KEY='saga:lastRefreshV15';
 var CH_CACHE_KEY='saga:chCacheV15';
 var CH_CACHE_TTL=3.5*24*60*60*1000;
 
-var ASPECTS=['Stretch','Contain','Cover'];
+var ASPECTS=['Contain','Stretch','Cover'];
 var LS={FAVS:'saga:favs',PL:'saga:pl',CFG:'saga:cfg',LCHU:'saga:lchu'};
 var GROUP_MAP={
   'news':'News','news channels':'News','live news':'News',
@@ -3759,11 +3759,11 @@ function resetOsd(){
 ════════════════════════════════════════════ */
 function cycleAspect(){
   aspectMode=(aspectMode+1)%ASPECTS.length;
-  if(aspectMode===0)video.style.objectFit='fill';
-  else if(aspectMode===1)video.style.objectFit='contain';
+  if(aspectMode===0)video.style.objectFit='contain';
+  else if(aspectMode===1)video.style.objectFit='fill';
   else video.style.objectFit='cover';
   setSt('Aspect: '+ASPECTS[aspectMode],'');
-  try{if(avplay&&ENGINE==='avplay'){avplay.setDisplayMethod(aspectMode===1?'PLAYER_DISPLAY_MODE_LETTER_BOX':aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':'PLAYER_DISPLAY_MODE_FULL_SCREEN')}}catch(e){}
+  try{if(avplay&&ENGINE==='avplay'){avplay.setDisplayMethod(aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':'PLAYER_DISPLAY_MODE_FULL_SCREEN')}}catch(e){}
 }
 function toggleFav(){
   var ch=getFocusedCh();if(!ch)return;
@@ -3799,7 +3799,7 @@ function playWithAVPlay(ch){
     /* setDisplayRect MUST be after open(), before prepareAsync */
     avplay.setDisplayRect(0,0,1920,1080);
     avplay.setDisplayMethod(
-      aspectMode===1?'PLAYER_DISPLAY_MODE_LETTER_BOX':
+      aspectMode===0?'PLAYER_DISPLAY_MODE_LETTER_BOX':
       aspectMode===2?'PLAYER_DISPLAY_MODE_AUTO_ASPECT_RATIO':
       'PLAYER_DISPLAY_MODE_FULL_SCREEN'
     );
@@ -3947,6 +3947,20 @@ function initShaka(){
       showEngine('shaka');_syncStripClasses();
       if(cfg.hq)setTimeout(lockHQ,3000);updateQ();scheduleOsdHide();
     });
+    /* Auto black-bar removal: only stretch narrow (4:3) streams, never touch widescreen */
+    video.addEventListener('loadedmetadata',function(){
+      if(aspectMode!==0)return; /* user has manually chosen aspect — respect it */
+      var w=video.videoWidth,h=video.videoHeight;
+      if(!w||!h)return;
+      var ratio=w/h;
+      if(ratio<=1.55){/* 4:3, 5:4, 1:1 etc — fill to remove side bars */
+        video.style.objectFit='fill';
+        try{if(avplay&&ENGINE==='avplay')avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_FULL_SCREEN');}catch(e){}
+      }else{/* 16:9, 16:10, 2.35:1 widescreen — keep contain, no bars */
+        video.style.objectFit='contain';
+        try{if(avplay&&ENGINE==='avplay')avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');}catch(e){}
+      }
+    });
     video.addEventListener('error',function(){setSt('Video error','err');setPlaying(false);bufSpinner.classList.remove('on')});
     setSt('Shaka ready','');resolve(true);
   });
@@ -3960,11 +3974,16 @@ function playWithShaka(ch,tryAVFirst){
   var loadUrl=ch.url;
   if(ch._src==='yupp'&&ch.url.indexOf('dtv=')>=0){var m=ch.url.match(/[?&]dtv=([^&\s]+)/);if(m){try{loadUrl=decodeURIComponent(m[1])}catch(e){loadUrl=m[1]}}}
   shakaPlayer.load(loadUrl).then(function(){
+    /* Apply per-stream live config BEFORE play() — do NOT touch currentTime here */
+    /* Manual currentTime seek before decoder is ready causes A/V desync on Tizen */
     try{
       if(shakaPlayer.isLive()){
-        shakaPlayer.configure({streaming:{safeSeekOffset:0,liveSync:{enabled:true,targetLatency:3,targetLatencyTolerance:1,maxPlaybackRate:1.1,minPlaybackRate:0.95,panicMode:false}}});
-        var sr=shakaPlayer.seekRange();
-        if(sr&&isFinite(sr.end))video.currentTime=Math.max(sr.start,sr.end-2);
+        /* liveSync handles edge-latency automatically without manual seeks */
+        shakaPlayer.configure({streaming:{
+          safeSeekOffset:0,
+          liveSync:{enabled:true,targetLatency:4,targetLatencyTolerance:2,
+                    maxPlaybackRate:1.05,minPlaybackRate:0.97,panicMode:false,panicThreshold:60}
+        }});
       }else{
         shakaPlayer.configure({streaming:{safeSeekOffset:2,liveSync:{enabled:false}}});
       }
